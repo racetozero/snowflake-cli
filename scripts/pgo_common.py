@@ -224,7 +224,7 @@ def run_workload(
         cwd=cwd,
         env=child_environment,
         input=workload.stdin,
-        text=True,
+        encoding='utf-8',
         capture_output=True,
         check=False,
         timeout=60,

@@ -24,21 +24,6 @@ fn err(m: impl Into<String>) -> std::io::Error {
     std::io::Error::other(m.into())
 }
 
-/// A rustls client trusting the webpki roots, with the `ring` provider.
-fn tls_config(
-    versions: &[&'static rustls::SupportedProtocolVersion],
-) -> Result<rustls::ClientConfig, rustls::Error> {
-    let roots = rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    };
-    Ok(rustls::ClientConfig::builder_with_provider(Arc::new(
-        rustls::crypto::ring::default_provider(),
-    ))
-    .with_protocol_versions(versions)?
-    .with_root_certificates(roots)
-    .with_no_client_auth())
-}
-
 impl WebSocket {
     /// Connect and complete the opening handshake, sending `headers` (`Name: value`).
     pub fn connect(url: &str, headers: &[String], timeout: Duration) -> std::io::Result<WebSocket> {
@@ -56,10 +41,9 @@ impl WebSocket {
         let tcp = TcpStream::connect_timeout(&addr, timeout)?;
         tcp.set_read_timeout(Some(Duration::from_secs(90)))?;
         let stream: Box<dyn Stream> = if tls {
-            let config = tls_config(rustls::DEFAULT_VERSIONS).map_err(|e| err(e.to_string()))?;
             let name = rustls::pki_types::ServerName::try_from(host.clone())
                 .map_err(|e| err(e.to_string()))?;
-            let conn = rustls::ClientConnection::new(Arc::new(config), name)
+            let conn = rustls::ClientConnection::new(crate::tls::default_config(), name)
                 .map_err(|e| err(e.to_string()))?;
             Box::new(rustls::StreamOwned::new(conn, tcp))
         } else {
@@ -188,7 +172,7 @@ impl WebSocket {
     }
 }
 
-/// `_probe_cert_for_host`: a TLS 1.3 handshake against the webpki roots.
+/// `_probe_cert_for_host`: a TLS 1.3 handshake against the system roots.
 /// `Some(true)` provisioned, `Some(false)` when the served certificate does not cover
 /// `host` or has expired, `None` when inconclusive (network or trust failures).
 pub fn tls_probe(host: &str, port: u16, timeout: Duration) -> Option<bool> {
@@ -202,7 +186,7 @@ pub fn tls_probe(host: &str, port: u16, timeout: Duration) -> Option<bool> {
         return None;
     };
     let _ = tcp.set_read_timeout(Some(timeout));
-    let Ok(config) = tls_config(&[&rustls::version::TLS13]) else {
+    let Ok(config) = crate::tls::config(&[&rustls::version::TLS13]) else {
         return None;
     };
     let Ok(name) = rustls::pki_types::ServerName::try_from(host.to_string()) else {

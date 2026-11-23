@@ -28,7 +28,7 @@ const FINISH_WAIT: Duration = Duration::from_millis(800);
 type Res<T> = std::result::Result<T, String>;
 
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
+    snow_connector::tls::agent_builder()
         .timeout(Duration::from_secs(10))
         .user_agent(concat!("snow/", env!("CARGO_PKG_VERSION")))
         .build()

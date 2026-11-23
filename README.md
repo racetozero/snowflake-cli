@@ -312,6 +312,13 @@ sign in again for each command.
 account host defaults to `<account>.snowflakecomputing.com`; for private
 link, set `host` in the connection or pass `--host`.
 
+Every TLS connection trusts the operating system's certificate store (the
+macOS keychain, the Windows certificate store, or the Linux CA bundle), so a
+corporate root CA or a TLS-inspecting proxy works once it is installed there.
+`snow` does not use a bundled list of root certificates. To trust a different
+set, set `SSL_CERT_FILE` to a PEM file or `SSL_CERT_DIR` to a directory of PEM
+certificates; either one replaces the system store.
+
 ## Projects
 
 ### Define a project

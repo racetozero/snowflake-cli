@@ -23,7 +23,7 @@ fn fail(msg: impl Into<String>) -> DbError {
 }
 
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
+    crate::tls::agent_builder()
         .timeout(Duration::from_secs(10))
         .build()
 }
@@ -97,7 +97,7 @@ fn imds(path: &str) -> Option<String> {
         return None;
     }
     // botocore: 1 second timeout, 1 attempt.
-    let a = ureq::AgentBuilder::new()
+    let a = crate::tls::agent_builder()
         .timeout_connect(Duration::from_secs(1))
         .timeout(Duration::from_secs(1))
         .build();

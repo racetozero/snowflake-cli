@@ -414,7 +414,7 @@ impl Remote {
             threshold: MULTIPART_THRESHOLD,
             chunk: 8 * 1024 * 1024,
             // `allow_redirects=False`: S3 region redirects are handled (and re-signed) by `s3_send`.
-            agent: ureq::AgentBuilder::new().redirects(0).build(),
+            agent: crate::tls::agent_builder().redirects(0).build(),
             upload_material,
             download_materials,
         })
@@ -1254,7 +1254,7 @@ mod tests {
             command: "PUT file:///x @st".into(),
             threshold: 10,
             chunk: 4,
-            agent: ureq::AgentBuilder::new().redirects(0).build(),
+            agent: crate::tls::agent_builder().redirects(0).build(),
             upload_material: None,
             download_materials: vec![None],
         }

@@ -223,7 +223,7 @@ fn plaintext_error(url: &str) -> String {
 /// `ParsedStatement.from_url`: https only, redirects must stay on https.
 fn from_url(path_part: &str, raw: &str) -> Parsed {
     let url0 = drop_comments(path_part);
-    let agent = ureq::AgentBuilder::new()
+    let agent = snow_connector::tls::agent_builder()
         .redirects(0)
         .timeout(std::time::Duration::from_secs(10))
         .build();

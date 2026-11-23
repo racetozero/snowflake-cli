@@ -1,0 +1,15 @@
+# ureq's own constructors trust its bundled Mozilla roots. Build every HTTP
+# client with snow_connector::tls::agent_builder(), which trusts the OS store.
+disallowed-methods = [
+  { path = "ureq::AgentBuilder::new", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::builder", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::agent", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::get", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::post", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::put", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::patch", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::delete", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::head", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::request", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+  { path = "ureq::request_url", reason = "use snow_connector::tls::agent_builder() so TLS trusts the OS certificate store" },
+]

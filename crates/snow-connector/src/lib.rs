@@ -14,6 +14,7 @@ pub mod auth;
 mod cloud;
 mod sigv4;
 mod storage;
+pub mod tls;
 pub mod transfer;
 pub mod wif;
 pub mod ws;
@@ -264,11 +265,11 @@ pub type HttpAgent = ureq::Agent;
 
 /// A plain HTTPS client with a timeout (version checks, downloads).
 pub fn http_agent(timeout: Duration) -> HttpAgent {
-    ureq::AgentBuilder::new().timeout(timeout).build()
+    crate::tls::agent_builder().timeout(timeout).build()
 }
 
 pub(crate) fn agent() -> ureq::Agent {
-    let mut b = ureq::AgentBuilder::new()
+    let mut b = crate::tls::agent_builder()
         .timeout_connect(Duration::from_secs(60))
         .timeout_read(Duration::from_secs(300))
         .user_agent(&user_agent());

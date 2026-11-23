@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.100"
 license = "Apache-2.0"
@@ -66,7 +66,7 @@ self-replace = "1.5"
 toml_edit = "0.22"
 unicode-width = "0.2"
 url = "2"
-webpki-roots = "0.26"
+rustls-native-certs = "0.8"
 ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
 uuid = { version = "1", features = ["v4"] }
 yaml-rust2 = { version = "0.13", default-features = false }

@@ -1278,7 +1278,7 @@ checksum = "3244542535d5de959d90ec55d1b5ff0fd2bb7b1310223907d5f11932847f7b59"
 
 [[package]]
 name = "snow-api"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "snow-click"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "serde_json",
  "snow-rich",
@@ -1305,7 +1305,7 @@ dependencies = [
 
 [[package]]
 name = "snow-connector"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "aes",
  "base64",
@@ -1329,7 +1329,7 @@ dependencies = [
 
 [[package]]
 name = "snow-plugins"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "base64",
  "chrono",
@@ -1358,21 +1358,21 @@ dependencies = [
 
 [[package]]
 name = "snow-rich"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "unicode-width",
 ]
 
 [[package]]
 name = "snow-spec"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "snow-click",
 ]
 
 [[package]]
 name = "snowflake-cli"
-version = "3.35.0-dev0"
+version = "0.0.1"
 dependencies = [
  "mimalloc",
  "serde_json",

@@ -1,0 +1,189 @@
+[[case]]
+name = "sar events tail"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "GET_APPLICATION_SERVICE_LOGS", columns = ["R"], rows = [["line1\nline2\n"]] }]
+argv = ["app", "events"]
+
+[[case]]
+name = "sar events tail last"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "GET_APPLICATION_SERVICE_LOGS", columns = ["R"], rows = [["line1\nline2\n"]] }]
+argv = ["app", "events", "--last", "5"]
+
+[[case]]
+name = "sar events tail instance"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "GET_APPLICATION_SERVICE_LOGS", columns = ["R"], rows = [["line1\nline2\n"]] }]
+argv = ["app", "events", "--instance", "1"]
+
+[[case]]
+name = "sar events tail error"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "GET_APPLICATION_SERVICE_LOGS", error = { code = 2003, message = "Service does not exist" } }]
+argv = ["app", "events"]
+
+[[case]]
+name = "sar events tail instance error"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "GET_APPLICATION_SERVICE_LOGS", error = { code = 2003, message = "bad instance" } }]
+argv = ["app", "events", "--instance", "2", "--last", "9"]
+
+[[case]]
+name = "sar events metric"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000000.5\", \"container.cpu.usage\", \"0.25\", \"cpu\", \"0\", \"runner\"], [\"1700000100\", \"container.memory.usage\", \"1536\", \"byte\", null, \"\"], [\"1700000050\", \"network.egress\", \"12.0\", \"packet\", \"1\", \"runner\"], [\"x\", \"container.cpu.limit\", \"bad\", \"cpu\", \"0\", \"r\"], [\"1700000000\", \"short\"]]"]] }]
+argv = ["app", "events", "--type", "metric", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events metric json raw"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000000.5\", \"container.cpu.usage\", \"0.25\", \"cpu\", \"0\", \"runner\"], [\"1700000100\", \"container.memory.usage\", \"1536\", \"byte\", null, \"\"], [\"1700000050\", \"network.egress\", \"12.0\", \"packet\", \"1\", \"runner\"], [\"x\", \"container.cpu.limit\", \"bad\", \"cpu\", \"0\", \"r\"], [\"1700000000\", \"short\"]]"]] }]
+argv = ["app", "events", "--type", "metric", "--raw", "--format", "json", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events metric cpu"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000000.5\", \"container.cpu.usage\", \"0.25\", \"cpu\", \"0\", \"runner\"], [\"1700000100\", \"container.memory.usage\", \"1536\", \"byte\", null, \"\"], [\"1700000050\", \"network.egress\", \"12.0\", \"packet\", \"1\", \"runner\"], [\"x\", \"container.cpu.limit\", \"bad\", \"cpu\", \"0\", \"r\"], [\"1700000000\", \"short\"]]"]] }]
+argv = ["app", "events", "--type", "metric", "--metric", "CPU", "--format", "json", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events metric last"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW PARAMETERS LIKE", columns = ["key", "value"], rows = [["APPLICATION_SERVICE_EVENT_TABLE_MAX_ROWS", "500"]] }, { match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000000.5\", \"container.cpu.usage\", \"0.25\", \"cpu\", \"0\", \"runner\"], [\"1700000100\", \"container.memory.usage\", \"1536\", \"byte\", null, \"\"], [\"1700000050\", \"network.egress\", \"12.0\", \"packet\", \"1\", \"runner\"], [\"x\", \"container.cpu.limit\", \"bad\", \"cpu\", \"0\", \"r\"], [\"1700000000\", \"short\"]]"]] }]
+argv = ["app", "events", "--type", "metric", "--last", "1", "--format", "json", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events lifecycle"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000000\", \"INFO\", \"CONTAINER.STATUS_CHANGE\", \"{\\\"status\\\": \\\"READY\\\", \\\"message\\\": \\\"Running\\\"}\", \"0\", \"runner\"], [\"1700000200\", \"ERROR\", \"SVC\", \"plain text\"], [\"1700000100\", \"WARN\", \"X\", {\"status\": \"S\"}]]"]] }]
+argv = ["app", "events", "--type", "lifecycle", "--format", "json", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events windowed logs"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000200\", \"0\", \"runner\", \"newest  \"], [\"1700000100\", null, null, \"serverless\"], [\"1700000000\", \"1\", \"runner\", \"oldest\"]]"]] }]
+argv = ["app", "events", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events windowed logs last"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["[[\"1700000200\", \"0\", \"runner\", \"newest  \"], [\"1700000100\", null, null, \"serverless\"], [\"1700000000\", \"1\", \"runner\", \"oldest\"]]"]] }]
+argv = ["app", "events", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02", "--last", "2"]
+
+[[case]]
+name = "sar events paged"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW PARAMETERS LIKE", columns = ["key", "value"], rows = [["X", "2"]] }, { match = "RESULT_SCAN", columns = ["TIMESTAMP", "NAME", "VALUE", "UNIT", "INSTANCE", "CONTAINER"], rows = [["2024-01-01 10:00:00.000", "container.cpu.usage", "0.5", "cpu", "0", "runner"]] }, { match = "EVENT_TABLE_DATA", columns = ["R"], rows = [["01b2-qid"]] }]
+argv = ["app", "events", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02", "--type", "metric", "--last", "3", "--format", "json"]
+
+[[case]]
+name = "sar events serverless unavailable"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", error = { code = 94550, message = "no" } }]
+argv = ["app", "events", "--type", "metric", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events event table error"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "EVENT_TABLE_DATA", error = { code = 3001, message = "no" } }]
+argv = ["app", "events", "--type", "lifecycle", "--since", "2024-01-01 00:00:00", "--until", "2024-01-02"]
+
+[[case]]
+name = "sar events bad type"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--type", "span"]
+
+[[case]]
+name = "sar events two types"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--type", "log", "--type", "metric"]
+
+[[case]]
+name = "sar events metric without type"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--metric", "cpu"]
+
+[[case]]
+name = "sar events bad metric"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--type", "metric", "--metric", "disk"]
+
+[[case]]
+name = "sar events raw without metric"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--raw"]
+
+[[case]]
+name = "sar events negative instance"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--instance", "-1"]
+
+[[case]]
+name = "sar events instance with window"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--instance", "1", "--since", "1h"]
+
+[[case]]
+name = "sar events bad since"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--type", "metric", "--since", "yesterday"]
+
+[[case]]
+name = "sar events reversed window"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--type", "metric", "--since", "2024-02-01", "--until", "2024-01-01"]
+
+[[case]]
+name = "sar events native options"
+covers = ["snow app events"]
+connection = true
+files = { "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "events", "--first", "3", "--follow", "--consumer-org", "o"]

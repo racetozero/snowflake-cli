@@ -1,0 +1,151 @@
+[[case]]
+name = "check-snowsql-env-vars"
+covers = ["snow helpers check-snowsql-env-vars"]
+env = { SNOWSQL_ACCOUNT = "a", SNOWSQL_FOO = "x", SNOWSQL_PWD = "p" }
+argv = ["helpers", "check-snowsql-env-vars"]
+
+[[case]]
+name = "check-snowsql-env-vars json"
+covers = ["snow helpers check-snowsql-env-vars"]
+env = { SNOWSQL_ACCOUNT = "a", snowsql_bar = "y" }
+argv = ["helpers", "check-snowsql-env-vars", "--format", "json"]
+
+[[case]]
+name = "check-snowsql-env-vars none"
+covers = ["snow helpers check-snowsql-env-vars"]
+argv = ["helpers", "check-snowsql-env-vars"]
+
+[[case]]
+name = "check-version cached"
+covers = ["snow helpers check-version"]
+home_files = { ".cli_version.cache" = "{\"last_time_check\": 99999999999, \"version\": \"3.40.0\"}" }
+argv = ["helpers", "check-version"]
+normalize = [['"last_time_shown": [0-9.]+', '"last_time_shown": <T>']]
+
+[[case]]
+name = "check-version cached older json"
+covers = ["snow helpers check-version"]
+home_files = { ".cli_version.cache" = "{\"last_time_check\": 99999999999, \"version\": \"3.34.1\"}" }
+argv = ["helpers", "check-version", "--format", "json"]
+normalize = [['"last_time_shown": [0-9.]+', '"last_time_shown": <T>']]
+
+[[case]]
+name = "check-version air gapped"
+covers = ["snow helpers check-version"]
+config = "air_gapped = true"
+argv = ["helpers", "check-version"]
+
+[[case]]
+name = "generate-project-schema"
+covers = ["snow helpers generate-project-schema"]
+argv = ["helpers", "generate-project-schema"]
+
+[[case]]
+name = "generate-project-schema v1 json"
+covers = ["snow helpers generate-project-schema"]
+argv = ["helpers", "generate-project-schema", "--definition-version", "1", "--format", "json"]
+
+[[case]]
+name = "generate-project-schema file"
+covers = ["snow helpers generate-project-schema"]
+argv = ["helpers", "generate-project-schema", "--definition-version", "1.1", "-o", "schema.json"]
+
+[[case]]
+name = "generate-project-schema missing dir"
+covers = ["snow helpers generate-project-schema"]
+argv = ["helpers", "generate-project-schema", "-o", "nope/schema.json"]
+
+[[case]]
+name = "detect-encoding"
+covers = ["snow helpers detect-encoding"]
+argv = ["helpers", "detect-encoding"]
+
+[[case]]
+name = "detect-encoding latin1"
+covers = ["snow helpers detect-encoding"]
+env = { LC_ALL = "en_US.ISO8859-1" }
+argv = ["helpers", "detect-encoding", "--format", "json"]
+
+[[case]]
+name = "detect-encoding configured"
+covers = ["snow helpers detect-encoding"]
+env = { LC_ALL = "en_US.ISO8859-1", SNOWFLAKE_CLI_ENCODING_FILE_IO = "utf-8", SNOWFLAKE_CLI_ENCODING_SUBPROCESS = "cp1252", SNOWFLAKE_CLI_ENCODING_STDOUT = "latin1" }
+argv = ["helpers", "detect-encoding"]
+
+[[case]]
+name = "detect-encoding invalid"
+covers = ["snow helpers detect-encoding"]
+env = { SNOWFLAKE_CLI_ENCODING_FILE_IO = "klingon" }
+argv = ["helpers", "detect-encoding"]
+
+[[case]]
+name = "show-config-sources"
+covers = ["snow helpers show-config-sources"]
+offline_success = true
+argv = ["helpers", "show-config-sources", "account", "-c", "dev", "-d"]
+
+[[case]]
+name = "clean-installer-path none"
+covers = ["snow helpers clean-installer-path"]
+argv = ["helpers", "clean-installer-path"]
+
+[[case]]
+name = "clean-installer-path dry run"
+covers = ["snow helpers clean-installer-path"]
+user_files = { ".zshrc" = "alias a=b\n# added by Snowflake SnowflakeCLI installer v1.0\nexport PATH=/Applications/SnowflakeCLI.app/Contents/MacOS:$PATH\n\necho hi\n# added by Snowflake SnowflakeCLI installer v1.0\necho orphan\n", ".profile" = "# snowflake-cli PATH begin\n# added by Snowflake SnowflakeCLI installer v1.0\nexport PATH=/Applications/SnowflakeCLI.app/Contents/MacOS:$PATH\n# snowflake-cli PATH end\n" }
+argv = ["helpers", "clean-installer-path"]
+
+[[case]]
+name = "clean-installer-path apply"
+covers = ["snow helpers clean-installer-path"]
+user_files = { ".zshrc" = "alias a=b\n# added by Snowflake SnowflakeCLI installer v1.0\n\nexport PATH=/Applications/SnowflakeCLI.app/Contents/MacOS:$PATH\n\necho hi\n", ".bashrc" = "# added by Snowflake SnowflakeCLI installer v1.0\nexport PATH=\"/x/SnowflakeCLI.app/Contents/MacOS\":$PATH\n# added by Snowflake SnowflakeCLI installer v1.0\nexport PATH=/x/SnowflakeCLI.app/Contents/MacOS:$PATH\r\n" }
+argv = ["helpers", "clean-installer-path", "--apply", "--format", "json"]
+
+[[case]]
+name = "import-snowsql-connections none"
+covers = ["snow helpers import-snowsql-connections"]
+argv = ["helpers", "import-snowsql-connections"]
+compare_config = true
+
+[[case]]
+name = "import-snowsql-connections full"
+covers = ["snow helpers import-snowsql-connections"]
+compare_config = true
+user_files = { ".snowsql/config" = "[connections]\naccountname = acc1\nusername = \"u1\"\npassword = 'p # x'\nrolename = r1 # inline\n\n[connections.example]\naccountname = ex\nwarehousename = wh\nprivate_key_path = /k.p8\nlogin_timeout = 30\n\n[connections.blank]\nusername =   \n\n[connections.okta]\naccountname = o\nauthenticator = externalbrowser\nprivate_key_path = /k.p8\nprivate_key_file_pwd = sec\n\n[options]\nlogin_timeout = 10\nclient_session_keep_alive = yes\nocsp_fail_open = off\nlog_level = DEBUG\n" , ".snowsql.cnf" = "[connections.example]\nusername = from_cnf\nproxy_pwd = pp\nextra_thing = 1\n" }
+files = { "custom.cnf" = "[connections.custom]\naccountname = cust\ninsecure_mode = true\nclient_prefetch_threads = x4\n" }
+argv = ["helpers", "import-snowsql-connections", "--snowsql-config-file", "custom.cnf", "--default-connection-name", "snowsql"]
+
+[[case]]
+name = "import-snowsql-connections default name taken"
+covers = ["snow helpers import-snowsql-connections"]
+compare_config = true
+user_files = { ".snowsql/config" = "[connections]\naccountname = a\n[connections.default]\naccountname = b\n" }
+stdin = "\nother\n"
+argv = ["helpers", "import-snowsql-connections"]
+
+[[case]]
+name = "import-snowsql-connections override existing"
+covers = ["snow helpers import-snowsql-connections"]
+compare_config = true
+connection = true
+user_files = { ".snowsql/config" = "[connections.dev]\naccountname = b\n[connections.new]\naccountname = c\n" }
+stdin = "n\n"
+argv = ["helpers", "import-snowsql-connections"]
+offline_success = true
+
+[[case]]
+name = "import-snowsql-connections parse error"
+covers = ["snow helpers import-snowsql-connections"]
+user_files = { ".snowsql/config" = "[connections]\naccountname = a\naccountname = b\n" }
+argv = ["helpers", "import-snowsql-connections"]
+
+[[case]]
+name = "import-snowsql-connections bad line"
+covers = ["snow helpers import-snowsql-connections"]
+user_files = { ".snowsql.cnf" = "[connections]\njust some words\n" }
+argv = ["helpers", "import-snowsql-connections"]
+
+[[case]]
+name = "import-snowsql-connections missing custom"
+covers = ["snow helpers import-snowsql-connections"]
+argv = ["helpers", "import-snowsql-connections", "--snowsql-config-file", "nope.cnf"]

@@ -1,0 +1,347 @@
+[[case]]
+name = "sar deploy yml"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\nlabel: L\nmin_instances: 1\nauto_resume: true\nexternal_access_integrations: [e1]\nsecrets:\n  - name: TOKEN\n    secret: sec1\nenvironment_variables:\n  - name: MODE\n    value: 3\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml target"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ntargets:\n  prod:\n    name: other_db.other_s.app2\n    artifact_repo: repodb.reposc.repo1\n    build_eai: beai\n    build_job_location: x.y\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--target", "prod"]
+
+[[case]]
+name = "sar deploy yml existing stage"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [["MY_APP_CODE"]] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [["MY_APP_REPO"]] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml code stage"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncode_stage: mystage\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml upload only"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml build only"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [["MY_APP_REPO"]] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--build-only"]
+
+[[case]]
+name = "sar deploy yml promote only"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--promote-only"]
+
+[[case]]
+name = "sar deploy yml build failed"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "FAILED"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml bad build output"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["oops"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml apply fails"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CREATE OR ALTER APPLICATION SERVICE", error = { code = 3001, message = "Insufficient privileges" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--promote-only"]
+
+[[case]]
+name = "sar deploy yml two phases"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only", "--build-only"]
+
+[[case]]
+name = "sar deploy yml native options"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--prune"]
+
+[[case]]
+name = "sar deploy yml stage create denied"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 3001, message = "Insufficient privileges to operate on schema" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml stage drop denied"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [["MY_APP_CODE"]] }, { match = "DROP STAGE", error = { code = 3001, message = "no drop" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml app schema"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: my_app\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml serverless disabled"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncompute_resource: serverless\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml python disabled"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\nruntime: python\nrun:\n  command: [python, app.py]\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy yml postgres not cng"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\npostgres_instances:\n  - instance: pg\n" }
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--promote-only"]
+
+[[case]]
+name = "sar deploy entity create"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier:\n      name: myapp\n      database: db\n      schema: s\n    meta:\n      title: My App\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME"], rows = [] }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", columns = ["X"], rows = [["{\"query_warehouse\": \"WH1\", \"build_eai\": \"E1\"}"]] }, { match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "sar deploy entity upgrade"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier:\n      name: myapp\n      database: db\n      schema: s\n    meta:\n      title: My App\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME"], rows = [] }, { match = "CREATE APPLICATION SERVICE", error = { code = 2002, message = "Object MYAPP already exists." } }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--promote-only"]
+
+[[case]]
+name = "sar deploy entity create fails"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier:\n      name: myapp\n      database: db\n      schema: s\n    meta:\n      title: My App\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME"], rows = [] }, { match = "CREATE APPLICATION SERVICE", error = { code = 3001, message = "nope" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--promote-only"]
+
+[[case]]
+name = "sar deploy yml personal workspace"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: USER$\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml workspace denied personal"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: USER$\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "CREATE WORKSPACE", error = { code = 3001, message = "Insufficient privileges" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml workspace fallback"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncode_workspace: ws1\n" }
+rules = [{ match = "CREATE WORKSPACE", error = { code = 3001, message = "Insufficient privileges" } }, { match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy yml workspace live exists"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncode_workspace: ws1\n" }
+rules = [{ match = "ADD LIVE VERSION", error = { code = 99106, message = "live version exists" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar open watch"
+covers = ["snow app open"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", once = true, error = { code = 2003, message = "does not exist" } }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.example.com", "false"]] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["file://\\S+", "file://<F>"]]
+argv = ["app", "open", "--watch", "--print-only"]
+
+[[case]]
+name = "sar deploy cng cert unknown"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncompute_resource: SERVERLESS\n", "index.js" = "x\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_APPLICATION_SERVICE_COMPUTE_RESOURCE_SERVERLESS\", \"value\": \"ENABLED\"}]}"]] }, { match = "GET_ACCOUNT_DEPLOYMENT_INFO", columns = ["INFO"], rows = [["{\"dnsRegionId\": \"us-west-2.aws\"}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MY_ACC"]] }, { match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+env = { SNOWFLAKE_CLI_PER_ACCOUNT_APP_DOMAIN = "test.invalid" }
+normalize = [["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy cng no region"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncompute_resource: SERVERLESS\n", "index.js" = "x\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_APPLICATION_SERVICE_COMPUTE_RESOURCE_SERVERLESS\", \"value\": \"ENABLED\"}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MY_ACC"]] }, { match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+env = { SNOWFLAKE_CLI_PER_ACCOUNT_APP_DOMAIN = "test.invalid" }
+normalize = [["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar deploy cng skip certs"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncompute_resource: SERVERLESS\n", "index.js" = "x\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_APPLICATION_SERVICE_COMPUTE_RESOURCE_SERVERLESS\", \"value\": \"ENABLED\"}]}"]] }, { match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+env = { SNOWFLAKE_CLI_PER_ACCOUNT_APP_DOMAIN = "test.invalid" }
+normalize = [["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only", "--skip-certs-check"]

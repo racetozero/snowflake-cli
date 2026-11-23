@@ -1,0 +1,55 @@
+//! snow CLI command implementations.
+#![forbid(unsafe_code)]
+
+pub mod ai;
+pub mod app;
+pub mod apps;
+pub mod artifacts;
+pub mod auth_cmd;
+pub mod bundle;
+pub mod callbacks;
+pub mod common;
+pub mod completion;
+pub mod connection;
+pub mod cortex;
+pub mod custom_images;
+pub mod dbt;
+pub mod dcm;
+pub mod dcm_ops;
+pub mod entities;
+pub mod feature;
+pub mod feedback;
+pub mod git;
+pub mod helpers;
+pub mod init;
+pub mod logs;
+pub mod logs_cmd;
+pub mod nativeapp;
+pub mod notebook;
+pub mod object;
+pub mod paths;
+pub mod plugin_callbacks;
+pub mod registry;
+pub mod root;
+pub mod skill;
+pub mod snowpark;
+pub mod snowpark_package;
+pub mod snowpark_pip;
+pub mod snowsight;
+pub mod snowsql_import;
+pub mod spcs;
+pub mod sql;
+pub mod stage;
+pub mod stage_diff;
+pub mod stage_execute;
+pub mod streamlit;
+pub mod streamlit_grants;
+pub mod streamlit_logs;
+pub mod telemetry;
+pub mod types;
+pub mod update;
+pub mod upgrade;
+pub mod ws;
+pub mod zipper;
+
+pub use app::run;

@@ -1,0 +1,26 @@
+[package]
+name = "snow-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "snow CLI core: configuration, global context, output printing, console, errors"
+
+[lints]
+workspace = true
+
+[dependencies]
+snow-rich.workspace = true
+snow-click.workspace = true
+snow-connector.workspace = true
+serde_json.workspace = true
+toml_edit.workspace = true
+regex.workspace = true
+serde.workspace = true
+yaml-rust2.workspace = true
+dirs.workspace = true
+indexmap.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+minijinja = { workspace = true, features = ["custom_syntax"] }

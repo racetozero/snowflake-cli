@@ -1,0 +1,101 @@
+[[case]]
+name = "stage list"
+covers = ["snow stage list"]
+connection = true
+argv = ["stage", "list", "--in", "schema", "s"]
+
+[[case]]
+name = "stage describe"
+covers = ["snow stage describe"]
+connection = true
+argv = ["stage", "describe", "@my_stage"]
+
+[[case]]
+name = "stage drop"
+covers = ["snow stage drop"]
+connection = true
+argv = ["stage", "drop", "db.s.st"]
+
+[[case]]
+name = "git list"
+covers = ["snow git list"]
+connection = true
+argv = ["git", "list", "--like", "r%"]
+
+[[case]]
+name = "git describe"
+covers = ["snow git describe"]
+connection = true
+argv = ["git", "describe", "repo"]
+
+[[case]]
+name = "git drop"
+covers = ["snow git drop"]
+connection = true
+argv = ["git", "drop", "repo", "--if-exists"]
+
+[[case]]
+name = "streamlit list"
+covers = ["snow streamlit list"]
+connection = true
+argv = ["streamlit", "list"]
+
+[[case]]
+name = "streamlit describe"
+covers = ["snow streamlit describe"]
+connection = true
+argv = ["streamlit", "describe", "app1"]
+
+[[case]]
+name = "streamlit drop"
+covers = ["snow streamlit drop"]
+connection = true
+argv = ["streamlit", "drop", "app1"]
+
+[[case]]
+name = "compute pool list"
+covers = ["snow spcs compute-pool list"]
+connection = true
+argv = ["spcs", "compute-pool", "list", "--like", "p%"]
+
+[[case]]
+name = "compute pool describe"
+covers = ["snow spcs compute-pool describe"]
+connection = true
+argv = ["spcs", "compute-pool", "describe", "pool1"]
+
+[[case]]
+name = "compute pool drop"
+covers = ["snow spcs compute-pool drop"]
+connection = true
+argv = ["spcs", "compute-pool", "drop", "pool1"]
+
+[[case]]
+name = "image repository list"
+covers = ["snow spcs image-repository list"]
+connection = true
+argv = ["spcs", "image-repository", "list"]
+
+[[case]]
+name = "image repository drop"
+covers = ["snow spcs image-repository drop"]
+connection = true
+argv = ["spcs", "image-repository", "drop", "repo1"]
+
+[[case]]
+name = "service list"
+covers = ["snow spcs service list"]
+connection = true
+argv = ["spcs", "service", "list", "--in", "compute-pool", "p1"]
+
+[[case]]
+name = "service describe"
+covers = ["snow spcs service describe"]
+connection = true
+argv = ["spcs", "service", "describe", "svc"]
+
+[[case]]
+name = "dcm list"
+covers = ["snow dcm list"]
+connection = true
+argv = ["dcm", "list"]

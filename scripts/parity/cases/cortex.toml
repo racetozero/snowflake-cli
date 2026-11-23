@@ -1,0 +1,99 @@
+[[case]]
+name = "cortex complete"
+covers = ["snow cortex complete"]
+connection = true
+argv = ["cortex", "complete", "it's a \\ test", "--backend", "sql"]
+rules = [{ match = "CORTEX", columns = ["CORTEX_RESULT"], rows = [["  result text  "]] }]
+
+[[case]]
+name = "cortex complete file"
+covers = ["snow cortex complete"]
+connection = true
+files = { "chat.json" = "[{\"role\": \"user\", \"content\": \"hi\"}]" }
+argv = ["cortex", "complete", "--file", "chat.json", "--model", "m1", "--backend", "sql"]
+rules = [{ match = "CORTEX", columns = ["CORTEX_RESULT"], rows = [["{\"choices\": [{\"messages\": \"hello\"}]}"]] }]
+
+[[case]]
+name = "cortex complete nothing"
+covers = ["snow cortex complete"]
+connection = true
+argv = ["cortex", "complete"]
+
+[[case]]
+name = "cortex complete sql error"
+covers = ["snow cortex complete"]
+connection = true
+argv = ["cortex", "complete", "x", "--backend", "sql"]
+rules = [{ match = "CORTEX", error = { code = "100357", message = "Request failed", sqlState = "P0000" } }]
+
+[[case]]
+name = "cortex extract-answer"
+covers = ["snow cortex extract-answer"]
+connection = true
+argv = ["cortex", "extract-answer", "what?", "the doc"]
+rules = [{ match = "CORTEX", columns = ["CORTEX_RESULT"], rows = [["[{\"answer\": \"42\", \"score\": 0.9}]"]] }]
+
+[[case]]
+name = "cortex sentiment"
+covers = ["snow cortex sentiment"]
+connection = true
+argv = ["cortex", "sentiment", "great"]
+rules = [{ match = "CORTEX", columns = [{ name = "CORTEX_RESULT", type = "real" }], rows = [["0.75"]] }]
+
+[[case]]
+name = "cortex summarize file"
+covers = ["snow cortex summarize"]
+connection = true
+files = { "t.txt" = "long text\n" }
+argv = ["cortex", "summarize", "--file", "t.txt"]
+rules = [{ match = "CORTEX", columns = ["CORTEX_RESULT"], rows = [["  result text  "]] }]
+
+[[case]]
+name = "cortex translate"
+covers = ["snow cortex translate"]
+connection = true
+argv = ["cortex", "translate", "hallo", "--from", "de", "--to", "en"]
+rules = [{ match = "CORTEX", columns = ["CORTEX_RESULT"], rows = [["  result text  "]] }]
+
+[[case]]
+name = "cortex complete sql backend"
+covers = ["snow cortex complete"]
+connection = true
+argv = ["cortex", "complete", "it's", "--backend", "sql"]
+rules = [{ match = "CORTEX", columns = ["CORTEX_RESULT"], rows = [["  ok  "]] }]
+
+
+[[case]]
+name = "cortex complete rest"
+covers = ["snow cortex complete"]
+connection = true
+argv = ["cortex", "complete", "hi"]
+rules = [{ rest = "POST /api/v2/cortex/inference:complete", body = "data: {\"choices\": [{\"delta\": {\"content\": \"Hel\"}}]}\n\ndata: {\"choices\": [{\"delta\": {\"content\": \"lo\"}}]}\n\n" }]
+
+[[case]]
+name = "cortex complete rest error"
+covers = ["snow cortex complete"]
+connection = true
+argv = ["cortex", "complete", "hi", "--model", "nope"]
+rules = [{ rest = "POST /api/v2/cortex/inference:complete", status = 400, body = { message = "unknown model nope", code = "390400" } }]
+
+[[case]]
+name = "cortex search"
+covers = ["snow cortex search"]
+connection = true
+argv = ["cortex", "search", "what is snow", "--service", "svc", "--columns", "TEXT", "--columns", "ID", "--limit", "3"]
+rules = [{ rest = "POST /api/v2/databases/.*cortex-search-services/svc:query", body = { results = [{ TEXT = "hello", ID = 1 }, { TEXT = "world", ID = 2 }], request_id = "r1" } }]
+
+[[case]]
+name = "cortex search json"
+covers = ["snow cortex search"]
+connection = true
+argv = ["cortex", "search", "q", "--service", "svc", "--format", "json"]
+rules = [{ rest = "POST /api/v2/databases/.*:query", body = { results = [{ TEXT = "hello" }] } }]
+
+[[case]]
+name = "cortex search not found"
+covers = ["snow cortex search"]
+connection = true
+argv = ["cortex", "search", "q", "--service", "nope"]
+rules = [{ rest = "POST /api/v2/databases/.*:query", status = 404, body = { message = "Cortex search service NOPE does not exist", code = "399", request_id = "abc" } }]

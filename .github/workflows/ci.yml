@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Keep local agent files out of Git
+        run: |
+          if git ls-files | grep -E '(^|/)\.agent/|(^|/)(AGENTS|CLAUDE)\.md$'; then
+            echo 'Local agent files must not be tracked' >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo nextest run --workspace
+      - name: Install uv
+        if: runner.os == 'macOS'
+        uses: astral-sh/setup-uv@v6
+      - name: Parity with the Python reference (help, structure and behaviour)
+        if: runner.os == 'macOS'
+        run: |
+          scripts/upstream.sh
+          cargo build --release -p snowflake-cli
+          python3 scripts/parity/check.py
+      - name: Documentation tests
+        run: cargo test --workspace --doc
+
+  pgo-scripts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Test PGO helpers
+        run: python scripts/test_pgo.py
+
+  windows-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Clippy on Windows
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test on Windows
+        run: cargo nextest run --workspace --no-fail-fast
+      - name: Documentation tests on Windows
+        run: cargo test --workspace --doc
+
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check shell installer
+        if: runner.os != 'Windows'
+        run: bash -n install.sh
+      - name: Check shell installer with ShellCheck
+        if: runner.os == 'Linux'
+        run: shellcheck -x install.sh
+      - name: Check PowerShell installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/installer_regression.ps1

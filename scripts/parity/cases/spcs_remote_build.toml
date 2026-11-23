@@ -1,0 +1,76 @@
+[[case]]
+name = "spcs remote-build"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ rest = "POST /api/v2/remote-build/execute", body = { job_name = "JOB_1" } }, { rest = "GET /api/v2/remote-build/jobs/JOB_1", body = { job_name = "JOB_1", job_status = "DONE" } }]
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx", "--location", "db.s.repo", "--name", "img", "--image-tag", "v1", "--eai-name", "e1"]
+
+[[case]]
+name = "spcs remote-build failed existing stage"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ rest = "POST /api/v2/remote-build/execute", body = { job_name = "JOB_1" } }, { rest = "GET /api/v2/remote-build/jobs/JOB_1", body = { job_name = "JOB_1", job_status = "FAILED" } }]
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx", "--stage", "st"]
+
+[[case]]
+name = "spcs remote-build submit 403"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ rest = "POST /api/v2/remote-build/execute", status = 403, body = {} }]
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx"]
+
+[[case]]
+name = "spcs remote-build no job name"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ rest = "POST /api/v2/remote-build/execute", body = { x = 1 } }]
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx"]
+
+[[case]]
+name = "spcs remote-build bad type"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = []
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx", "--build-type", "zip"]
+
+[[case]]
+name = "spcs remote-build app without location"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = []
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx", "--build-type", "app"]
+
+[[case]]
+name = "spcs remote-build no dockerfile"
+covers = ["snow spcs service remote-build"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/x" = "1" }
+rules = []
+normalize = [["remote_build_[0-9a-f]{8}", "remote_build_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "remote-build", "--build-context-dir", "ctx"]

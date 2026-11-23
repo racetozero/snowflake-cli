@@ -1,0 +1,47 @@
+[[case]]
+name = "streamlit share user records new grants"
+covers = ["snow streamlit share"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  app:  # my app\n    type: streamlit\n    identifier: st1\n    main_file: app.py\n" }
+argv = ["streamlit", "share", "st1", "--to-user", "bob"]
+
+[[case]]
+name = "streamlit share users record existing grants"
+covers = ["snow streamlit share"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  app:\n    type: streamlit\n    identifier:\n      name: st1\n      database: db\n    main_file: app.py\n    grants:\n      - privilege: USAGE\n        role: R1\n\n# end\n" }
+argv = ["streamlit", "share", "db.public.st1", "--to-user", "bob", "--to-user", "Eve", "--with-grant-option"]
+
+[[case]]
+name = "streamlit share user already recorded"
+covers = ["snow streamlit share"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  app:\n    type: streamlit\n    identifier: st1\n    main_file: app.py\n    grants:\n      - privilege: usage\n        user: BOB\n" }
+argv = ["streamlit", "share", "st1", "--to-user", "bob"]
+
+[[case]]
+name = "streamlit share user no matching entity"
+covers = ["snow streamlit share"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  other:\n    type: streamlit\n    identifier: st9\n    main_file: app.py\n" }
+argv = ["streamlit", "share", "st1", "--to-user", "bob"]
+
+[[case]]
+name = "streamlit share user invalid project"
+covers = ["snow streamlit share"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  app:\n    type: streamlit\n    identifier: st1\n    bogus_field: 1\n" }
+argv = ["streamlit", "share", "st1", "--to-user", "bob"]
+
+[[case]]
+name = "streamlit share user no trailing newline"
+covers = ["snow streamlit share"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  app:\n    type: streamlit\n    identifier: st1\n    main_file: app.py" }
+argv = ["streamlit", "share", "st1", "--to-user", "bob"]
+
+[[case]]
+name = "streamlit share user no project"
+covers = ["snow streamlit share"]
+connection = true
+argv = ["streamlit", "share", "st1", "--to-user", "bob"]

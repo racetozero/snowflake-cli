@@ -1,0 +1,73 @@
+[[case]]
+name = "notebook execute"
+covers = ["snow notebook execute"]
+connection = true
+argv = ["notebook", "execute", "db.s.nb"]
+
+[[case]]
+name = "notebook get-url"
+covers = ["snow notebook get-url"]
+connection = true
+argv = ["notebook", "get-url", "nb"]
+rules = [{ match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+
+[[case]]
+name = "notebook get-url defaults"
+covers = ["snow notebook get-url"]
+connection = true
+argv = ["notebook", "get-url", "\"My NB\""]
+rules = [{ match = "return_current_org_name", columns = ["RESULT"], rows = [["org"]] }]
+
+[[case]]
+name = "notebook open"
+covers = ["snow notebook open"]
+connection = true
+files = { "bin/open" = { mode = "755", text = "#!/bin/sh\nexit 0\n" }, "bin/xdg-open" = { mode = "755", text = "#!/bin/sh\nexit 0\n" } }
+env = { PATH = "<CWD>/bin:/usr/bin:/bin" }
+argv = ["notebook", "open", "nb"]
+rules = [{ match = "return_current_org_name", columns = ["RESULT"], rows = [["org"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["acc"]] }]
+
+[[case]]
+name = "notebook create"
+covers = ["snow notebook create"]
+connection = true
+argv = ["notebook", "create", "nb", "--notebook-file", "@stage/dir/nb.ipynb"]
+rules = [{ match = "return_current_org_name", columns = ["RESULT"], rows = [["org"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["acc"]] }]
+
+[[case]]
+name = "notebook create bad file"
+covers = ["snow notebook create"]
+connection = true
+argv = ["notebook", "create", "nb", "--notebook-file", "@stage/nb.txt"]
+
+[[case]]
+name = "notebook deploy"
+covers = ["snow notebook deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  nb:\n    type: notebook\n    identifier: my_nb\n    notebook_file: nb.ipynb\n    query_warehouse: xs\n    artifacts:\n      - nb.ipynb\n      - src: lib/\n        dest: lib/\n", "nb.ipynb" = "{}", "lib/a.py" = "a=1\n" }
+rules = [{ match = "DESCRIBE NOTEBOOK", error = { code = 2003, message = "does not exist" } }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["notebook", "deploy"]
+
+[[case]]
+name = "notebook deploy exists"
+covers = ["snow notebook deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  nb:\n    type: notebook\n    notebook_file: nb.ipynb\n    query_warehouse: xs\n    artifacts: [nb.ipynb]\n", "nb.ipynb" = "{}" }
+argv = ["notebook", "deploy", "nb"]
+
+[[case]]
+name = "notebook deploy replace prune"
+covers = ["snow notebook deploy"]
+connection = true
+stage_files = { "notebooks/nb/old.txt" = "x", "notebooks/nb/nb.ipynb" = "{}" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  nb:\n    type: notebook\n    notebook_file: nb.ipynb\n    query_warehouse: xs\n    compute_pool: pool\n    runtime_name: rt\n    artifacts: [nb.ipynb]\n", "nb.ipynb" = "{\"x\": 1}" }
+rules = [{ match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["notebook", "deploy", "--replace", "--prune"]
+
+[[case]]
+name = "notebook deploy v1"
+covers = ["snow notebook deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 1\n" }
+argv = ["notebook", "deploy"]

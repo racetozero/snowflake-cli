@@ -1,0 +1,85 @@
+[[case]]
+name = "app bundle snowpark processor"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [snowpark]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n[{\"type\": \"function\", \"lineno\": 4, \"name\": \"echo\", \"handler\": \"echo\", \"imports\": [\"lib/missing.zip\", \"@st/x.zip\"], \"packages\": [\"numpy\", \"snowflake-snowpark-python>=1.0\"], \"runtime\": \"3.11\", \"returns\": \"STRING\", \"signature\": [{\"name\": \"a\", \"type\": \"STRING\"}, {\"name\": \"b\", \"type\": \"INT\", \"default\": \"5\"}], \"external_access_integrations\": [\"eai1\"], \"secrets\": {\"k\": \"sec1\"}, \"schema\": \"core\", \"application_roles\": [\"app_public\", \"app_admin\"]}, {\"type\": \"procedure\", \"lineno\": 10, \"name\": null, \"handler\": \"run\", \"imports\": [], \"packages\": [], \"runtime\": \"3.11\", \"returns\": \"INT\", \"signature\": [], \"external_access_integrations\": [], \"secrets\": {}, \"execute_as_caller\": true}, {\"type\": \"table function\", \"lineno\": 10, \"name\": \"tf\", \"handler\": \"run\", \"imports\": [], \"packages\": [\"'snowflake-snowpark-python'\"], \"runtime\": \"3.11\", \"returns\": \"TABLE(A INT)\", \"signature\": [], \"schema\": \"My Schema.x\"}, {\"type\": \"function\", \"handler\": \"bad\"}]\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor failure"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [snowpark]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\nprintf '%s' \"An exception occurred while executing file:  boom\\n\" >&2\ncat <<'JSON'\n\nJSON\nexit 1\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor bad json"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [snowpark]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\noops\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor empty output"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [snowpark]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor venv missing"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [{name: snowpark, properties: {env: {type: venv, path: nope}}}]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n[]\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor venv no path"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [{name: snowpark, properties: {env: {type: venv}}}]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n[]\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor conda"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [{name: snowpark, properties: {env: {type: conda, name: myenv}}}]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n[]\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor conda no name"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [{name: snowpark, properties: {env: {type: CONDA}}}]\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n[]\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor existing generated"
+covers = ["snow app bundle"]
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "src/echo.py" = "from snowflake.snowpark.functions import udf, sproc\n\n@udf(\n    name=\"echo\",\n    native_app_params={\"schema\": \"core\"},\n)\ndef echo(a: str) -> str:\n    return a\n\n@sproc(name='p1')\ndef run(session):\n    return 1\n\n@staticmethod\ndef untouched():\n    pass\n", "src/other.py" = "x = 1\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [snowpark]\n", "app/generated/x.txt" = "x\n" }
+bins = { "python3" = "#!/bin/sh\ncat > sandbox_input.txt\ncat <<'JSON'\n[{\"type\": \"function\", \"lineno\": 4, \"name\": \"echo\", \"handler\": \"echo\", \"imports\": [\"lib/missing.zip\", \"@st/x.zip\"], \"packages\": [\"numpy\", \"snowflake-snowpark-python>=1.0\"], \"runtime\": \"3.11\", \"returns\": \"STRING\", \"signature\": [{\"name\": \"a\", \"type\": \"STRING\"}, {\"name\": \"b\", \"type\": \"INT\", \"default\": \"5\"}], \"external_access_integrations\": [\"eai1\"], \"secrets\": {\"k\": \"sec1\"}, \"schema\": \"core\", \"application_roles\": [\"app_public\", \"app_admin\"]}]\nJSON\nexit 0\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle native app setup flag off"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [native app setup]\n", "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "select 1;\n", "src/a.py" = "x = 1\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle snowpark processor ast shapes"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n      - src: src/*.py\n        dest: ./py/\n        processors: [snowpark]\n", "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "select 1;\n", "src/mod.py" = "import functools\nfrom snowflake.snowpark.functions import udf, udtf\n\ndecos = [udf]\n\n@udf(name=\"a1\")\nasync def ahandler(x):\n    return x\n\n@udtf(output_schema=[\"a\"])\n@functools.lru_cache\nclass Tab:\n    @udf\n    def inner(self):\n        pass\n\n@decos[0]\ndef sub(x):\n    return x\n\ndef outer():\n    @udf(\n        name=\"nested\",\n        packages=[\"a\", \"b\"],\n    )\n    def nested(x):\n        return x\n    return nested\n" }
+bins = { "python3" = "#!/bin/sh\ncat > /dev/null\ncat <<'JSON'\n[{\"type\": \"function\", \"handler\": \"ahandler\", \"returns\": \"STRING\", \"signature\": [], \"runtime\": \"3.11\"}, {\"type\": \"table function\", \"handler\": \"Tab\", \"returns\": \"TABLE(A INT)\", \"signature\": [], \"runtime\": 3.1}, {\"type\": \"function\", \"handler\": \"sub\", \"returns\": \"INT\", \"signature\": [], \"runtime\": \"3.11\"}, {\"type\": \"function\", \"handler\": \"nested\", \"returns\": \"INT\", \"signature\": [{\"name\": \"x\", \"type\": \"INT\", \"default\": \"1\"}], \"runtime\": \"3.11\", \"imports\": [\"/abs.zip\"], \"external_access_integrations\": [\"e\"], \"secrets\": {\"a b\": \"s\"}}, {\"type\": \"aggregate function\", \"handler\": \"inner\", \"returns\": \"INT\", \"signature\": [], \"name\": \"agg\", \"application_roles\": [\"r1\"]}, {\"type\": \"procedure\", \"handler\": \"x\", \"returns\": \"INT\", \"signature\": [], \"extra\": 1}]\nJSON\n" }
+normalize = [["/private<", "<"]]
+argv = ["app", "bundle"]

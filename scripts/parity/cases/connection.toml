@@ -1,0 +1,324 @@
+[[case]]
+name = "connection list"
+covers = ["snow connection list"]
+connection = true
+compare = ["stdout", "stderr", "exit"]
+argv = ["connection", "list"]
+
+[[case]]
+name = "connection list json"
+covers = ["snow connection list"]
+connection = true
+compare = ["stdout", "stderr", "exit"]
+argv = ["connection", "list", "--format", "json"]
+
+[[case]]
+name = "connection list connections.toml"
+covers = ["snow connection list"]
+home_files = { "connections.toml" = { mode = "600", text = "[a]\naccount = \"x\"\npassword = \"secret\"\nport = 1\n[b]\nuser = \"u\"\n" } }
+argv = ["connection", "list", "--format", "csv"]
+
+[[case]]
+name = "connection list empty"
+covers = ["snow connection list"]
+argv = ["connection", "list"]
+
+[[case]]
+name = "connection add non interactive"
+covers = ["snow connection add"]
+compare_config = true
+argv = ["connection", "add", "-n", "new", "--account", "acc", "--user", "u", "--port", "1234", "--no-interactive", "--default"]
+
+[[case]]
+name = "connection add existing"
+covers = ["snow connection add"]
+connection = true
+argv = ["connection", "add", "-n", "dev", "--account", "acc", "--no-interactive"]
+
+[[case]]
+name = "connection add interactive"
+covers = ["snow connection add"]
+compare_config = true
+stdin = "conn1\nmyacc\nme\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+argv = ["connection", "add", "--password", "pw"]
+
+[[case]]
+name = "connection add missing key file"
+covers = ["snow connection add"]
+argv = ["connection", "add", "-n", "x", "-k", "/nonexistent.p8", "--no-interactive"]
+
+[[case]]
+name = "connection add to connections.toml"
+covers = ["snow connection add"]
+compare_config = true
+home_files = { "connections.toml" = { mode = "600", text = "[a]\naccount = \"x\"\n" } }
+argv = ["connection", "add", "-n", "b", "--account", "y", "--no-interactive"]
+
+[[case]]
+name = "connection remove"
+covers = ["snow connection remove"]
+connection = true
+compare_config = true
+argv = ["connection", "remove", "dev"]
+
+[[case]]
+name = "connection remove missing"
+covers = ["snow connection remove"]
+argv = ["connection", "remove", "nope"]
+
+[[case]]
+name = "connection set-default"
+covers = ["snow connection set-default"]
+connection = true
+compare_config = true
+config = "[connections.other]\naccount = \"o\"\n"
+argv = ["connection", "set-default", "other"]
+
+[[case]]
+name = "connection set-default missing"
+covers = ["snow connection set-default"]
+argv = ["connection", "set-default", "nope"]
+
+[[case]]
+name = "connection test"
+covers = ["snow connection test"]
+connection = true
+argv = ["connection", "test"]
+
+[[case]]
+name = "connection test json"
+covers = ["snow connection test"]
+connection = true
+argv = ["connection", "test", "--format", "json"]
+
+[[case]]
+name = "connection test temporary"
+covers = ["snow connection test"]
+server = true
+argv = ["connection", "test", "-x", "--account", "a", "--user", "u", "--password", "p", "--host", "127.0.0.1", "--port", "<PORT>", "--protocol", "http"]
+
+[[case]]
+name = "connection test login failure"
+covers = ["snow connection test"]
+connection = true
+config = "[connections.bad]\naccount = \"a\"\nuser = \"u\"\npassword = \"wrong\"\nhost = \"127.0.0.1\"\nport = <PORT>\nprotocol = \"http\"\n"
+argv = ["connection", "test", "-c", "bad"]
+
+[[case]]
+name = "connection test unknown connection"
+covers = ["snow connection test"]
+argv = ["connection", "test", "-c", "nope"]
+
+[[case]]
+name = "generate-jwt missing user"
+covers = ["snow connection generate-jwt"]
+config = "[connections.k]\naccount = \"a\"\n"
+argv = ["connection", "generate-jwt", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token missing provider"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\n"
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token oidc token"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"OIDC\"\ntoken = \"abc.def\"\n"
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-jwt"
+covers = ["snow connection generate-jwt"]
+offline_success = true
+files = { "key.p8" = """-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCjAwo36Q2q7EL+
+ITw3AmK3eYJePEBzSojVKAEz0YpQE7QuBHkb1J8SxxQpsuu3TTvl4iEDv1zPQTK1
+WcsQpYM2f/VCGWDtp3u+4Ct1a8wkTE7/U7CR6xNl7N6b9hUysHn6Cjkog02hPEUR
+VjlG/xUqlwFHgYIm/EYc3LxlaIEBkVgLkEACzYd6/ZJOuNIhmv7fZwKhDUtnwwnL
+3nw9rwTdbb5yUCyGc+Yghz6+4UNDCfVSMVDvI5oMQiaAfRwvbKLYtvM2hkr1dj5P
+59Ca7U6OLeOsMmQnt7SgYgNcBdzNrjTlaeiTay3CHHsVzmzILE5cQiMrmQD+on+N
+0c6PwmbJAgMBAAECggEAA3KfYxSXrIlr9tBI4+B16kvEfz3+vnmBeKGsmdYZGu25
+wj3nulgWR7lEcsfVHrbAWTG90USZP8xxGD8WkYrwoiTVcQEUqN4hmsVGwghmRE/F
+XXbdjY6HZeDbSfjr1JtBLzHLaPETAaGi09WrJzZishiIx0SE1lKAYKCmDu6FiP0L
+d3VXJeZ3wPx6OkPLDQxLMrPgtis1n2xbmfmhh5h0gbSMP4vgcWuIJ0aSy54Wv+Sp
+Aqw5TsXwEDrFFKtXysw0TrQ3I6Yd3+CmajOXgqGz8CVu361D/PKgTaWbt9h6Ao/H
+ylxTlpaqplF/LXGUe8+mjXzUwbF1hCIENVkGZj0TEQKBgQDOvrUqoryyGsTF+b2w
+cyUFhkp6aVlp1XUz0v51M7mciXMbb1KoWXTPeFgEzmmq0OIpKx3H4Um8PSWemCzU
+lRu1MugL90SRF6XhSmgXq9wslTvSxbtwoWFqfG/UPoSaOG64ib5XcMlrLVw9Mzm/
+re1RwSDQydsLb3X9BZyZ1asfsQKBgQDJ2RG7OfPa8rSjSV1rWt9K9SKkgyl/D/bj
+vTlqVfvCqCPsSsme/jS0HZStCJ0E7hjyqvIz79Erjf5kgT+78/uJfqZ2bZbRBdE7
+mOysCKE+z8LOL0Zq0QuPasRWUt3ibEk7deW07yY6uRt6Z4Ia/RY4EqrkWYefVuJj
+HTUjIgdWmQKBgD/SQUzbFdMJTmsrEDKTKP+OmBk3wkFYgqiv3ptBj2/SQnVapTKR
+Au004j8BlT8E4nwA8l2Mn117psxRf61UJkyGXXmsKD9+BFgKxx1fkUU2AFStc5Ju
+Tws3RLJJZlfRSeSvqNGHYLY0N4Aw+we/4j3Vl5K8bWEXVF36SIB4pC3RAoGAO5Mc
+36SwK6w80oDh2MC+bPJDIkkwIzeECB2eZ5svLnnP+HruXUXsKkkcy6FiLsVTibQY
+vmmG1BMZxXI8bG4LjL5bxVJ9E/5ijfOJzxDQ/qf1eEONxhMjFVZO0qeso5qQVsNq
+Y+e94dEmog8Q4IRYXX5s/+7Iz6emM9i4CUGO5ukCgYAwod17dYAo3hpS/EYcJL9y
+3/TvG8LRfVwCBZ7yLz89A4b5CAxz3/t7j3eCTOaZhFdH2ZQAdqA8OX+VLLeBeyyM
+uHb8zxRdPcCYeDqIR1UkeyxFg/lN+mrGr4WteEnjL8vncRyfWQZpajVly1UbEC+8
+wY13+B35Wo9LubNUu+cEOg==
+-----END PRIVATE KEY-----
+""" }
+config = "[connections.k]\naccount = \"myorg-acc\"\nuser = \"me\"\nauthenticator = \"SNOWFLAKE_JWT\"\nprivate_key_file = \"<CWD>/key.p8\"\n"
+argv = ["connection", "generate-jwt", "-c", "k"]
+normalize = [['eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '<JWT>']]
+
+[[case]]
+name = "generate-workload-identity-token oidc valid"
+covers = ["snow connection generate-workload-identity-token"]
+offline_success = true
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"OIDC\"\ntoken = \"eyJhbGciOiAibm9uZSJ9.eyJpc3MiOiAiaHR0cHM6Ly9pc3N1ZXIiLCAic3ViIjogIm1lIn0.sig\"\n"
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws no region"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+timeout = 60
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws env creds"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"aws\"\n"
+env = { AWS_REGION = "us-west-2", AWS_ACCESS_KEY_ID = "AKIDEXAMPLE", AWS_SECRET_ACCESS_KEY = "SECRET" }
+normalize = [["^\\S+$", "<TOKEN>"]]
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws shared file"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "eu-central-1", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/creds" }
+files = { "creds" = "[default]\naws_access_key_id = AKFILE\naws_secret_access_key = S2\naws_session_token = T2\n" }
+normalize = [["^\\S+$", "<TOKEN>"]]
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws no credentials"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/none" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token azure no endpoint header"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AZURE\"\n"
+env = { IDENTITY_ENDPOINT = "http://127.0.0.1:9/token" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif login impersonation path oidc"
+covers = ["snow connection test"]
+config = "[connections.k]\naccount = \"a\"\nuser = \"u\"\nauthenticator = \"WORKLOAD_IDENTITY\"\nworkload_identity_provider = \"OIDC\"\ntoken = \"t\"\nworkload_identity_impersonation_path = [\"r1\"]\n"
+argv = ["connection", "test", "-c", "k"]
+
+[[case]]
+name = "wif login host not aws"
+covers = ["snow connection test"]
+config = "[connections.k]\naccount = \"a\"\nuser = \"u\"\nauthenticator = \"WORKLOAD_IDENTITY\"\nworkload_identity_provider = \"GCP\"\nworkload_identity_host = \"sts.example.com\"\n"
+argv = ["connection", "test", "-c", "k"]
+
+[[case]]
+name = "wif login host with path"
+covers = ["snow connection test"]
+config = "[connections.k]\naccount = \"a\"\nuser = \"u\"\nauthenticator = \"WORKLOAD_IDENTITY\"\nworkload_identity_provider = \"AWS\"\nworkload_identity_host = \"https://sts.example.com/x\"\n"
+argv = ["connection", "test", "-c", "k"]
+
+[[case]]
+name = "wif login host bad scheme"
+covers = ["snow connection test"]
+config = "[connections.k]\naccount = \"a\"\nuser = \"u\"\nauthenticator = \"WORKLOAD_IDENTITY\"\nworkload_identity_provider = \"AWS\"\nworkload_identity_host = \"ftp://sts.example.com\"\n"
+argv = ["connection", "test", "-c", "k"]
+
+[[case]]
+name = "wif login no provider"
+covers = ["snow connection test"]
+config = "[connections.k]\naccount = \"a\"\nuser = \"u\"\nauthenticator = \"WORKLOAD_IDENTITY\"\n"
+argv = ["connection", "test", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws credential process"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\ncredential_process = /bin/echo {\"Version\":1,\"AccessKeyId\":\"AKP\",\"SecretAccessKey\":\"SP\"}\n" }
+normalize = [["^\\S+$", "<TOKEN>"]]
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws credential process quoted"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\ncredential_process = /bin/echo '{\"Version\": 1, \"AccessKeyId\": \"AKP\", \"SecretAccessKey\": \"SP\"}'\n" }
+normalize = [["^\\S+$", "<TOKEN>"]]
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws credential process fails"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\ncredential_process = /bin/sh -c 'echo nope >&2; exit 3'\n" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "generate-workload-identity-token aws credential process version"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\ncredential_process = /bin/echo '{\"Version\": 2}'\n" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif aws sso missing config"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\nsso_account_id = 123\n" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif aws sso no token"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\nsso_start_url = https://x.awsapps.com/start\nsso_region = us-east-1\nsso_account_id = 123\nsso_role_name = Dev\n" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif aws sso expired token"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\nsso_start_url = https://x.awsapps.com/start\nsso_region = us-east-1\nsso_account_id = 123\nsso_role_name = Dev\n" }
+user_files = { ".aws/sso/cache/3947de8b16688092197fa616c34e01335f21d256.json" = "{\"accessToken\": \"tok\", \"expiresAt\": \"2020-01-01T00:00:00Z\"}" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif aws sso invalid token"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\nsso_start_url = https://x.awsapps.com/start\nsso_region = us-east-1\nsso_account_id = 123\nsso_role_name = Dev\n" }
+user_files = { ".aws/sso/cache/3947de8b16688092197fa616c34e01335f21d256.json" = "{\"accessToken\": \"tok\"}" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif aws sso session missing"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\nsso_session = mysess\nsso_account_id = 123\nsso_role_name = Dev\n" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]
+
+[[case]]
+name = "wif aws sso session inconsistent"
+covers = ["snow connection generate-workload-identity-token"]
+config = "[connections.k]\naccount = \"a\"\nworkload_identity_provider = \"AWS\"\n"
+env = { AWS_REGION = "us-west-2", AWS_EC2_METADATA_DISABLED = "true", AWS_SHARED_CREDENTIALS_FILE = "<CWD>/none", AWS_CONFIG_FILE = "<CWD>/config" }
+files = { "config" = "[default]\nsso_session = mysess\nsso_account_id = 123\nsso_role_name = Dev\nsso_region = eu-west-1\n[sso-session mysess]\nsso_region = us-east-1\nsso_start_url = https://x\n" }
+argv = ["connection", "generate-workload-identity-token", "-c", "k"]

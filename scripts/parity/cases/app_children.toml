@@ -1,0 +1,62 @@
+[[case]]
+name = "app bundle children"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: my_st\n        identifier:\n          schema: v_schema\n        ensure_usable_by:\n          application_roles: [\"app_user\"]\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children plain"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: my_st\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children dir"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children_artifacts_dir: kids\n    children:\n      - target: my_st\n        ensure_usable_by:\n          application_roles: app_admin\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children function"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: fn\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children missing"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: nope\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children dup"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: my_st\n      - target: my_st\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children runtime settings"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: my_st\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n    execute_as: RESTRICTED CALLER\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_NATIVE_APP_CHILDREN = "true" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle children flag off"
+covers = ["snow app bundle"]
+connection = true
+files = { "app/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "st.py" = "import streamlit\n", "pages/p1.py" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n    children:\n      - target: my_st\n  my_st:\n    type: streamlit\n    identifier: my_st\n    query_warehouse: wh\n    main_file: st.py\n    title: T\n    artifacts: [st.py]\n  fn:\n    type: function\n    identifier: f\n    handler: a.b\n    returns: string\n    signature: []\n    artifacts: [st.py]\n    stage: s\n" }
+argv = ["app", "bundle"]

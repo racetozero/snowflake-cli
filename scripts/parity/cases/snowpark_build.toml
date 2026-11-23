@@ -1,0 +1,93 @@
+[[case]]
+name = "snowpark build"
+covers = ["snow snowpark build"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n" }
+argv = ["snowpark", "build"]
+
+[[case]]
+name = "snowpark build requirements anaconda"
+covers = ["snow snowpark build"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "requirements.txt" = "pandas==1.5.3\n# comment\nsnowflake-snowpark-python\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+argv = ["snowpark", "build"]
+
+[[case]]
+name = "snowpark build pyproject"
+covers = ["snow snowpark build"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "pyproject.toml" = "[project]\nname = 'x'\ndependencies = ['pandas']\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+argv = ["snowpark", "build"]
+
+[[case]]
+name = "snowpark build skip dependencies"
+covers = ["snow snowpark build"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "requirements.snowflake.txt" = "pandas\n" }
+argv = ["snowpark", "build", "--skip-dependencies"]
+
+[[case]]
+name = "snowpark build skip dependencies conflict"
+covers = ["snow snowpark build"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n" }
+argv = ["snowpark", "build", "--skip-dependencies", "--ignore-anaconda"]
+
+[[case]]
+name = "snowpark build v1"
+covers = ["snow snowpark build"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 1\nsnowpark:\n  project_name: my_project\n  stage_name: dev_deployment\n  src: app/\n  functions:\n    - name: f1\n      handler: functions.hello_function\n      signature:\n        - name: name\n          type: string\n      returns: string\n", "app/functions.py" = "x=1\n" }
+argv = ["snowpark", "build"]
+
+[[case]]
+name = "snowpark deploy"
+covers = ["snow snowpark deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "app.zip" = "fakezip" }
+rules = [{ match = "show integrations", columns = ["name", "type"], rows = [["MY_EAI", "EXTERNAL_ACCESS"]] }, { match = "describe procedure", error = { code = 2003, message = "does not exist" } }, { match = "describe function", error = { code = 2003, message = "does not exist" } }]
+stages = true
+argv = ["snowpark", "deploy"]
+
+[[case]]
+name = "snowpark deploy existing"
+covers = ["snow snowpark deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "app.zip" = "fakezip" }
+rules = [{ match = "show integrations", columns = ["name", "type"], rows = [["MY_EAI", "EXTERNAL_ACCESS"]] }, { match = "describe function", columns = ["property", "value"], rows = [["packages", "['snowflake-snowpark-python']"], ["handler", "functions.hello_function"], ["returns", "VARCHAR(16777216)"], ["imports", "[@db.public.dev_deployment/app.zip]"], ["runtime_version", "3.10"]] }, { match = "describe procedure", error = { code = 2003, message = "does not exist" } }]
+argv = ["snowpark", "deploy"]
+
+[[case]]
+name = "snowpark deploy replace"
+covers = ["snow snowpark deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "app.zip" = "fakezip", "requirements.snowflake.txt" = "snowflake-snowpark-python" }
+rules = [{ match = "show integrations", columns = ["name", "type"], rows = [["MY_EAI", "EXTERNAL_ACCESS"]] }, { match = "describe function", columns = ["property", "value"], rows = [["packages", "['snowflake-snowpark-python']"], ["handler", "functions.hello_function"], ["returns", "VARCHAR(16777216)"], ["imports", "[@db.public.dev_deployment/app.zip]"], ["runtime_version", "3.10"]] }, { match = "describe procedure", error = { code = 2003, message = "does not exist" } }]
+stages = true
+argv = ["snowpark", "deploy", "--replace"]
+
+[[case]]
+name = "snowpark deploy force replace prune"
+covers = ["snow snowpark deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "app.zip" = "fakezip" }
+rules = [{ match = "show integrations", columns = ["name", "type"], rows = [["MY_EAI", "EXTERNAL_ACCESS"]] }]
+stages = true
+argv = ["snowpark", "deploy", "--force-replace", "--prune"]
+
+[[case]]
+name = "snowpark deploy missing artifact"
+covers = ["snow snowpark deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n" }
+argv = ["snowpark", "deploy"]
+
+[[case]]
+name = "snowpark deploy missing integration"
+covers = ["snow snowpark deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  base:\n    stage: dev_deployment\n    artifacts: [app/]\nentities:\n  hello_function:\n    type: function\n    identifier: hello_function\n    handler: functions.hello_function\n    signature:\n      - name: name\n        type: string\n    returns: string\n    external_access_integrations: [nope_eai]\n    meta:\n      use_mixins: [base]\n  hello_procedure:\n    type: procedure\n    identifier: hello_procedure\n    handler: procedures.hello_procedure\n    signature:\n      - name: name\n        type: string\n        default: world\n    returns: string\n    execute_as_caller: true\n    meta:\n      use_mixins: [base]\n", "app/functions.py" = "def hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\ndef hello_function(name):\n    return 'Hello ' + name\n", "app/procedures.py" = "def hello_procedure(session, name):\n    return name\n", "app/sub/util.py" = "X = 1\n", "app.zip" = "fakezip" }
+rules = [{ match = "show integrations", columns = ["name", "type"], rows = [["MY_EAI", "EXTERNAL_ACCESS"]] }]
+argv = ["snowpark", "deploy"]

@@ -1,0 +1,216 @@
+[[case]]
+name = "sar upload error create stage 3001"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 3001, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 2003"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 2003, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 2043"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 2043, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 3041"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 3041, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 60119"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 60119, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 1003"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 1003, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 99108"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 99108, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error create stage 1234"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "CREATE STAGE", error = { code = 1234, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error put 3001"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "PUT ", error = { code = 3001, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error put 2003"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "PUT ", error = { code = 2003, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error put 1003"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "PUT ", error = { code = 1003, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error put 253003"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }, { match = "PUT ", error = { code = 253003, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error show stages"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES", error = { code = 2003, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error remove"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [["MY_APP_CODE"]] }, { match = "DROP STAGE", error = { code = 3001, message = "boom" } }, { match = "REMOVE", error = { code = 3001, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar upload error workspace personal put"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: USER$\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "PUT ", error = { code = 99108, message = "boom" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "sar drop stage after build fails"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DROP STAGE", error = { code = 3001, message = "cannot drop" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--build-only"]
+
+[[case]]
+name = "sar drop workspace after build fails"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nignore: [index.js]\nname: my_app\ndatabase: USER$\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "SHOW ARTIFACT REPOSITORIES", columns = ["name"], rows = [] }, { match = "SELECT CURRENT_DATABASE", columns = ["D"], rows = [["DB"]] }, { match = "SPCS_TEST_BUILD_APP_ARTIFACT_REPO", columns = ["R"], rows = [["Build job submitted: DB.S.BUILD_JOB_1"]] }, { match = "DESCRIBE SERVICE", columns = ["name", "status"], rows = [["BUILD_JOB_1", "DONE"]] }, { match = "DROP WORKSPACE", error = { code = 3001, message = "cannot drop" } }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+argv = ["app", "deploy", "--build-only"]
+
+[[case]]
+name = "sar upload glob chars"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+sort_sql = true
+timeout = 120
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n", "app/[id]/page.js" = "p\n", "my dir/a b.js" = "q\n" }
+rules = [{ match = "SHOW STAGES LIKE", columns = ["name"], rows = [] }]
+normalize = [["\\[\\d\\d:\\d\\d:\\d\\d\\]", "[TS]"], ["/private<", "<"]]
+sort_lines = "^  Uploaded "
+argv = ["app", "deploy", "--upload-only"]

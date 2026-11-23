@@ -1,0 +1,70 @@
+[[case]]
+name = "stage copy put"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+files = { "data/a.csv" = "1,2\n3,4\n", "data/b.txt" = "hello\n", "data/c.gz" = "notreallygz" }
+argv = ["stage", "copy", "data", "@my_stage/dir"]
+
+[[case]]
+name = "stage copy put file overwrite no compress"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+files = { "data/a.csv" = "1,2\n3,4\n" }
+argv = ["stage", "copy", "data/a.csv", "@my_stage", "--overwrite", "--no-auto-compress", "--parallel", "2"]
+
+[[case]]
+name = "stage copy get"
+covers = ["snow stage copy"]
+connection = true
+stage_files = { "my_stage/x/one.txt" = "one\n", "my_stage/x/sub/two.txt" = "two two\n" }
+argv = ["stage", "copy", "@my_stage/x/", "out/"]
+
+[[case]]
+name = "stage copy get recursive"
+covers = ["snow stage copy"]
+connection = true
+stage_files = { "my_stage/x/one.txt" = "one\n", "my_stage/x/sub/two.txt" = "two two\n" }
+sort_sql = true
+argv = ["stage", "copy", "@my_stage/x/", "out/", "--recursive"]
+
+[[case]]
+name = "stage copy put recursive"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "data/sub/deeper/c.txt" = "c\n", "data/sub/deeper/d.txt" = "dd\n" }
+argv = ["stage", "copy", "data", "@my_stage/dir", "--recursive", "--auto-compress", "--format", "json"]
+normalize = [['file:///\S+/[0-9]+/\*', 'file://<ISO>/*']]
+
+[[case]]
+name = "stage copy put json"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+files = { "data/a.csv" = "1,2\n", "data/x.parquet" = "PAR1zzzz" }
+argv = ["stage", "copy", "data/", "@~/up", "--auto-compress", "--format", "json"]
+
+[[case]]
+name = "stage copy put missing"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+argv = ["stage", "copy", "nope.txt", "@my_stage"]
+
+[[case]]
+name = "stage copy put unsupported compression"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+files = { "x.xz" = "zz" }
+argv = ["stage", "copy", "x.xz", "@my_stage"]
+
+[[case]]
+name = "stage copy get single file json"
+covers = ["snow stage copy"]
+connection = true
+stage_files = { "st/a/f.csv.gz" = "zzz" }
+argv = ["stage", "copy", "@st/a/f.csv.gz", "dl", "--format", "json"]

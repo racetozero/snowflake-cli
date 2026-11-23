@@ -1,0 +1,90 @@
+# Root options and Click usage errors.
+
+[[case]]
+name = "version"
+covers = []
+argv = ["--version"]
+
+[[case]]
+name = "info"
+covers = []
+argv = ["--info"]
+normalize = [['"value": "3\.12[^"]*"', '"value": "<PY>"'], ['"value": "(macOS|Linux|Windows|macos|linux)[^"]*"', '"value": "<PLATFORM>"'], ['"(pypi|binary)"', '"<SOURCE>"']]
+
+[[case]]
+name = "root no args"
+covers = []
+argv = []
+
+[[case]]
+name = "missing argument"
+covers = []
+argv = ["object", "list"]
+
+[[case]]
+name = "unknown option with suggestions"
+covers = []
+argv = ["object", "list", "table", "--bogus"]
+
+[[case]]
+name = "no such command"
+covers = []
+argv = ["objec"]
+
+[[case]]
+name = "bad integer"
+covers = []
+argv = ["object", "list", "table", "--limit", "x"]
+
+[[case]]
+name = "extra argument"
+covers = []
+argv = ["connection", "list", "extra"]
+
+[[case]]
+name = "bad choice"
+covers = []
+argv = ["connection", "list", "--format", "xml"]
+
+[[case]]
+name = "option requires argument"
+covers = []
+argv = ["connection", "list", "--format"]
+
+[[case]]
+name = "group without command"
+covers = []
+argv = ["connection"]
+
+[[case]]
+name = "help all"
+covers = []
+argv = ["connection", "list", "--help-all"]
+
+[[case]]
+name = "help and help all"
+covers = []
+argv = ["connection", "list", "--help", "--help-all"]
+
+[[case]]
+name = "verbose and debug"
+covers = []
+argv = ["connection", "list", "-v", "--debug"]
+
+[[case]]
+name = "version with loose config files"
+covers = []
+home_files = { "connections.toml" = { mode = "644", text = "[a]\naccount = \"x\"\n" } }
+argv = ["--version"]
+
+[[case]]
+name = "loose connections file error"
+covers = []
+home_files = { "connections.toml" = { mode = "644", text = "[a]\naccount = \"x\"\n" } }
+argv = ["connection", "list"]
+
+[[case]]
+name = "writable connections file"
+covers = []
+home_files = { "connections.toml" = { mode = "666", text = "[a]\naccount = \"x\"\n" } }
+argv = ["connection", "list"]

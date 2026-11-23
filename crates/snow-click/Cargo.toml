@@ -1,0 +1,16 @@
+[package]
+name = "snow-click"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Click-compatible argument parsing, help and usage errors for the snow CLI"
+
+[lints]
+workspace = true
+
+[dependencies]
+snow-rich.workspace = true
+serde_json.workspace = true
+terminal_size = "0.4"

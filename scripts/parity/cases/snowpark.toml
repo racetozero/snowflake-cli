@@ -1,0 +1,36 @@
+[[case]]
+name = "snowpark list"
+covers = ["snow snowpark list"]
+connection = true
+argv = ["snowpark", "list", "function", "--like", "f%", "--in", "database", "db"]
+
+[[case]]
+name = "snowpark drop"
+covers = ["snow snowpark drop"]
+connection = true
+argv = ["snowpark", "drop", "procedure", "p(int, string)"]
+
+[[case]]
+name = "snowpark describe"
+covers = ["snow snowpark describe"]
+connection = true
+argv = ["snowpark", "describe", "function", "db.s.f(VARCHAR)"]
+
+[[case]]
+name = "snowpark execute function"
+covers = ["snow snowpark execute"]
+connection = true
+argv = ["snowpark", "execute", "function", "hello(1, 'world')"]
+rules = [{ match = "^select hello", columns = ["HELLO(1, 'WORLD')"], rows = [["Hello world 1"]] }]
+
+[[case]]
+name = "snowpark execute procedure"
+covers = ["snow snowpark execute"]
+connection = true
+argv = ["snowpark", "execute", "procedure", "p()", "--format", "json"]
+
+[[case]]
+name = "snowpark bad type"
+covers = ["snow snowpark list"]
+connection = true
+argv = ["snowpark", "list", "table"]

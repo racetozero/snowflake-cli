@@ -1,0 +1,133 @@
+[[case]]
+name = "dcm plan"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": [{\"type\": \"CREATE\", \"object_id\": {\"domain\": \"table\", \"fqn\": \"DB.S.T1\"}, \"changes\": [{\"kind\": \"collection\", \"collection_name\": \"grants\", \"changes\": [{\"kind\": \"added\", \"item_id\": {\"desc\": \"SELECT to ROLE R1\"}}]}, {\"kind\": \"set\", \"attribute_name\": \"comment\", \"value\": \"x\"}]}, {\"type\": \"ALTER\", \"object_id\": {\"domain\": \"view\", \"fqn\": \"DB.S.\\\"My View\\\"\"}, \"changes\": [{\"kind\": \"changed\", \"attribute_name\": \"query\", \"prev_value\": \"select 1 from a very long table name that keeps going and going\", \"value\": \"select 2 from a very long table name that keeps going and going\"}, {\"kind\": \"unset\", \"attribute_name\": \"comment\"}, {\"kind\": \"set\", \"attribute_name\": \"enabled\", \"value\": true}]}, {\"type\": \"DROP\", \"object_id\": {\"domain\": \"schema\", \"fqn\": \"DB.OLD\"}, \"changes\": []}, {\"type\": \"CREATE\", \"object_id\": {\"domain\": \"database\", \"fqn\": \"NEWDB\"}, \"changes\": []}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm plan delta vars"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PLAN", columns = ["result"], rows = [["{\"version\": 1, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan", "--delta", "-D", "x=1", "--format", "json"]
+
+[[case]]
+name = "dcm plan from deployment"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PLAN", columns = ["result"], rows = [["{\"version\": 1, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan", "--deployment", "DEPLOYMENT$1"]
+
+[[case]]
+name = "dcm deploy"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": [{\"type\": \"CREATE\", \"object_id\": {\"domain\": \"table\", \"fqn\": \"DB.S.T1\"}, \"changes\": [{\"kind\": \"collection\", \"collection_name\": \"grants\", \"changes\": [{\"kind\": \"added\", \"item_id\": {\"desc\": \"SELECT to ROLE R1\"}}]}, {\"kind\": \"set\", \"attribute_name\": \"comment\", \"value\": \"x\"}]}, {\"type\": \"ALTER\", \"object_id\": {\"domain\": \"view\", \"fqn\": \"DB.S.\\\"My View\\\"\"}, \"changes\": [{\"kind\": \"changed\", \"attribute_name\": \"query\", \"prev_value\": \"select 1 from a very long table name that keeps going and going\", \"value\": \"select 2 from a very long table name that keeps going and going\"}, {\"kind\": \"unset\", \"attribute_name\": \"comment\"}, {\"kind\": \"set\", \"attribute_name\": \"enabled\", \"value\": true}]}, {\"type\": \"DROP\", \"object_id\": {\"domain\": \"schema\", \"fqn\": \"DB.OLD\"}, \"changes\": []}, {\"type\": \"CREATE\", \"object_id\": {\"domain\": \"database\", \"fqn\": \"NEWDB\"}, \"changes\": []}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy", "--alias", "v1"]
+
+[[case]]
+name = "dcm deploy skip plan"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": [{\"type\": \"CREATE\", \"object_id\": {\"domain\": \"table\", \"fqn\": \"DB.S.T1\"}}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy", "--skip-plan"]
+
+[[case]]
+name = "dcm deploy bad response"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"nope\": 1}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy"]
+
+[[case]]
+name = "dcm purge force"
+covers = ["snow dcm purge"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PURGE", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": [{\"type\": \"DROP\", \"object_id\": {\"domain\": \"table\", \"fqn\": \"DB.S.T1\"}}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "purge", "--force"]
+
+[[case]]
+name = "dcm purge non interactive"
+covers = ["snow dcm purge"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "purge"]
+
+[[case]]
+name = "dcm purge interactive"
+covers = ["snow dcm purge"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PURGE", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+stdin = "purge db.s.wrong\npurge db.s.proj\n"
+argv = ["dcm", "purge", "--interactive"]
+
+[[case]]
+name = "dcm purge cancel"
+covers = ["snow dcm purge"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+stdin = "cancel\n"
+argv = ["dcm", "purge", "--interactive"]
+
+[[case]]
+name = "dcm raw-analyze"
+covers = ["snow dcm raw-analyze"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "ANALYZE", columns = ["result"], rows = [["{\"files\": [{\"path\": \"a.sql\", \"issues\": [], \"definitions\": []}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "raw-analyze"]
+
+[[case]]
+name = "dcm raw-analyze issues"
+covers = ["snow dcm raw-analyze"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "ANALYZE", columns = ["result"], rows = [["{\"files\": [{\"path\": \"a.sql\", \"issues\": [{\"m\": 1}], \"definitions\": [{\"issues\": [{\"m\": 2}]}]}], \"issues\": [{\"m\": 3}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "raw-analyze"]

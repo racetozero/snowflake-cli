@@ -1,0 +1,36 @@
+[[case]]
+name = "logs"
+covers = ["snow logs"]
+connection = true
+argv = ["logs", "procedure", "db.s.p"]
+rules = [{ match = "FROM SNOWFLAKE.TELEMETRY.EVENTS", columns = ["TIMESTAMP", "DATABASE_NAME", "SCHEMA_NAME", "OBJECT_NAME", "LOG_LEVEL", "LOG_MESSAGE"], rows = [["2024-01-01", "DB", "S", "P", "INFO", "hello"], ["2024-01-01", "DB", "S", "P", "WARN", "world"]] }]
+
+[[case]]
+name = "logs from to partial"
+covers = ["snow logs"]
+connection = true
+argv = ["logs", "service", "svc_1", "--from", "2024-01-01 10:00:00", "--to", "2024-01-02T11:30:15.25", "--log-level", "warn", "--partial", "--table", "db.s.ev", "--format", "json"]
+
+[[case]]
+name = "logs from only"
+covers = ["snow logs"]
+connection = true
+argv = ["logs", "function", "f", "--from", "2024-01-01"]
+
+[[case]]
+name = "logs bad level"
+covers = ["snow logs"]
+connection = true
+argv = ["logs", "function", "f", "--log-level", "loud"]
+
+[[case]]
+name = "logs bad date"
+covers = ["snow logs"]
+connection = true
+argv = ["logs", "function", "f", "--from", "yesterday"]
+
+[[case]]
+name = "logs from after to"
+covers = ["snow logs"]
+connection = true
+argv = ["logs", "function", "f", "--from", "2024-02-01", "--to", "2024-01-01"]

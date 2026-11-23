@@ -1,0 +1,83 @@
+[[case]]
+name = "dcm create from manifest"
+covers = ["snow dcm create"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n" }
+rules = [{ match = "^describe DCM PROJECT", error = { code = 2003, message = "does not exist" } }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "OTHER"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "create"]
+
+[[case]]
+name = "dcm create exists if not exists"
+covers = ["snow dcm create"]
+connection = true
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "create", "proj", "--if-not-exists"]
+
+[[case]]
+name = "dcm create exists"
+covers = ["snow dcm create"]
+connection = true
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "create", "proj"]
+
+[[case]]
+name = "dcm create no manifest no id"
+covers = ["snow dcm create"]
+connection = true
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "create"]
+
+[[case]]
+name = "dcm drop"
+covers = ["snow dcm drop"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "drop", "--if-exists"]
+
+[[case]]
+name = "dcm describe"
+covers = ["snow dcm describe"]
+connection = true
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "describe", "db.s.proj"]
+
+[[case]]
+name = "dcm describe bad target"
+covers = ["snow dcm describe"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n" }
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "describe", "--target", "prod"]
+
+[[case]]
+name = "dcm list-deployments"
+covers = ["snow dcm list-deployments"]
+connection = true
+files = { "m/manifest.yml" = "manifest_version: 2\ntype: dcm_project\ndefault_target: a\ntargets:\n  a:\n    project_name: p1\n  b:\n    project_name: p2\n" }
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "list-deployments", "--from", "m", "--target", "b"]
+
+[[case]]
+name = "dcm list-deployments bad manifest"
+covers = ["snow dcm list-deployments"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 1\ntype: dcm_project\n" }
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "list-deployments", "p"]
+
+[[case]]
+name = "dcm drop-deployment"
+covers = ["snow dcm drop-deployment"]
+connection = true
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "drop-deployment", "p", "--deployment", "DEPLOYMENT", "--if-exists"]
+
+[[case]]
+name = "dcm drop-deployment blank"
+covers = ["snow dcm drop-deployment"]
+connection = true
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "drop-deployment", "p", "--deployment", " "]

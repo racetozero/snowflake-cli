@@ -1,0 +1,8803 @@
+{
+ "versions": {
+  "1": "DefinitionV10",
+  "1.1": "DefinitionV11",
+  "2": "DefinitionV20"
+ },
+ "models": {
+  "_ProjectDefinitionBase": {
+   "module": "snowflake.cli.api.project.schemas.project_definition",
+   "title": "_ProjectDefinitionBase",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "definition_version",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "int"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_is_supported_version",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "AppYmlDefinition": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlDefinition",
+   "extra": "ignore",
+   "fields": [
+    {
+     "name": "package_name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifact_repo",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "build_eai",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "build_job_location",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "code_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "code_workspace",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "ignore",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "account",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "label",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "description",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "icon",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "execute_as_role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_resume",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_suspend_secs",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "min_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "max_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "compute_resource",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_compute_resource",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "url_prefix",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "health_check",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "AppYmlSecret"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "environment_variables",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "AppYmlEnvVar"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "postgres_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "AppYmlPostgresInstance"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "version",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "int"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "default_target",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "targets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "factory": {}
+     },
+     "type": {
+      "k": "dict",
+      "key": {
+       "k": "str"
+      },
+      "of": {
+       "k": "model",
+       "name": "AppYmlTarget"
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_coerce_empty_targets",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "runtime",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "node"
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_runtime",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "streamlit",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": false
+     },
+     "type": {
+      "k": "bool"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_streamlit",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "install",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "AppYmlBuildPhase"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "build",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "AppYmlBuildPhase"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "run",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "AppYmlRunPhase"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "dev",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "AppYmlRunPhase"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "_reject_conflicting_code_storage",
+     "mode": "after"
+    },
+    {
+     "fn": "_reject_streamlit_with_node",
+     "mode": "after"
+    },
+    {
+     "fn": "_default_node_phases",
+     "mode": "before"
+    },
+    {
+     "fn": "_reject_legacy_targets_default",
+     "mode": "before"
+    }
+   ]
+  },
+  "AppYmlSecret": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlSecret",
+   "extra": "ignore",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "secret",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "AppYmlEnvVar": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlEnvVar",
+   "extra": "ignore",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "value",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_coerce_scalar_value",
+       "mode": "before"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "AppYmlPostgresInstance": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlPostgresInstance",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "instance",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "authentication_mode",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_normalize_authentication_mode",
+       "mode": "before"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "AppYmlTarget": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlTarget",
+   "extra": "ignore",
+   "fields": [
+    {
+     "name": "package_name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifact_repo",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "build_eai",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "build_job_location",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "code_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "code_workspace",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "ignore",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "account",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "label",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "description",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "icon",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "execute_as_role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_resume",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_suspend_secs",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "min_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "max_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "compute_resource",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_compute_resource",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "url_prefix",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "health_check",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "AppYmlSecret"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "environment_variables",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "AppYmlEnvVar"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "postgres_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "AppYmlPostgresInstance"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "_reject_conflicting_code_storage",
+     "mode": "after"
+    }
+   ]
+  },
+  "AppYmlBuildPhase": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlBuildPhase",
+   "extra": "ignore",
+   "fields": [
+    {
+     "name": "commands",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "list",
+       "of": {
+        "k": "str"
+       }
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "AppYmlRunPhase": {
+   "module": "snowflake.cli._plugins.apps.app_yml",
+   "title": "AppYmlRunPhase",
+   "extra": "ignore",
+   "fields": [
+    {
+     "name": "command",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "str"
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "DefinitionV10": {
+   "module": "snowflake.cli.api.project.schemas.project_definition",
+   "title": "DefinitionV10",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "definition_version",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "int"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_is_supported_version",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "native_app",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "NativeApp"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "snowpark",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Snowpark"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "streamlit",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Streamlit"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "NativeApp": {
+   "module": "snowflake.cli.api.project.schemas.v1.native_app.native_app",
+   "title": "NativeApp",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "bundle_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/bundle/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "generated_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "__generated/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "source_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "app_src.stage"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_source_stage",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "scratch_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "app_src.stage_snowflake_cli_scratch"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_scratch_stage",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "package",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Package"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "application",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Application"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "PathMapping": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "PathMapping",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "src",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "dest",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "processors",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "union",
+         "of": [
+          {
+           "k": "str"
+          },
+          {
+           "k": "model",
+           "name": "ProcessorMapping"
+          }
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_processors",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "ignore",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ProcessorMapping": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "ProcessorMapping",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "properties",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "any"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "Package": {
+   "module": "snowflake.cli.api.project.schemas.v1.native_app.package",
+   "title": "Package",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "scripts",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_scripts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "append_test_resource_suffix_to_name",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "distribution",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "internal"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "literal",
+        "values": [
+         "internal",
+         "external",
+         "INTERNAL",
+         "EXTERNAL"
+        ]
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "post_deploy",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "SqlScriptHookType"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "validate_no_scripts_and_post_deploy",
+     "mode": "after"
+    }
+   ]
+  },
+  "SqlScriptHookType": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "SqlScriptHookType",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "sql_script",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_sql_script_path",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "Application": {
+   "module": "snowflake.cli.api.project.schemas.v1.native_app.application",
+   "title": "Application",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "append_test_resource_suffix_to_name",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "debug",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "post_deploy",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "SqlScriptHookType"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "Snowpark": {
+   "module": "snowflake.cli.api.project.schemas.v1.snowpark.snowpark",
+   "title": "Snowpark",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "project_name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "stage_name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "src",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "functions",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "FunctionSchema"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "procedures",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "ProcedureSchema"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "FunctionSchema": {
+   "module": "snowflake.cli.api.project.schemas.v1.snowpark.callable",
+   "title": "FunctionSchema",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_name",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "handler",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "returns",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "signature",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "Argument"
+        }
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "float"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "convert_runtime",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "imports",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "Argument": {
+   "module": "snowflake.cli.api.project.schemas.v1.snowpark.argument",
+   "title": "Argument",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "arg_type",
+     "alias": "type",
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "default",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ProcedureSchema": {
+   "module": "snowflake.cli.api.project.schemas.v1.snowpark.callable",
+   "title": "ProcedureSchema",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_name",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "handler",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "returns",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "signature",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "Argument"
+        }
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "float"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "convert_runtime",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "imports",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "execute_as_caller",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": false
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "Streamlit": {
+   "module": "snowflake.cli.api.project.schemas.v1.streamlit.streamlit",
+   "title": "Streamlit",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_name",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "streamlit"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "main_file",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "streamlit_app.py"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "path"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "env_file",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "path"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "pages_dir",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "path"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "additional_source_files",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "path"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "title",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "comment",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "DefinitionV11": {
+   "module": "snowflake.cli.api.project.schemas.project_definition",
+   "title": "DefinitionV11",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "definition_version",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "int"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_is_supported_version",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "native_app",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "NativeAppV11"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "snowpark",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Snowpark"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "streamlit",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Streamlit"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "env",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "union",
+         "of": [
+          {
+           "k": "int"
+          },
+          {
+           "k": "bool"
+          },
+          {
+           "k": "str"
+          }
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "NativeAppV11": {
+   "module": "snowflake.cli.api.project.schemas.v1.native_app.native_app",
+   "title": "NativeAppV11",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "bundle_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/bundle/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "generated_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "__generated/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "source_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "app_src.stage"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_source_stage",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "scratch_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "app_src.stage_snowflake_cli_scratch"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_scratch_stage",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "package",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "scripts=None role=None name=\"<% fn.concat_ids(ctx.native_app.name, '_pkg_', fn.sanitize_id(fn.get_username('unknown_user')) | lower) %>\" warehouse=None distribution='internal' post_deploy=None"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "PackageV11"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "application",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "role=None name=\"<% fn.concat_ids(ctx.native_app.name, '_', fn.sanitize_id(fn.get_username('unknown_user')) | lower) %>\" warehouse=None debug=None post_deploy=None"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "ApplicationV11"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "PackageV11": {
+   "module": "snowflake.cli.api.project.schemas.v1.native_app.package",
+   "title": "PackageV11",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "scripts",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_scripts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "<% fn.concat_ids(ctx.native_app.name, '_pkg_', fn.sanitize_id(fn.get_username('unknown_user')) | lower) %>"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "append_test_resource_suffix_to_name",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "distribution",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "internal"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "literal",
+        "values": [
+         "internal",
+         "external",
+         "INTERNAL",
+         "EXTERNAL"
+        ]
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "post_deploy",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "SqlScriptHookType"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "validate_no_scripts_and_post_deploy",
+     "mode": "after"
+    }
+   ]
+  },
+  "ApplicationV11": {
+   "module": "snowflake.cli.api.project.schemas.v1.native_app.application",
+   "title": "ApplicationV11",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "<% fn.concat_ids(ctx.native_app.name, '_', fn.sanitize_id(fn.get_username('unknown_user')) | lower) %>"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "append_test_resource_suffix_to_name",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "debug",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "post_deploy",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "SqlScriptHookType"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "DefinitionV20": {
+   "module": "snowflake.cli.api.project.schemas.project_definition",
+   "title": "DefinitionV20",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "definition_version",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "int"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_is_supported_version",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "entities",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "dict",
+      "key": {
+       "k": "str"
+      },
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "ApplicationEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "ApplicationPackageEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "StreamlitEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "FunctionEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "ProcedureEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "ComputePoolEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "ImageRepositoryEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "ServiceEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "NotebookEntityModel"
+        },
+        {
+         "k": "model",
+         "name": "SnowflakeAppEntityModel"
+        }
+       ],
+       "discriminator": "type"
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_entities",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "env",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "union",
+         "of": [
+          {
+           "k": "int"
+          },
+          {
+           "k": "bool"
+          },
+          {
+           "k": "str"
+          }
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "mixins",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "dict",
+         "key": {
+          "k": "any"
+         },
+         "of": {
+          "k": "any"
+         }
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "validate_entities_identifiers",
+     "mode": "after"
+    },
+    {
+     "fn": "apply_mixins",
+     "mode": "before"
+    },
+    {
+     "fn": "validate_dependencies",
+     "mode": "after"
+    }
+   ]
+  },
+  "ApplicationEntityModel": {
+   "module": "snowflake.cli._plugins.nativeapp.entities.application",
+   "title": "ApplicationEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "append_test_resource_suffix_to_identifier",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "application"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "from_",
+     "alias": "from",
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "model",
+      "name": "TargetField<ApplicationPackageEntityModel>"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "debug",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "telemetry",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "EventSharingTelemetry"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "MetaField": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "MetaField",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "post_deploy",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "SqlScriptHookType"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "use_mixins",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "ensure_use_mixins_is_a_list",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "depends_on",
+     "alias": null,
+     "required": false,
+     "default": {
+      "factory": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "action_arguments",
+     "alias": null,
+     "required": false,
+     "default": {
+      "factory": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "dict",
+         "key": {
+          "k": "str"
+         },
+         "of": {
+          "k": "union",
+          "of": [
+           {
+            "k": "int"
+           },
+           {
+            "k": "bool"
+           },
+           {
+            "k": "str"
+           }
+          ]
+         }
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "arguments_validator",
+       "mode": "before"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "Identifier": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "Identifier",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "TargetField<ApplicationPackageEntityModel>": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "TargetField[ApplicationPackageEntityModel]",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "target",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "EventSharingTelemetry": {
+   "module": "snowflake.cli._plugins.nativeapp.entities.models.event_sharing_telemetry",
+   "title": "EventSharingTelemetry",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "share_mandatory_events",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "optional_shared_events",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_optional_shared_events",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "validate_telemetry_event_sharing",
+     "mode": "after"
+    }
+   ]
+  },
+  "ApplicationPackageEntityModel": {
+   "module": "snowflake.cli._plugins.nativeapp.entities.application_package",
+   "title": "ApplicationPackageEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "append_test_resource_suffix_to_identifier",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "application package"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "bundle_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/bundle/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "children_artifacts_dir",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "_children/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "generated_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "__generated/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "app_src.stage"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_stage",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "scratch_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "app_src.stage_snowflake_cli_scratch"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_scratch_stage",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "distribution",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "internal"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "literal",
+        "values": [
+         "internal",
+         "external",
+         "INTERNAL",
+         "EXTERNAL"
+        ]
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "manifest",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": ""
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "stage_subdirectory",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": ""
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "children",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "ApplicationPackageChildField"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "verify_children_behind_flag",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "enable_release_channels",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ApplicationPackageChildField": {
+   "module": "snowflake.cli._plugins.nativeapp.entities.application_package",
+   "title": "ApplicationPackageChildField",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "target",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "ensure_usable_by",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "EnsureUsableByField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "model",
+      "name": "ApplicationPackageChildIdentifier"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "EnsureUsableByField": {
+   "module": "snowflake.cli._plugins.nativeapp.entities.application_package",
+   "title": "EnsureUsableByField",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "application_roles",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "set",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "ensure_app_roles_is_a_set",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "ApplicationPackageChildIdentifier": {
+   "module": "snowflake.cli._plugins.nativeapp.entities.application_package",
+   "title": "ApplicationPackageChildIdentifier",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "StreamlitEntityModel": {
+   "module": "snowflake.cli._plugins.streamlit.streamlit_entity_model",
+   "title": "StreamlitEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "grants",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "Grant"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "imports",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_imports_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_integrations_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_secrets_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "union",
+         "of": [
+          {
+           "k": "model",
+           "name": "PathMapping"
+          },
+          {
+           "k": "str"
+          }
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "streamlit"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "title",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "comment",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "main_file",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "streamlit_app.py"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "pages_dir",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "streamlit"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime_name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "canonicalize_runtime_name",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "compute_pool",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_compute_pool",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "tags",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "dataclass",
+         "name": "Tag",
+         "fields": [
+          [
+           "name",
+           {
+            "k": "str"
+           }
+          ],
+          [
+           "value",
+           {
+            "k": "str"
+           }
+          ]
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "include_project_definition",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": false
+     },
+     "type": {
+      "k": "bool"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "execute_as",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "literal",
+        "values": [
+         "OWNER",
+         "RESTRICTED CALLER"
+        ]
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "canonicalize_execute_as",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "app_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_app_warehouse",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "artifact_repositories",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_artifact_repositories",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "idle_auto_shutdown_time_seconds",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "gt": 0
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schedules",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Schedules"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "Grant": {
+   "module": "snowflake.cli.api.project.schemas.entities.common",
+   "title": "Grant",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "privilege",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "validate_privilege",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "with_grant_option",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": false
+     },
+     "type": {
+      "k": "bool"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_grantee",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "user",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_grantee",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "validate_grantee",
+     "mode": "after"
+    }
+   ]
+  },
+  "Schedules": {
+   "module": "snowflake.cli._plugins.streamlit.streamlit_entity_model",
+   "title": "Schedules",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "cron_exprs",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "str"
+      }
+     },
+     "constraints": {
+      "max_length": 5
+     },
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_cron_exprs",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "timezone",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "strip_timezone",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "FunctionEntityModel": {
+   "module": "snowflake.cli._plugins.snowpark.snowpark_entity_model",
+   "title": "FunctionEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "imports",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_imports_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_integrations_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_secrets_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      },
+      {
+       "fn": "_convert_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "handler",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "returns",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "signature",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "Argument"
+        }
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "float"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "convert_runtime",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "stage",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifact_repository",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifact_repository_packages",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "packages",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "resource_constraint",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "any"
+        },
+        "of": {
+         "k": "any"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "function"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "check_artifact_repository",
+     "mode": "before"
+    }
+   ]
+  },
+  "ProcedureEntityModel": {
+   "module": "snowflake.cli._plugins.snowpark.snowpark_entity_model",
+   "title": "ProcedureEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "imports",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_imports_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_integrations_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_secrets_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      },
+      {
+       "fn": "_convert_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "handler",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "returns",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "signature",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "Argument"
+        }
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "float"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "convert_runtime",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "stage",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifact_repository",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifact_repository_packages",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "packages",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "resource_constraint",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "any"
+        },
+        "of": {
+         "k": "any"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "procedure"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "execute_as_caller",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": false
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "check_artifact_repository",
+     "mode": "before"
+    }
+   ]
+  },
+  "ComputePoolEntityModel": {
+   "module": "snowflake.cli._plugins.spcs.compute_pool.compute_pool_entity_model",
+   "title": "ComputePoolEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "compute-pool"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "min_nodes",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": 1
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "ge": 1
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "max_nodes",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "ge": 1
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "instance_family",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_resume",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": true
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "initially_suspended",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": false
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "bool"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_suspend_seconds",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": 3600
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "ge": 1
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "comment",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_convert_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "tags",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "dataclass",
+         "name": "Tag",
+         "fields": [
+          [
+           "name",
+           {
+            "k": "str"
+           }
+          ],
+          [
+           "value",
+           {
+            "k": "str"
+           }
+          ]
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ImageRepositoryEntityModel": {
+   "module": "snowflake.cli._plugins.spcs.image_repository.image_repository_entity_model",
+   "title": "ImageRepositoryEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "image-repository"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ServiceEntityModel": {
+   "module": "snowflake.cli._plugins.spcs.services.service_entity_model",
+   "title": "ServiceEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "external_access_integrations",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_integrations_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "secrets",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_secrets_have_no_backslash",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "service"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "compute_pool",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "spec_file",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "path"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "min_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": 1
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "ge": 1
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "max_instances",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "ge": 1
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_resume",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": true
+     },
+     "type": {
+      "k": "bool"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "auto_suspend_secs",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "int"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "ge": 0
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "tags",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "dataclass",
+         "name": "Tag",
+         "fields": [
+          [
+           "name",
+           {
+            "k": "str"
+           }
+          ],
+          [
+           "value",
+           {
+            "k": "str"
+           }
+          ]
+         ]
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "comment",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_convert_artifacts",
+       "mode": "after"
+      }
+     ]
+    }
+   ],
+   "model_validators": []
+  },
+  "NotebookEntityModel": {
+   "module": "snowflake.cli._plugins.notebook.notebook_entity_model",
+   "title": "NotebookEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "MetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "notebook"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "stage_path",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "notebook_file",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "path"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime_environment_version",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "compute_pool",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "runtime_name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "validate_notebook_file",
+     "mode": "after"
+    },
+    {
+     "fn": "validate_container_setup",
+     "mode": "after"
+    }
+   ]
+  },
+  "SnowflakeAppEntityModel": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "SnowflakeAppEntityModel",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "meta",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "SnowflakeAppMetaField"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "identifier",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "Identifier"
+       },
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "artifacts",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "list",
+      "of": {
+       "k": "union",
+       "of": [
+        {
+         "k": "model",
+         "name": "PathMapping"
+        },
+        {
+         "k": "str"
+        }
+       ]
+      }
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "transform_artifacts",
+       "mode": "after"
+      }
+     ]
+    },
+    {
+     "name": "deploy_root",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "output/deploy/"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "type",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "literal",
+      "values": [
+       "snowflake-app"
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": true,
+     "validators": []
+    },
+    {
+     "name": "query_warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "build_compute_pool",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "ComputePoolReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_compute_pool",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "service_compute_pool",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "ComputePoolReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_compute_pool",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "build_eai",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "ExternalAccessReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_eai",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "service_eai",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "ExternalAccessReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_eai",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "artifact_repository",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "ArtifactRepositoryReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "code_stage",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "CodeStageReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_code_storage",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "code_workspace",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "model",
+        "name": "CodeWorkspaceReference"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_code_storage",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "runtime_image",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": ""
+     },
+     "type": {
+      "k": "str"
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "spcs_test_project_type",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "_validate_spcs_test_project_type",
+       "mode": "before"
+      }
+     ]
+    }
+   ],
+   "model_validators": [
+    {
+     "fn": "_validate_single_code_storage",
+     "mode": "after"
+    }
+   ]
+  },
+  "SnowflakeAppMetaField": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "SnowflakeAppMetaField",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "warehouse",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "role",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "post_deploy",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "model",
+         "name": "SqlScriptHookType"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "use_mixins",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "ensure_use_mixins_is_a_list",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "depends_on",
+     "alias": null,
+     "required": false,
+     "default": {
+      "factory": []
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "list",
+        "of": {
+         "k": "str"
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "action_arguments",
+     "alias": null,
+     "required": false,
+     "default": {
+      "factory": {}
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "dict",
+        "key": {
+         "k": "str"
+        },
+        "of": {
+         "k": "dict",
+         "key": {
+          "k": "str"
+         },
+         "of": {
+          "k": "union",
+          "of": [
+           {
+            "k": "int"
+           },
+           {
+            "k": "bool"
+           },
+           {
+            "k": "str"
+           }
+          ]
+         }
+        }
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": [
+      {
+       "fn": "arguments_validator",
+       "mode": "before"
+      }
+     ]
+    },
+    {
+     "name": "title",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "description",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "icon",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ComputePoolReference": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "ComputePoolReference",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ExternalAccessReference": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "ExternalAccessReference",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "ArtifactRepositoryReference": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "ArtifactRepositoryReference",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "CodeStageReference": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "CodeStageReference",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "encryption_type",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": "SNOWFLAKE_SSE"
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {},
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  },
+  "CodeWorkspaceReference": {
+   "module": "snowflake.cli._plugins.apps.snowflake_app_entity_model",
+   "title": "CodeWorkspaceReference",
+   "extra": "forbid",
+   "fields": [
+    {
+     "name": "name",
+     "alias": null,
+     "required": true,
+     "default": null,
+     "type": {
+      "k": "str"
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "schema_",
+     "alias": "schema",
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    },
+    {
+     "name": "database",
+     "alias": null,
+     "required": false,
+     "default": {
+      "value": null
+     },
+     "type": {
+      "k": "union",
+      "of": [
+       {
+        "k": "str"
+       },
+       {
+        "k": "none"
+       }
+      ]
+     },
+     "constraints": {
+      "max_length": 254,
+      "pattern": "^((?:\"[^\"]*(?:\"\"[^\"]*)*\")|(?:[A-Za-z_][\\w$]*))$"
+     },
+     "discriminator_field": false,
+     "validators": []
+    }
+   ],
+   "model_validators": []
+  }
+ }
+}

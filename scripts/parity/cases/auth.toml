@@ -1,0 +1,79 @@
+[[case]]
+name = "auth list"
+covers = ["snow auth list"]
+config = "default_connection_name = \"b\"\n[connections.a]\naccount = \"acc\"\nauthenticator = \"oauth_authorization_code\"\nuser = \"u\"\n[connections.b]\naccount = \"acc2\"\nauthenticator = \"OAUTH_AUTHORIZATION_CODE\"\nrole = \"r\"\nport = 443\n[connections.c]\naccount = \"x\"\nauthenticator = \"OAUTH_AUTHORIZATION_CODE\"\noauth_client_id = \"id\"\n[connections.d]\naccount = \"y\""
+argv = ["auth", "list"]
+
+[[case]]
+name = "auth list json connections file"
+covers = ["snow auth list"]
+home_files = { "connections.toml" = { mode = "600", text = "[a]\naccount = \"acc\"\nauthenticator = \"OAUTH_AUTHORIZATION_CODE\"\n" } }
+argv = ["auth", "list", "--format", "json"]
+
+[[case]]
+name = "auth list empty"
+covers = ["snow auth list"]
+argv = ["auth", "list"]
+
+[[case]]
+name = "oidc read-token github"
+covers = ["snow auth oidc read-token"]
+connection = true
+env = { GITHUB_ACTIONS = "true", ACTIONS_ID_TOKEN_REQUEST_TOKEN = "reqtok", ACTIONS_ID_TOKEN_REQUEST_URL = "http://127.0.0.1:<PORT>/oidc/token?api-version=2.0" }
+rules = [{ rest = "GET /oidc/token", body = { value = "eyJ.the.token" } }]
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token"]
+offline_success = true
+
+[[case]]
+name = "oidc read-token github audience"
+covers = ["snow auth oidc read-token"]
+connection = true
+env = { GITHUB_ACTIONS = "true", ACTIONS_ID_TOKEN_REQUEST_TOKEN = "reqtok", ACTIONS_ID_TOKEN_REQUEST_URL = "http://127.0.0.1:<PORT>/oidc/token", SNOWFLAKE_AUDIENCE = "custom" }
+rules = [{ rest = "GET /oidc/token", body = { value = "tok2" } }]
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token", "--type", "github"]
+offline_success = true
+
+[[case]]
+name = "oidc read-token http error"
+covers = ["snow auth oidc read-token"]
+connection = true
+env = { GITHUB_ACTIONS = "true", ACTIONS_ID_TOKEN_REQUEST_TOKEN = "reqtok", ACTIONS_ID_TOKEN_REQUEST_URL = "http://127.0.0.1:<PORT>/oidc/token" }
+rules = [{ rest = "GET /oidc/token", status = 403, body = { message = "nope" } }]
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token"]
+
+[[case]]
+name = "oidc read-token no request token"
+covers = ["snow auth oidc read-token"]
+env = { GITHUB_ACTIONS = "true" }
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token"]
+
+[[case]]
+name = "oidc read-token not ci"
+covers = ["snow auth oidc read-token"]
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token"]
+
+[[case]]
+name = "oidc read-token github not ci"
+covers = ["snow auth oidc read-token"]
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token", "--type", "github"]
+
+[[case]]
+name = "oidc read-token air gapped"
+covers = ["snow auth oidc read-token"]
+config = "air_gapped = true"
+env = { GITHUB_ACTIONS = "true", ACTIONS_ID_TOKEN_REQUEST_TOKEN = "t", ACTIONS_ID_TOKEN_REQUEST_URL = "http://127.0.0.1:9/x" }
+normalize = [['(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ', '<TS> ']]
+argv = ["auth", "oidc", "read-token"]
+
+[[case]]
+name = "auth list loose connections file"
+covers = ["snow auth list"]
+home_files = { "connections.toml" = { mode = "640", text = "[a]\naccount = \"acc\"\n" } }
+env = { SF_SKIP_TOKEN_FILE_PERMISSIONS_VERIFICATION = "true" }
+argv = ["auth", "list"]

@@ -1,0 +1,131 @@
+[[case]]
+name = "ai claude pat"
+# Only a login happens before the agent is launched.
+offline_success = true
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+env = { KEEP_ME = "1", ANTHROPIC_CUSTOM_HEADERS = "x-snowflake-application: mine\nOther: 2" }
+argv = ["ai", "claude", "--agent-args", "-p", "explain this repo", "--verbose"]
+
+[[case]]
+name = "ai claude exit code"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+env = { AGENT_EXIT = "3" }
+argv = ["ai", "claude"]
+
+[[case]]
+name = "ai claude token file"
+# Only a login happens before the agent is launched.
+offline_success = true
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"oauth\"\ntoken_file_path = \"tok.txt\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+files = { "tok.txt" = "  file-token \n" }
+argv = ["ai", "claude", "--gateway-name", "MY_GW$1"]
+
+[[case]]
+name = "ai claude empty token file"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken_file_path = \"tok.txt\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+files = { "tok.txt" = "  \n" }
+argv = ["ai", "claude"]
+
+[[case]]
+name = "ai claude no token"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+argv = ["ai", "claude"]
+
+[[case]]
+name = "ai claude password auth"
+covers = ["snow ai claude"]
+connection = true
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+argv = ["ai", "claude"]
+
+[[case]]
+name = "ai claude bad gateway"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+argv = ["ai", "claude", "--gateway-name", "a/b"]
+
+[[case]]
+name = "ai claude conflicting env"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+env = { ANTHROPIC_API_KEY = "x", CLAUDE_CODE_USE_VERTEX = "1" }
+argv = ["ai", "claude"]
+
+[[case]]
+name = "ai claude not installed"
+covers = ["snow ai claude"]
+bins = {}
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+argv = ["ai", "claude"]
+
+[[case]]
+name = "ai claude bad option"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+argv = ["ai", "claude", "--bogus"]
+
+[[case]]
+name = "ai claude bad format"
+covers = ["snow ai claude"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "claude" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+argv = ["ai", "claude", "--format", "bogus"]
+
+[[case]]
+name = "ai opencode pat"
+# Only a login happens before the agent is launched.
+offline_success = true
+covers = ["snow ai opencode"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "opencode" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+argv = ["ai", "opencode", "--agent-args", "run", "fix it"]
+
+[[case]]
+name = "ai opencode conflicting"
+covers = ["snow ai opencode"]
+connection = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = { "opencode" = "#!/bin/sh\n{ echo \"args:\"; for a in \"$@\"; do echo \"  [$a]\"; done\n  for v in ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_CUSTOM_HEADERS CLAUDE_CODE_ENABLE_TELEMETRY OTEL_TRACES_EXPORTER OPENCODE_CONFIG_CONTENT KEEP_ME; do eval \"echo $v=\\${$v-<unset>}\"; done; } > agent.log\necho agent stdout\nexit ${AGENT_EXIT:-0}\n" }
+env = { SNOWFLAKE_CORTEX_PAT = "x" }
+argv = ["ai", "opencode"]
+
+[[case]]
+name = "ai opencode not installed"
+covers = ["snow ai opencode"]
+connection = true
+bins = {}
+argv = ["ai", "opencode"]
+
+[[case]]
+name = "ai opencode home fallback"
+covers = ["snow ai opencode"]
+connection = true
+offline_success = true
+config = "authenticator = \"PROGRAMMATIC_ACCESS_TOKEN\"\ntoken = \"pat-secret\""
+bins = {}
+user_files = { ".opencode/bin/opencode" = { mode = "755", text = "#!/bin/sh\necho fallback opencode \"$@\"\n" } }
+argv = ["ai", "opencode", "--agent-args", "x"]

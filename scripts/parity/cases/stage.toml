@@ -1,0 +1,8 @@
+
+[[case]]
+name = "stage copy recursive single file"
+covers = ["snow stage copy"]
+connection = true
+stages = true
+files = { "a.txt" = "x\n" }
+argv = ["stage", "copy", "a.txt", "@st", "--recursive"]

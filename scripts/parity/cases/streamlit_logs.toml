@@ -1,0 +1,50 @@
+[[case]]
+name = "streamlit logs"
+covers = ["snow streamlit logs"]
+connection = true
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11"]] }, { match = "GET_STREAMLIT_DEVELOPER_API_TOKEN", columns = ["x"], rows = [["{\"token\": \"tok123\", \"resourceUri\": \"http://127.0.0.1:<SELF_PORT>/app/\"}"]] }, { ws = [{ source = 1, content = "hello", seconds = 1704067200, nanos = 123456789, sequence = 1, level = 2 }, { source = 2, content = "boot", seconds = 1704067201, sequence = 2, level = 4 }, { content = "bare" }] }]
+argv = ["streamlit", "logs", "--name", "db.s.app", "--tail", "5"]
+
+[[case]]
+name = "streamlit logs json"
+covers = ["snow streamlit logs"]
+connection = true
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11"]] }, { match = "GET_STREAMLIT_DEVELOPER_API_TOKEN", columns = ["x"], rows = [["{\"token\": \"tok123\", \"resourceUri\": \"http://127.0.0.1:<SELF_PORT>/app/\"}"]] }, { ws = [{ source = 1, content = "hello", seconds = 1704067200, nanos = 123456789, sequence = 1, level = 2 }, { source = 2, content = "boot", seconds = 1704067201, sequence = 2, level = 4 }, { content = "bare" }] }]
+argv = ["streamlit", "logs", "--name", "app", "--format", "json"]
+
+[[case]]
+name = "streamlit logs from project"
+covers = ["snow streamlit logs"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  st:\n    type: streamlit\n    identifier: my_app\n    main_file: app.py\n", "app.py" = "" }
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11"]] }, { match = "GET_STREAMLIT_DEVELOPER_API_TOKEN", columns = ["x"], rows = [["{\"token\": \"tok123\", \"resourceUri\": \"http://127.0.0.1:<SELF_PORT>/app/\"}"]] }, { ws = [{ source = 1, content = "hello", seconds = 1704067200, nanos = 123456789, sequence = 1, level = 2 }, { source = 2, content = "boot", seconds = 1704067201, sequence = 2, level = 4 }, { content = "bare" }] }]
+argv = ["streamlit", "logs"]
+
+[[case]]
+name = "streamlit logs warehouse runtime"
+covers = ["snow streamlit logs"]
+connection = true
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name"], rows = [["APP", "SYSTEM$WAREHOUSE_RUNTIME"]] }]
+argv = ["streamlit", "logs", "--name", "app"]
+
+[[case]]
+name = "streamlit logs name and entity"
+covers = ["snow streamlit logs"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  st:\n    type: streamlit\n    identifier: my_app\n    main_file: app.py\n", "app.py" = "" }
+rules = []
+argv = ["streamlit", "logs", "st", "--name", "app"]
+
+[[case]]
+name = "streamlit logs no project"
+covers = ["snow streamlit logs"]
+connection = true
+rules = []
+argv = ["streamlit", "logs"]
+
+[[case]]
+name = "streamlit logs empty token"
+covers = ["snow streamlit logs"]
+connection = true
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11"]] }, { match = "GET_STREAMLIT_DEVELOPER_API_TOKEN", columns = ["x"], rows = [["{\"token\": \"\"}"]] }]
+argv = ["streamlit", "logs", "--name", "app"]

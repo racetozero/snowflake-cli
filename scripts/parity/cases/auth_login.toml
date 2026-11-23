@@ -1,0 +1,31 @@
+[[case]]
+name = "auth login blank role"
+covers = ["snow auth login"]
+argv = ["auth", "login", "myorg-acct", "--role", " "]
+
+[[case]]
+name = "auth login blank connection name"
+covers = ["snow auth login"]
+argv = ["auth", "login", "myorg-acct", "--connection-name", " "]
+
+[[case]]
+name = "auth login name owned by password connection"
+covers = ["snow auth login"]
+connection = true
+argv = ["auth", "login", "myorg-acct", "--connection-name", "dev"]
+
+[[case]]
+name = "auth login empty account prompt"
+covers = ["snow auth login"]
+stdin = " \n"
+argv = ["auth", "login"]
+
+[[case]]
+name = "auth login bad host url"
+covers = ["snow auth login"]
+argv = ["auth", "login", "https://", "--role", "r"]
+
+[[case]]
+name = "auth login warehouse conflict"
+covers = ["snow auth login"]
+argv = ["auth", "login", "acct", "--warehouse", "w", "--clear-warehouse"]

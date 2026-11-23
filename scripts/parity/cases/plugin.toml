@@ -1,0 +1,19 @@
+[[case]]
+name = "plugin list"
+covers = ["snow plugin list"]
+argv = ["plugin", "list"]
+
+[[case]]
+name = "plugin list json"
+covers = ["snow plugin list"]
+argv = ["plugin", "list", "--format", "json"]
+
+[[case]]
+name = "plugin enable missing"
+covers = ["snow plugin enable"]
+argv = ["plugin", "enable", "foo"]
+
+[[case]]
+name = "plugin disable missing"
+covers = ["snow plugin disable"]
+argv = ["plugin", "disable", "foo"]

@@ -1,0 +1,126 @@
+[[case]]
+name = "bundle create stage"
+covers = ["snow bundle create"]
+connection = true
+argv = ["bundle", "create", "b1", "--source", "@st/code", "--comment", "it's"]
+rules = [{ match = "CREATE CODE BUNDLE", columns = ["status"], rows = [["Code bundle B1 successfully created."]] }]
+
+[[case]]
+name = "bundle create overwrite workspace"
+covers = ["snow bundle create"]
+connection = true
+argv = ["bundle", "create", "db.s.b1", "-s", "snow://workspace/w/versions/live", "--overwrite"]
+
+[[case]]
+name = "bundle create skip local"
+covers = ["snow bundle create"]
+connection = true
+stages = true
+files = { "src/main.py" = "print(1)\n" }
+argv = ["bundle", "create", "b1", "--source", "file://src", "--skip-if-exists"]
+normalize = [['tmp_bundle_stage_[0-9]+', 'tmp_bundle_stage_N'], ['file:///\S+/[0-9]+/\*', 'file://<ISO>/*']]
+
+[[case]]
+name = "bundle create both flags"
+covers = ["snow bundle create"]
+connection = true
+argv = ["bundle", "create", "b1", "--source", "@s", "--overwrite", "--skip-if-exists"]
+
+[[case]]
+name = "bundle create bad source"
+covers = ["snow bundle create"]
+connection = true
+argv = ["bundle", "create", "b1", "--source", "http://x"]
+
+[[case]]
+name = "bundle list"
+covers = ["snow bundle list"]
+connection = true
+argv = ["bundle", "list", "--like", "b%", "--in", "schema", "db.s"]
+rules = [{ match = "SHOW CODE BUNDLES", columns = ["name", "database_name"], rows = [["B1", "DB"]] }]
+
+[[case]]
+name = "bundle list account"
+covers = ["snow bundle list"]
+connection = true
+argv = ["bundle", "list", "--in-account", "--format", "json"]
+
+[[case]]
+name = "bundle list bad scope"
+covers = ["snow bundle list"]
+connection = true
+argv = ["bundle", "list", "--in", "table", "t"]
+
+[[case]]
+name = "bundle delete"
+covers = ["snow bundle delete"]
+connection = true
+argv = ["bundle", "delete", "b1", "--if-exists"]
+
+[[case]]
+name = "bundle alter rename"
+covers = ["snow bundle alter"]
+connection = true
+argv = ["bundle", "alter", "b1", "--rename-to", "b2"]
+
+[[case]]
+name = "bundle alter version"
+covers = ["snow bundle alter"]
+connection = true
+argv = ["bundle", "alter", "b1", "--add-version", "@st/v2"]
+
+[[case]]
+name = "bundle alter none"
+covers = ["snow bundle alter"]
+connection = true
+argv = ["bundle", "alter", "b1"]
+
+[[case]]
+name = "bundle execute"
+covers = ["snow bundle execute"]
+connection = true
+files = { "over.yml" = "spec:\n  x: 1\n\n" }
+argv = ["bundle", "execute", "b1", "--entrypoint", "main.py", "--execution-name", "run1", "--overrides", "over.yml", "a", "b c"]
+
+[[case]]
+name = "bundle execute async"
+covers = ["snow bundle execute"]
+connection = true
+argv = ["bundle", "execute", "b1", "--entrypoint", "main.py", "--async"]
+
+[[case]]
+name = "bundle execute missing overrides"
+covers = ["snow bundle execute"]
+connection = true
+argv = ["bundle", "execute", "b1", "--entrypoint", "main.py", "--overrides", "nope.yml"]
+
+[[case]]
+name = "bundle status"
+covers = ["snow bundle status"]
+connection = true
+argv = ["bundle", "status", "01b2c3d4-0000-1111-0000-000000000001"]
+rules = [{ rest = "GET /monitoring/queries/", body = { success = true, data = { queries = [{ status = "RUNNING" }] } } }]
+
+[[case]]
+name = "bundle status bad id"
+covers = ["snow bundle status"]
+connection = true
+argv = ["bundle", "status", "nope"]
+
+[[case]]
+name = "bundle cancel"
+covers = ["snow bundle cancel"]
+connection = true
+argv = ["bundle", "cancel", "01b2c3d4-0000-1111-0000-000000000001"]
+
+[[case]]
+name = "bundle history"
+covers = ["snow bundle history"]
+connection = true
+argv = ["bundle", "history", "--bundle-name", "b1", "--bundle-database", "db", "--bundle-schema", "s", "--entrypoint", "m.py", "--start-time-range-start", "2024-01-01", "--start-time-range-end", "2024-02-01", "--bundle-types", "a", "--bundle-types", "b", "--compute-types", "WH", "--language-types", "PY", "--status", "OK", "--execution-name", "r", "--result-limit", "5"]
+
+[[case]]
+name = "bundle history default"
+covers = ["snow bundle history"]
+connection = true
+argv = ["bundle", "history"]

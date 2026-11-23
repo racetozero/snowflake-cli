@@ -1,0 +1,204 @@
+[[case]]
+name = "app version list"
+covers = ["snow app version list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "setup.sql" = "" }
+rules = [{ match = "show versions in application package", columns = ["version", "patch", "label", "comment", "created_on", "dropped_on", "log_level", "trace_level", "state", "review_status"], rows = [["V1", 0, "<NULL>", "<NULL>", "2024-01-01", "<NULL>", "OFF", "OFF", "READY", "NOT_REVIEWED"]] }]
+argv = ["app", "version", "list"]
+
+[[case]]
+name = "app release-directive list"
+covers = ["snow app release-directive list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n    meta:\n      role: pkg_role\n", "setup.sql" = "" }
+rules = [{ match = "show release directives", columns = ["name", "target_type", "version", "patch"], rows = [["DEFAULT", "<NULL>", "V1", 0], ["MY_DIR", "ACCOUNT", "V1", 1]] }]
+argv = ["app", "release-directive", "list", "--like", "MY%"]
+
+[[case]]
+name = "app release-channel list"
+covers = ["snow app release-channel list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa channel", "<NULL>", "<NULL>", "{\"accounts\": [\"ORG.ACC\"]}", "[\"V1\"]"]] }]
+argv = ["app", "release-channel", "list"]
+
+[[case]]
+name = "app release-channel list json"
+covers = ["snow app release-channel list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa channel", "<NULL>", "<NULL>", "{}", "[\"V1\", \"V2\"]"]] }]
+argv = ["app", "release-channel", "list", "--format", "json"]
+
+[[case]]
+name = "app release-directive list channel"
+covers = ["snow app release-directive list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"]] }, { match = "show release directives", columns = ["name"], rows = [["DEFAULT"]] }]
+argv = ["app", "release-directive", "list", "--channel", "nope"]
+
+[[case]]
+name = "app version list missing package"
+covers = ["snow app version list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "show versions", error = { code = 2003, message = "does not exist" } }]
+argv = ["app", "version", "list"]
+
+[[case]]
+name = "app version list no package entity"
+covers = ["snow app version list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities: {}\n" }
+argv = ["app", "version", "list"]
+
+[[case]]
+name = "app release-channel add-accounts"
+covers = ["snow app release-channel add-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "add-accounts", "qa", "--target-accounts", "org1.acc1,org2.acc2"]
+
+[[case]]
+name = "app release-channel remove-accounts bad account"
+covers = ["snow app release-channel remove-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "remove-accounts", "QA", "--target-accounts", "nope"]
+
+[[case]]
+name = "app release-channel remove-accounts"
+covers = ["snow app release-channel remove-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }, { match = "remove accounts", error = { code = 512017, message = "cannot modify" } }]
+argv = ["app", "release-channel", "remove-accounts", "QA", "--target-accounts", "o.a"]
+
+[[case]]
+name = "app release-channel remove-accounts ok"
+covers = ["snow app release-channel remove-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "remove-accounts", "QA", "--target-accounts", "o.a"]
+
+[[case]]
+name = "app release-channel set-accounts"
+covers = ["snow app release-channel set-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "set-accounts", "QA", "--target-accounts", "o.a"]
+
+[[case]]
+name = "app release-channel set-accounts unknown channel"
+covers = ["snow app release-channel set-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "set-accounts", "PROD", "--target-accounts", "o.a"]
+
+[[case]]
+name = "app release-channel add-version"
+covers = ["snow app release-channel add-version"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "add-version", "QA", "--version", "v1"]
+
+[[case]]
+name = "app release-channel remove-version"
+covers = ["snow app release-channel remove-version"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }, { match = "drop version", error = { code = 93088, message = "referenced" } }]
+argv = ["app", "release-channel", "remove-version", "QA", "--version", "v1"]
+
+[[case]]
+name = "app release-channel remove-version ok"
+covers = ["snow app release-channel remove-version"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-channel", "remove-version", "QA", "--version", "v1"]
+
+[[case]]
+name = "app release-directive set"
+covers = ["snow app release-directive set"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-directive", "set", "my_dir", "--channel", "QA", "--target-accounts", "o.a,o.b", "--version", "v1", "--patch", "2"]
+
+[[case]]
+name = "app release-directive set default"
+covers = ["snow app release-directive set"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "release-directive", "set", "default", "--version", "v1", "--patch", "0"]
+
+[[case]]
+name = "app release-directive set default accounts"
+covers = ["snow app release-directive set"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+argv = ["app", "release-directive", "set", "DEFAULT", "--target-accounts", "o.a", "--version", "v1", "--patch", "0"]
+
+[[case]]
+name = "app release-directive unset"
+covers = ["snow app release-directive unset"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-directive", "unset", "my_dir", "--channel", "QA"]
+
+[[case]]
+name = "app release-directive unset default"
+covers = ["snow app release-directive unset"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+argv = ["app", "release-directive", "unset", "default"]
+
+[[case]]
+name = "app release-directive add-accounts"
+covers = ["snow app release-directive add-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-directive", "add-accounts", "my_dir", "--target-accounts", "o.a"]
+
+[[case]]
+name = "app release-directive remove-accounts"
+covers = ["snow app release-directive remove-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }, { match = "remove accounts", error = { code = 93090, message = "nope" } }]
+argv = ["app", "release-directive", "remove-accounts", "my_dir", "--target-accounts", "o.a", "--channel", "QA"]
+
+[[case]]
+name = "app release-directive remove-accounts ok"
+covers = ["snow app release-directive remove-accounts"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_RELEASE_CHANNELS\", \"value\": true}]}"]] }, { match = "show release channels", columns = ["name", "description", "created_on", "updated_on", "targets", "versions"], rows = [["QA", "qa", "<NULL>", "<NULL>", "{}", "[]"], ["DEFAULT", "d", "<NULL>", "<NULL>", "{}", "[]"]] }]
+argv = ["app", "release-directive", "remove-accounts", "my_dir", "--target-accounts", "o.a", "--channel", "QA"]
+
+[[case]]
+name = "app version list unclassified error"
+covers = ["snow app version list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: [setup.sql]\n", "setup.sql" = "" }
+rules = [{ match = "show versions", error = { code = 1234, message = "boom" } }]
+argv = ["app", "version", "list"]
+
+[[case]]
+name = "app version list v1 project"
+covers = ["snow app version list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 1\nnative_app:\n  name: myapp\n  artifacts:\n    - setup.sql\n  package:\n    role: pkg_role\n", "setup.sql" = "" }
+rules = [{ match = "show versions in application package", columns = ["version", "patch"], rows = [["V1", 0]] }]
+argv = ["app", "version", "list"]

@@ -1,0 +1,159 @@
+[[case]]
+name = "sar open print"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.snowflakecomputing.app", "false"]] }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open http url"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "http://x.example.com/", "false"]] }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open provisioning"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "Endpoints provisioning in progress", "false"]] }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open upgrading"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "abc.app", "true"]] }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open not deployed"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open describe error"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", error = { code = 2003, message = "does not exist" } }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open settings"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["app", "open", "--settings", "--print-only"]
+
+[[case]]
+name = "sar open entity"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    artifacts: [index.js]\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "e.example.com", "false"]] }]
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open entity no db"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME", "QUERY_WAREHOUSE", "BUILD_EXTERNAL_ACCESS_INTEGRATION"], rows = [["APPS_DB", "APP_WH", "<NULL>"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "e.example.com", "false"]] }]
+config = "[connections.dev2]\naccount = \"x\""
+argv = ["app", "open", "--print-only"]
+
+[[case]]
+name = "sar open target without yml"
+covers = ["snow app open"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    artifacts: [index.js]\n" }
+argv = ["app", "open", "--target", "x"]
+
+[[case]]
+name = "sar teardown force"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown still exists"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name", "status", "url", "is_upgrading"], rows = [["MY_APP", "RUNNING", "x", "false"]] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown cascade"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "teardown", "--force", "--cascade"]
+
+[[case]]
+name = "sar teardown workspace"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ncode_workspace: ws1\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown personal"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: USER$\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown confirm no"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+stdin = "n\n"
+argv = ["app", "teardown"]
+
+[[case]]
+name = "sar teardown entity"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME", "QUERY_WAREHOUSE", "BUILD_EXTERNAL_ACCESS_INTEGRATION"], rows = [["APPS_DB", "APP_WH", "<NULL>"]] }, { match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown entity system defaults"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", error = { code = 2003, message = "Unknown function" } }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", columns = ["X"], rows = [["{\"database\": \"DDB\", \"schema\": \"DSC\", \"query_warehouse\": \"\"}"]] }, { match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown entity legacy defaults"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", error = { code = 2003, message = "Unknown function" } }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", error = { code = 2140, message = "SQL compilation error: Unknown function SYSTEM$GET_APPLICATION_SERVICE_DEFAULTS" } }, { match = "SHOW PARAMETERS LIKE", columns = ["key", "value", "level"], rows = [["DEFAULT_SNOWFLAKE_APPS_DESTINATION_DATABASE", "ADB", "ACCOUNT"], ["DEFAULT_SNOWFLAKE_APPS_QUERY_WAREHOUSE", "AWH", ""]] }, { match = "EXPLAIN_PRIVILEGES", columns = ["R"], rows = [["{\"allOf\": [{\"privilege\": \"USAGE\", \"objectType\": \"DATABASE\", \"objectName\": \"ADB\"}]}"]] }, { match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]
+
+[[case]]
+name = "sar teardown entity stage"
+covers = ["snow app teardown"]
+connection = true
+files = { "index.js" = "x\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: myapp\n    code_stage: db2.sc2.stg\n    artifacts: [index.js]\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", error = { code = 2003, message = "Unknown function" } }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", columns = ["X"], rows = [["{\"database\": \"DDB\", \"schema\": \"DSC\", \"query_warehouse\": \"\"}"]] }, { match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "DESCRIBE APPLICATION SERVICE", columns = ["name"], rows = [] }]
+argv = ["app", "teardown", "--force"]

@@ -1,0 +1,206 @@
+[[case]]
+name = "ws dump v2"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = """
+definition_version: 2
+env:
+  foo: bar
+  n: 3
+mixins:
+  m1:
+    stage: st
+    external_access_integrations: [eai1]
+entities:
+  my_func:
+    type: function
+    identifier:
+      name: f_<% ctx.env.foo %>
+    handler: app.hello
+    returns: string
+    signature:
+      - name: a
+        type: int
+    artifacts:
+      - src/
+      - src: lib/a.py
+        dest: lib/
+        processors: [snowpark]
+    meta:
+      use_mixins: [m1]
+  my_st:
+    type: streamlit
+    identifier: st1
+    main_file: app.py
+    title: "<% ctx.entities.my_func.handler %> v<% ctx.env.n %>"
+    artifacts: [app.py]
+""" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump errors"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = """
+definition_version: 2
+entities:
+  f:
+    type: function
+    identifier: x
+    handler: 5
+    extra_thing: 1
+  s:
+    type: bogus
+  t:
+    type: streamlit
+    identifier: {name: a, foo: b}
+    main_file: [a]
+""" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump v1"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = """
+definition_version: 1
+snowpark:
+  project_name: proj
+  stage_name: dev_deployment
+  src: app/
+  functions:
+    - name: hello
+      handler: functions.hello
+      signature:
+        - name: name
+          type: string
+      returns: string
+streamlit:
+  name: st
+  main_file: streamlit_app.py
+native_app:
+  name: myapp
+  artifacts:
+    - setup.sql
+""" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump no definition"
+covers = ["snow ws dump"]
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump duplicate key"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = "definition_version: 2\nentities: {}\nentities: {}\n" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump bad version"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = "definition_version: 3\nfoo: bar\n" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump local override and env"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = "definition_version: '1.1'\nenv:\n  db: base\nstreamlit:\n  name: <% ctx.env.db %>_app\n  main_file: x.py\n", "snowflake.local.yml" = "env:\n  db: local\n" }
+argv = ["ws", "dump", "--env", "other=1"]
+
+[[case]]
+name = "ws dump env override"
+covers = ["snow ws dump"]
+files = { "sub/snowflake.yml" = "definition_version: 2\nenv:\n  db: base\nentities:\n  s:\n    type: streamlit\n    identifier:\n      name: <% ctx.env.db %>\n      database: <% ctx.env.DB_FROM_OS %>\n    artifacts: []\n" }
+env = { DB_FROM_OS = "osdb" }
+argv = ["ws", "dump", "--env", "db=cli", "-p", "sub"]
+
+[[case]]
+name = "ws dump template missing var"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: <% ctx.env.nope %>\n    artifacts: []\n" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump v1 template warning"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = "definition_version: 1\nstreamlit:\n  name: <% ctx.env.x %>\n  main_file: a.py\n" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump mixins errors"
+covers = ["snow ws dump"]
+files = { "snowflake.yml" = "definition_version: 2\nmixins:\n  m: {nope: 1}\nentities:\n  s:\n    type: streamlit\n    artifacts: []\n    meta:\n      use_mixins: m\n" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "ws dump glob flag"
+covers = ["snow ws dump"]
+config = "[cli.features]\nenable_snowpark_glob_support = true"
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: procedure\n    identifier: p\n    handler: a.b\n    returns: int\n    signature: ''\n    stage: s\n    runtime: 3.10\n    execute_as_caller: 'yes'\n    artifacts: ['lib/*.py']\n    secrets: {a: b}\n    imports: ['@s/x.zip']\n" }
+argv = ["ws", "dump"]
+
+[[case]]
+name = "v1-to-v2 snowpark streamlit"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = """
+definition_version: 1
+snowpark:
+  project_name: proj
+  stage_name: dev_deployment
+  src: app/
+  functions:
+    - name: hello
+      handler: functions.hello
+      signature:
+        - name: name
+          type: string
+      returns: string
+  procedures:
+    - name: proc
+      database: db
+      handler: procs.p
+      signature: ''
+      returns: int
+      execute_as_caller: true
+streamlit:
+  name: st
+  main_file: streamlit_app.py
+  additional_source_files: [common/a.py, pages/x.py]
+  title: My app
+  query_warehouse: wh
+""", "pages/x.py" = "", "environment.yml" = "", "streamlit_app.py" = "" }
+argv = ["helpers", "v1-to-v2"]
+
+[[case]]
+name = "v1-to-v2 native app"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = "definition_version: 1\nnative_app:\n  name: myapp\n  source_stage: app_src.stage\n  artifacts:\n    - setup.sql\n    - src: app/*\n      dest: ./\n  package:\n    role: pkg_role\n  application:\n    name: my_application\n    debug: true\n", "setup.sql" = "" }
+argv = ["helpers", "v1-to-v2"]
+
+[[case]]
+name = "v1-to-v2 already v2"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = "definition_version: 2\nentities: {}\n" }
+argv = ["helpers", "v1-to-v2"]
+
+[[case]]
+name = "v1-to-v2 local yml"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = "definition_version: '1.1'\nstreamlit:\n  name: st\n  main_file: a.py\n", "snowflake.local.yml" = "streamlit:\n  title: local\n", "a.py" = "" }
+argv = ["helpers", "v1-to-v2"]
+
+[[case]]
+name = "v1-to-v2 local yml migrate"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = "definition_version: '1.1'\nenv:\n  x: 1\nstreamlit:\n  name: st\n  main_file: a.py\n", "snowflake.local.yml" = "streamlit:\n  title: local\n", "a.py" = "" }
+argv = ["helpers", "v1-to-v2", "--migrate-local-overrides"]
+
+[[case]]
+name = "v1-to-v2 templates"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = "definition_version: '1.1'\nenv:\n  n: abc\nstreamlit:\n  name: <% ctx.env.n %>\n  main_file: a.py\n", "a.py" = "" }
+argv = ["helpers", "v1-to-v2"]
+
+[[case]]
+name = "v1-to-v2 templates accepted"
+covers = ["snow helpers v1-to-v2"]
+files = { "snowflake.yml" = "definition_version: '1.1'\nenv:\n  n: abc\nstreamlit:\n  name: <% ctx.env.n %>\n  main_file: a.py\n", "a.py" = "" }
+argv = ["helpers", "v1-to-v2", "-t"]

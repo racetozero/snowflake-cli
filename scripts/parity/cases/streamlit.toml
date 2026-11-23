@@ -1,0 +1,302 @@
+[[case]]
+name = "streamlit execute"
+covers = ["snow streamlit execute"]
+connection = true
+argv = ["streamlit", "execute", "db.s.app"]
+
+[[case]]
+name = "streamlit get-url"
+covers = ["snow streamlit get-url"]
+connection = true
+argv = ["streamlit", "get-url", "my_app"]
+rules = [{ match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+
+[[case]]
+name = "streamlit status warehouse"
+covers = ["snow streamlit status"]
+connection = true
+argv = ["streamlit", "status", "db.s.app"]
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name", "compute_pool"], rows = [["APP", "SYSTEM$WAREHOUSE_RUNTIME", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+
+[[case]]
+name = "streamlit status not started"
+covers = ["snow streamlit status"]
+connection = true
+argv = ["streamlit", "status", "db.s.app", "--format", "json"]
+rules = [{ match = "describe streamlit", columns = ["name", "runtime_name", "compute_pool"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "POOL"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+
+[[case]]
+name = "streamlit status running"
+covers = ["snow streamlit status"]
+connection = true
+argv = ["streamlit", "status", "db.s.app", "--format", "json"]
+rules = [
+  { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] },
+  { match = "describe streamlit", columns = ["name", "runtime_name", "compute_pool"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "POOL"]] },
+  { match = "show services", columns = ["name", "status", { name = "current_instances", type = "fixed" }, "managing_object_domain", "managing_object_name"], rows = [["STPLATSTREAMLIT_1", "RUNNING", 1, "Streamlit", "DB.S.APP"], ["STPLATSTREAMLIT_2", "SUSPENDED", 0, "STREAMLIT", "OTHER"]] },
+  { match = "GET_SERVICE_STATUS", columns = ["x"], rows = [["[{\"status\": \"READY\"}, {\"status\": \"PENDING\"}]"]] },
+]
+
+[[case]]
+name = "streamlit status monitor denied"
+covers = ["snow streamlit status"]
+connection = true
+argv = ["streamlit", "status", "db.s.app"]
+rules = [
+  { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] },
+  { match = "describe streamlit", columns = ["name", "runtime_name", "compute_pool"], rows = [["APP", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "POOL"]] },
+  { match = "show services", columns = ["name", "status", { name = "current_instances", type = "fixed" }, "managing_object_domain", "managing_object_name"], rows = [["STPLATSTREAMLIT_1", "RUNNING", 1, "STREAMLIT", "APP"]] },
+  { match = "GET_SERVICE_STATUS", error = { code = 3001, message = "Insufficient privileges to operate on service" } },
+]
+
+[[case]]
+name = "streamlit status no schema"
+covers = ["snow streamlit status"]
+connection = true
+argv = ["streamlit", "status", "app", "--schema", ""]
+
+[[case]]
+name = "streamlit share role"
+covers = ["snow streamlit share"]
+connection = true
+argv = ["streamlit", "share", "db.s.app", "analyst", "--with-grant-option"]
+
+[[case]]
+name = "streamlit share location"
+covers = ["snow streamlit share"]
+connection = true
+argv = ["streamlit", "share", "db.s.app", "analyst", "--grant-location-usage"]
+rules = [{ match = "ON SCHEMA", error = { code = 3001, message = "Insufficient privileges" } }]
+
+[[case]]
+name = "streamlit share none"
+covers = ["snow streamlit share"]
+connection = true
+argv = ["streamlit", "share", "db.s.app"]
+
+[[case]]
+name = "streamlit deploy new"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy exists"
+covers = ["snow streamlit deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: {name: st1, database: d2}\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["streamlit", "deploy", "s"]
+
+[[case]]
+name = "streamlit deploy container auto artifacts"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st2\n    title: \"It's\"\n    main_file: app.py\n    runtime_name: system$st_container_runtime_py3_11\n    compute_pool: pool\n    external_access_integrations: [db.s.eai]\n    secrets: {k: db.s.sec}\n    idle_auto_shutdown_time_seconds: 300\n    artifacts: []\n", "app.py" = "x", "environment.yml" = "deps: []\n", "pages/p1.py" = "p" }
+rules = [{ match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "does not exist" } }, { match = "(?i)^describe streamlit", columns = ["live_version_location_uri"], rows = [["snow://streamlit/DB.PUBLIC.ST2/versions/live/"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy restricted caller on container"
+covers = ["snow streamlit deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st3\n    main_file: app.py\n    query_warehouse: wh\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    execute_as: restricted   caller\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy no project"
+covers = ["snow streamlit deploy"]
+connection = true
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy replace"
+covers = ["snow streamlit deploy"]
+connection = true
+stage_files = { "streamlit/DB.PUBLIC.ST1/versions/live/app.py" = "old", "streamlit/DB.PUBLIC.ST1/versions/live/stale.py" = "s" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh2\n    main_file: app.py\n    title: New title\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "title", "comment", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name", "external_access_integrations"], rows = [["ST1", "Old", "a comment", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$WAREHOUSE_RUNTIME", "[\"E1\"]"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace", "--prune"]
+
+[[case]]
+name = "streamlit deploy replace container main change"
+covers = ["snow streamlit deploy"]
+connection = true
+stage_files = { "streamlit/DB.PUBLIC.ST1/versions/live/app.py" = "old" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    main_file: main.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: p2\n    artifacts: [main.py]\n", "main.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name", "compute_pool"], rows = [["ST1", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "P1"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace"]
+
+[[case]]
+name = "streamlit deploy grants"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st9\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n    grants:\n      - privilege: USAGE\n        role: analyst\n      - privilege: usage\n        user: bob\n        with_grant_option: true\n", "app.py" = "x" }
+rules = [{ match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "does not exist" } }, { match = "(?i)^describe streamlit", columns = ["live_version_location_uri"], rows = [["snow://streamlit/DB.PUBLIC.ST9/versions/live/"]] }, { match = "SHOW GRANTS ON STREAMLIT", columns = ["privilege", "granted_to", "grantee_name", "grant_option"], rows = [["OWNERSHIP", "ROLE", "SYSADMIN", "true"], ["USAGE", "ROLE", "OLD_ROLE", "false"], ["USAGE", "USER", "BOB", "false"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy v1 project"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 1\nstreamlit:\n  name: st1\n  query_warehouse: wh\n  main_file: app.py\n  additional_source_files: [utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy v1 without streamlit"
+covers = ["snow streamlit deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 1\nsnowpark:\n  project_name: p\n  stage_name: s\n  src: app/\n" }
+argv = ["streamlit", "deploy"]
+
+
+[[case]]
+name = "streamlit deploy legacy new"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--legacy"]
+
+[[case]]
+name = "streamlit deploy legacy container runtime"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--legacy"]
+
+
+[[case]]
+name = "streamlit deploy schedules"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\", \"0 20 * * 1-5\"]\n      timezone: Europe/Warsaw\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "SHOW TASKS LIKE", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * Europe/Warsaw", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "suspended"], ["ST1__STREAMLIT_LIFECYCLE_3", "DB", "PUBLIC", "x", "y", "started"]] }, { match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+
+[[case]]
+name = "streamlit deploy legacy replace legacy app"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    main_file: app.py\n    imports: [\"@db.s.st/a.zip\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--legacy", "--replace"]
+
+[[case]]
+name = "streamlit deploy legacy replace versioned app"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    main_file: app.py\n    imports: [\"@db.s.st/a.zip\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "<NULL>", "app.py", "WH", "<NULL>", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$WAREHOUSE_RUNTIME", "[]"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--legacy", "--replace"]
+
+[[case]]
+name = "streamlit deploy replace converts legacy app"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    main_file: app.py\n    imports: [\"@db.s.st/a.zip\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", once = true, columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "(?i)^describe streamlit", once = true, columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "(?i)^describe streamlit", once = true, columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "(?i)^describe streamlit", columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "<NULL>", "app.py", "WH", "<NULL>", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$WAREHOUSE_RUNTIME", "[]"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace"]
+
+[[case]]
+name = "streamlit deploy replace converts legacy copy fails"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    main_file: app.py\n    imports: [\"@db.s.st/a.zip\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", once = true, columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "(?i)^describe streamlit", once = true, columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "(?i)^describe streamlit", once = true, columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "c", "old.py", "WH", "@db.public.streamlit/st1", "<NULL>", "<NULL>", "[]"]] }, { match = "COPY FILES", error = { code = 2003, message = "Stage does not exist." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "comment", "main_file", "query_warehouse", "root_location", "live_version_location_uri", "runtime_name", "import_urls"], rows = [["ST1", "Old", "<NULL>", "app.py", "WH", "<NULL>", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$WAREHOUSE_RUNTIME", "[]"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace"]
+
+[[case]]
+name = "streamlit deploy schedules show error"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\", \"0 20 * * 1-5\"]\n      timezone: Europe/Warsaw\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "SHOW TASKS", error = { code = 3001, message = "Insufficient privileges." } }, { match = "SHOW TASKS LIKE", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * Europe/Warsaw", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "suspended"], ["ST1__STREAMLIT_LIFECYCLE_3", "DB", "PUBLIC", "x", "y", "started"]] }, { match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy schedules create 1420"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\", \"0 20 * * 1-5\"]\n      timezone: Europe/Warsaw\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "CREATE OR REPLACE TASK", error = { code = 1420, message = "invalid property" } }, { match = "SHOW TASKS LIKE", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * Europe/Warsaw", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "suspended"], ["ST1__STREAMLIT_LIFECYCLE_3", "DB", "PUBLIC", "x", "y", "started"]] }, { match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy schedules create other"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\", \"0 20 * * 1-5\"]\n      timezone: Europe/Warsaw\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "CREATE OR REPLACE TASK", error = { code = 3001, message = "Insufficient privileges." } }, { match = "SHOW TASKS LIKE", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * Europe/Warsaw", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "suspended"], ["ST1__STREAMLIT_LIFECYCLE_3", "DB", "PUBLIC", "x", "y", "started"]] }, { match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy schedules resume fails drop fails"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\", \"0 20 * * 1-5\"]\n      timezone: Europe/Warsaw\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "RESUME", error = { code = 3001, message = "no resume" } }, { match = "DROP TASK", error = { code = 3001, message = "no drop" } }, { match = "SHOW TASKS LIKE", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * Europe/Warsaw", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "suspended"], ["ST1__STREAMLIT_LIFECYCLE_3", "DB", "PUBLIC", "x", "y", "started"]] }, { match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy schedules link fails"
+covers = ["snow streamlit deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  my_st:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\", \"0 20 * * 1-5\"]\n      timezone: Europe/Warsaw\n    artifacts: [app.py, utils.py]\n", "app.py" = "import streamlit\n", "utils.py" = "x = 1\n" }
+rules = [{ match = "SET SCHEDULED_TASKS", error = { code = 3001, message = "no link" } }, { match = "SHOW TASKS LIKE", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * Europe/Warsaw", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "suspended"], ["ST1__STREAMLIT_LIFECYCLE_3", "DB", "PUBLIC", "x", "y", "started"]] }, { match = "(?i)^describe streamlit", once = true, error = { code = 2003, message = "Streamlit 'ST1' does not exist or not authorized." } }, { match = "(?i)^describe streamlit", columns = ["name", "title", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name"], rows = [["ST1", "<NULL>", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "<NULL>"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy"]
+
+[[case]]
+name = "streamlit deploy schedules replace linked"
+covers = ["snow streamlit deploy"]
+connection = true
+stage_files = { "streamlit/DB.PUBLIC.ST1/versions/live/app.py" = "new" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name", "compute_pool"], rows = [["ST1", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "POOL1"]] }, { match = "SHOW STREAMLITS", columns = ["name", "scheduled_tasks"], rows = [["ST1", "[\"DB.PUBLIC.ST1__STREAMLIT_LIFECYCLE\"]"]] }, { match = "SHOW TASKS", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * UTC", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "started"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace"]
+
+[[case]]
+name = "streamlit deploy schedules replace unlinked"
+covers = ["snow streamlit deploy"]
+connection = true
+stage_files = { "streamlit/DB.PUBLIC.ST1/versions/live/app.py" = "new" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name", "compute_pool"], rows = [["ST1", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "POOL1"]] }, { match = "SHOW STREAMLITS", columns = ["name", "scheduled_tasks"], rows = [["ST1", "[]"]] }, { match = "SHOW TASKS", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * UTC", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "started"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace"]
+
+[[case]]
+name = "streamlit deploy schedules replace unknown"
+covers = ["snow streamlit deploy"]
+connection = true
+stage_files = { "streamlit/DB.PUBLIC.ST1/versions/live/app.py" = "new" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11\n    compute_pool: pool1\n    schedules:\n      cron_exprs: [\"0 8 * * *\"]\n    artifacts: [app.py]\n", "app.py" = "new" }
+rules = [{ match = "(?i)^describe streamlit", columns = ["name", "main_file", "query_warehouse", "live_version_location_uri", "runtime_name", "compute_pool"], rows = [["ST1", "app.py", "WH", "snow://streamlit/DB.PUBLIC.ST1/versions/live/", "SYSTEM$ST_CONTAINER_RUNTIME_PY3_11", "POOL1"]] }, { match = "SHOW STREAMLITS", columns = ["name", "scheduled_tasks"], rows = [["ST1", "<NULL>"]] }, { match = "SHOW TASKS", columns = ["name", "database_name", "schema_name", "schedule", "definition", "state"], rows = [["ST1__STREAMLIT_LIFECYCLE", "DB", "PUBLIC", "USING CRON 0 8 * * * UTC", "SELECT SYSTEM$START_STREAMLIT('db.public.st1')", "started"]] }, { match = "system\\$get_snowsight_host", columns = ["RESULT"], rows = [["https://app.snowflake.com"]] }, { match = "return_current_org_name", columns = ["RESULT"], rows = [["myorg"]] }, { match = "current_account_name", columns = ["RESULT"], rows = [["MYACC"]] }]
+argv = ["streamlit", "deploy", "--replace"]
+
+[[case]]
+name = "streamlit deploy experimental"
+covers = ["snow streamlit deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: {name: st1, database: d2}\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["streamlit", "deploy", "s", "--experimental"]
+

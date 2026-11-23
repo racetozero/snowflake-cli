@@ -1,0 +1,147 @@
+[[case]]
+name = "stage list-files"
+covers = ["snow stage list-files"]
+connection = true
+argv = ["stage", "list-files", "@st/dir/", "--pattern", ".*[.]csv"]
+rules = [{ match = "^ls ", columns = ["name", { name = "size", type = "fixed" }, "md5", "last_modified"], rows = [["st/dir/a.csv", 10, "abc", "Mon, 1 Jan 2024 00:00:00 GMT"]] }]
+
+[[case]]
+name = "stage list-files quoted"
+covers = ["snow stage list-files"]
+connection = true
+argv = ["stage", "list-files", "@\"my stage\"/a b"]
+
+[[case]]
+name = "stage create"
+covers = ["snow stage create"]
+connection = true
+argv = ["stage", "create", "@db.s.st", "--encryption", "SNOWFLAKE_SSE", "--enable-directory"]
+
+[[case]]
+name = "stage remove"
+covers = ["snow stage remove"]
+connection = true
+argv = ["stage", "remove", "st", "dir/a.csv"]
+
+[[case]]
+name = "stage copy stage to stage"
+covers = ["snow stage copy"]
+connection = true
+argv = ["stage", "copy", "@a/dir", "@b/out"]
+
+[[case]]
+name = "stage copy local to local"
+covers = ["snow stage copy"]
+connection = true
+argv = ["stage", "copy", "./a", "./b"]
+
+[[case]]
+name = "stage copy to user stage"
+covers = ["snow stage copy"]
+connection = true
+argv = ["stage", "copy", "@a/dir", "@~/x"]
+
+[[case]]
+name = "git list-branches"
+covers = ["snow git list-branches"]
+connection = true
+argv = ["git", "list-branches", "repo", "--like", "main%"]
+
+[[case]]
+name = "git list-tags"
+covers = ["snow git list-tags"]
+connection = true
+argv = ["git", "list-tags", "db.s.repo"]
+
+[[case]]
+name = "git fetch"
+covers = ["snow git fetch"]
+connection = true
+argv = ["git", "fetch", "repo"]
+
+[[case]]
+name = "git list-files"
+covers = ["snow git list-files"]
+connection = true
+argv = ["git", "list-files", "@repo/branches/main/src/"]
+
+[[case]]
+name = "git list-files bad path"
+covers = ["snow git list-files"]
+connection = true
+argv = ["git", "list-files", "@repo/main"]
+
+[[case]]
+name = "git copy to stage"
+covers = ["snow git copy"]
+connection = true
+argv = ["git", "copy", "@repo/branches/main/src/", "@dst/x"]
+
+[[case]]
+name = "git copy download"
+covers = ["snow git copy"]
+connection = true
+stage_files = { "repo/branches/main/src/a.py" = "a\n", "repo/branches/main/src/b.py" = "bb\n" }
+argv = ["git", "copy", "@repo/branches/main/src/", "out"]
+
+[[case]]
+name = "git setup no secret"
+covers = ["snow git setup"]
+connection = true
+stdin = "https://github.com/x/y.git\nn\n\n"
+rules = [{ match = "^describe git repository", error = { code = 2003, message = "does not exist" } }, { match = "^describe integration", error = { code = 2003, message = "does not exist" } }, { match = "show integrations", columns = ["name"], rows = [["REPO_API_INTEGRATION"]] }]
+argv = ["git", "setup", "repo"]
+
+[[case]]
+name = "git setup existing secret"
+covers = ["snow git setup"]
+connection = true
+stdin = "https://github.com/x/y.git\ny\n\nmy_api\n"
+rules = [{ match = "^describe git repository", error = { code = 2003, message = "does not exist" } }, { match = "show secrets", columns = ["name"], rows = [["DB.S.REPO_SECRET"]] }]
+argv = ["git", "setup", "db.s.repo"]
+
+[[case]]
+name = "git setup exists"
+covers = ["snow git setup"]
+connection = true
+argv = ["git", "setup", "repo"]
+
+[[case]]
+name = "git setup bad url"
+covers = ["snow git setup"]
+connection = true
+stdin = "http://x\n"
+rules = [{ match = "^describe git repository", error = { code = 2003, message = "does not exist" } }]
+argv = ["git", "setup", "repo"]
+
+[[case]]
+name = "git setup existing secret integration"
+covers = ["snow git setup"]
+connection = true
+stdin = "https://github.com/x/y.git\ny\n\nmy_api\n"
+rules = [{ match = "^describe git repository", error = { code = 2003, message = "does not exist" } }, { match = "show secrets", columns = ["name"], rows = [["REPO_SECRET"]] }, { match = "show integrations", columns = ["name"], rows = [] }]
+argv = ["git", "setup", "db.s.repo"]
+
+[[case]]
+name = "stage diff"
+covers = ["snow stage diff"]
+connection = true
+stage_files = { "st/app/same.txt" = "same\n", "st/app/changed.txt" = "old\n", "st/app/gone.txt" = "x", "st/app/sub/deep.txt" = "d" }
+files = { "local/same.txt" = "same\n", "local/changed.txt" = "new\n", "local/new.txt" = "n", "local/sub/deep.txt" = "d" }
+argv = ["stage", "diff", "@st/app", "local"]
+
+[[case]]
+name = "stage diff json"
+covers = ["snow stage diff"]
+connection = true
+stage_files = { "st/same.txt" = "same\n", "st/gone.txt" = "x" }
+files = { "local/same.txt" = "same\n", "local/z/new.txt" = "n" }
+argv = ["stage", "diff", "st", "local", "--format", "json"]
+
+[[case]]
+name = "stage diff up to date"
+covers = ["snow stage diff"]
+connection = true
+stage_files = { "st/a.txt" = "a" }
+files = { "local/a.txt" = "a" }
+argv = ["stage", "diff", "@st", "local"]

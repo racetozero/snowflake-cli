@@ -1,0 +1,56 @@
+[[case]]
+name = "ws deploy function flag off"
+covers = ["snow ws deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: my_func\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    imports: ['@st/x.zip']\n    artifacts: [app/]\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: na/*\n        dest: ./\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "app/app.py" = "def f(): return 'x'\n", "na/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "na/setup.sql" = "select 1;\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show applications like", columns = ["created_on", "name", "comment", "owner", "source", "version", "patch"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show telemetry event definitions", columns = ["name", "type", "sharing"], rows = [] }]
+argv = ["ws", "deploy", "--entity-id", "f"]
+
+[[case]]
+name = "ws deploy function"
+covers = ["snow ws deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: my_func\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    imports: ['@st/x.zip']\n    artifacts: [app/]\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: na/*\n        dest: ./\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "app/app.py" = "def f(): return 'x'\n", "na/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "na/setup.sql" = "select 1;\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show applications like", columns = ["created_on", "name", "comment", "owner", "source", "version", "patch"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show telemetry event definitions", columns = ["name", "type", "sharing"], rows = [] }]
+config = "[cli.features]\nenable_native_app_children = true"
+argv = ["ws", "deploy", "--entity-id", "f"]
+
+[[case]]
+name = "ws drop function"
+covers = ["snow ws drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: my_func\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    imports: ['@st/x.zip']\n    artifacts: [app/]\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: na/*\n        dest: ./\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "app/app.py" = "def f(): return 'x'\n", "na/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "na/setup.sql" = "select 1;\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show applications like", columns = ["created_on", "name", "comment", "owner", "source", "version", "patch"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show telemetry event definitions", columns = ["name", "type", "sharing"], rows = [] }]
+config = "[cli.features]\nenable_native_app_children = true"
+argv = ["ws", "drop", "--entity-id", "f"]
+
+[[case]]
+name = "ws bundle function"
+covers = ["snow ws bundle"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: my_func\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    imports: ['@st/x.zip']\n    artifacts: [app/]\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: na/*\n        dest: ./\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "app/app.py" = "def f(): return 'x'\n", "na/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "na/setup.sql" = "select 1;\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show applications like", columns = ["created_on", "name", "comment", "owner", "source", "version", "patch"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show telemetry event definitions", columns = ["name", "type", "sharing"], rows = [] }]
+config = "[cli.features]\nenable_native_app_children = true"
+argv = ["ws", "bundle", "--entity-id", "f"]
+
+[[case]]
+name = "ws deploy application"
+covers = ["snow ws deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: my_func\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    imports: ['@st/x.zip']\n    artifacts: [app/]\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: na/*\n        dest: ./\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "app/app.py" = "def f(): return 'x'\n", "na/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "na/setup.sql" = "select 1;\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show applications like", columns = ["created_on", "name", "comment", "owner", "source", "version", "patch"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show telemetry event definitions", columns = ["name", "type", "sharing"], rows = [] }]
+argv = ["ws", "deploy", "--entity-id", "app"]
+
+[[case]]
+name = "ws drop application missing"
+covers = ["snow ws drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: my_func\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    imports: ['@st/x.zip']\n    artifacts: [app/]\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: na/*\n        dest: ./\n  app:\n    type: application\n    identifier: my_app\n    from:\n      target: pkg\n", "app/app.py" = "def f(): return 'x'\n", "na/manifest.yml" = "manifest_version: 1\nartifacts:\n  setup_script: setup.sql\n", "na/setup.sql" = "select 1;\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show applications like", columns = ["created_on", "name", "comment", "owner", "source", "version", "patch"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show telemetry event definitions", columns = ["name", "type", "sharing"], rows = [] }]
+argv = ["ws", "drop", "--entity-id", "app"]

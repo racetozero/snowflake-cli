@@ -1,0 +1,94 @@
+[[case]]
+name = "spcs compute-pool deploy"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pool:\n    type: compute-pool\n    identifier: my_pool\n    min_nodes: 2\n    instance_family: CPU_X64_XS\n    comment: \"it's mine\"\n    tags:\n      - name: env\n        value: dev\n" }
+argv = ["spcs", "compute-pool", "deploy"]
+
+[[case]]
+name = "spcs compute-pool deploy upgrade"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pool:\n    type: compute-pool\n    identifier: my_pool\n    min_nodes: 2\n    instance_family: CPU_X64_XS\n    comment: \"it's mine\"\n    tags:\n      - name: env\n        value: dev\n" }
+argv = ["spcs", "compute-pool", "deploy", "--upgrade"]
+
+[[case]]
+name = "spcs compute-pool deploy multiple"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pool:\n    type: compute-pool\n    identifier: my_pool\n    min_nodes: 2\n    instance_family: CPU_X64_XS\n    comment: \"it's mine\"\n    tags:\n      - name: env\n        value: dev\n  pool2:\n    type: compute-pool\n    identifier:\n      name: other\n    min_nodes: 1\n    max_nodes: 3\n    instance_family: CPU_X64_S\n    auto_resume: false\n" }
+argv = ["spcs", "compute-pool", "deploy"]
+
+[[case]]
+name = "spcs compute-pool deploy by id"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pool:\n    type: compute-pool\n    identifier: my_pool\n    min_nodes: 2\n    instance_family: CPU_X64_XS\n    comment: \"it's mine\"\n    tags:\n      - name: env\n        value: dev\n  pool2:\n    type: compute-pool\n    identifier:\n      name: other\n    min_nodes: 1\n    max_nodes: 3\n    instance_family: CPU_X64_S\n    auto_resume: false\n" }
+argv = ["spcs", "compute-pool", "deploy", "pool2"]
+
+[[case]]
+name = "spcs compute-pool deploy unknown id"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pool:\n    type: compute-pool\n    identifier: my_pool\n    min_nodes: 2\n    instance_family: CPU_X64_XS\n    comment: \"it's mine\"\n    tags:\n      - name: env\n        value: dev\n  pool2:\n    type: compute-pool\n    identifier:\n      name: other\n    min_nodes: 1\n    max_nodes: 3\n    instance_family: CPU_X64_S\n    auto_resume: false\n" }
+argv = ["spcs", "compute-pool", "deploy", "nope"]
+
+[[case]]
+name = "spcs compute-pool deploy no entity"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  repo:\n    type: image-repository\n    identifier:\n      name: my_repo\n      database: db\n      schema: s\n" }
+argv = ["spcs", "compute-pool", "deploy"]
+
+[[case]]
+name = "spcs compute-pool deploy exists"
+covers = ["snow spcs compute-pool deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pool:\n    type: compute-pool\n    identifier: my_pool\n    min_nodes: 2\n    instance_family: CPU_X64_XS\n    comment: \"it's mine\"\n    tags:\n      - name: env\n        value: dev\n" }
+rules = [{ match = "CREATE COMPUTE POOL", error = { code = 2002, message = "already exists" } }]
+argv = ["spcs", "compute-pool", "deploy"]
+
+[[case]]
+name = "spcs image-repository deploy"
+covers = ["snow spcs image-repository deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  repo:\n    type: image-repository\n    identifier:\n      name: my_repo\n      database: db\n      schema: s\n" }
+argv = ["spcs", "image-repository", "deploy"]
+
+[[case]]
+name = "spcs image-repository deploy replace"
+covers = ["snow spcs image-repository deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  repo:\n    type: image-repository\n    identifier:\n      name: my_repo\n      database: db\n      schema: s\n" }
+argv = ["spcs", "image-repository", "deploy", "--replace"]
+
+[[case]]
+name = "spcs image-repository deploy exists"
+covers = ["snow spcs image-repository deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  repo:\n    type: image-repository\n    identifier:\n      name: my_repo\n      database: db\n      schema: s\n" }
+rules = [{ match = "create image repository", error = { code = 2002, message = "already exists" } }]
+argv = ["spcs", "image-repository", "deploy"]
+
+[[case]]
+name = "spcs service deploy"
+covers = ["snow spcs service deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  svc:\n    type: service\n    identifier: my_svc\n    stage: svc_stage\n    compute_pool: my_pool\n    spec_file: spec.yml\n    min_instances: 1\n    max_instances: 2\n    query_warehouse: wh\n    external_access_integrations: [eai_one]\n    comment: hello\n    artifacts:\n      - spec.yml\n      - src/app.py\n", "spec.yml" = "spec:\n  containers: []\n", "src/app.py" = "print(1)\n" }
+stages = true
+argv = ["spcs", "service", "deploy"]
+
+[[case]]
+name = "spcs service deploy upgrade"
+covers = ["snow spcs service deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  svc:\n    type: service\n    identifier: my_svc\n    stage: svc_stage\n    compute_pool: my_pool\n    spec_file: spec.yml\n    min_instances: 1\n    max_instances: 2\n    query_warehouse: wh\n    external_access_integrations: [eai_one]\n    comment: hello\n    artifacts:\n      - spec.yml\n      - src/app.py\n", "spec.yml" = "spec:\n  containers: []\n", "src/app.py" = "print(1)\n" }
+stages = true
+argv = ["spcs", "service", "deploy", "--upgrade"]
+
+[[case]]
+name = "spcs service deploy bad instances"
+covers = ["snow spcs service deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  svc:\n    type: service\n    identifier: my_svc\n    stage: svc_stage\n    compute_pool: my_pool\n    spec_file: spec.yml\n    min_instances: 3\n    max_instances: 1\n    query_warehouse: wh\n    external_access_integrations: [eai_one]\n    comment: hello\n    artifacts:\n      - spec.yml\n      - src/app.py\n", "spec.yml" = "spec:\n  containers: []\n", "src/app.py" = "print(1)\n" }
+argv = ["spcs", "service", "deploy"]

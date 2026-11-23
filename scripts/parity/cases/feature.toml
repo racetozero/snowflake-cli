@@ -1,0 +1,82 @@
+[[case]]
+name = "feature init"
+covers = ["snow feature init"]
+connection = true
+offline_success = true
+argv = ["feature", "init"]
+
+[[case]]
+name = "feature sync --from ."
+covers = ["snow feature sync"]
+connection = true
+offline_success = true
+argv = ["feature", "sync", "--from", "."]
+
+[[case]]
+name = "feature apply"
+covers = ["snow feature apply"]
+connection = true
+offline_success = true
+argv = ["feature", "apply"]
+
+[[case]]
+name = "feature plan -D a=b"
+covers = ["snow feature plan"]
+connection = true
+offline_success = true
+argv = ["feature", "plan", "-D", "a=b"]
+
+[[case]]
+name = "feature list"
+covers = ["snow feature list"]
+connection = true
+offline_success = true
+argv = ["feature", "list"]
+
+[[case]]
+name = "feature describe fv1"
+covers = ["snow feature describe"]
+connection = true
+offline_success = true
+argv = ["feature", "describe", "fv1"]
+
+[[case]]
+name = "feature ingest src1"
+covers = ["snow feature ingest"]
+connection = true
+offline_success = true
+argv = ["feature", "ingest", "src1"]
+
+[[case]]
+name = "feature query fv1 --keys 1"
+covers = ["snow feature query"]
+connection = true
+offline_success = true
+argv = ["feature", "query", "fv1", "--keys", "1"]
+
+[[case]]
+name = "feature online-service status"
+covers = ["snow feature online-service status"]
+connection = true
+offline_success = true
+argv = ["feature", "online-service", "status"]
+
+[[case]]
+name = "feature online-service create"
+covers = ["snow feature online-service create"]
+connection = true
+offline_success = true
+argv = ["feature", "online-service", "create"]
+
+[[case]]
+name = "feature online-service drop"
+covers = ["snow feature online-service drop"]
+connection = true
+offline_success = true
+argv = ["feature", "online-service", "drop"]
+
+[[case]]
+name = "feature list missing from dir"
+covers = ["snow feature list"]
+connection = true
+argv = ["feature", "list", "--from", "nope"]

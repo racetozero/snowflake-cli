@@ -1,0 +1,66 @@
+[[case]]
+name = "dcm plan env vars"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n  env_secrets:\n    - API_KEY:\n", "sources/definitions/a.sql" = "x\n", ".env" = "API_KEY='s3cr3t'\n# c\nOTHER=1\n" }
+rules = [{ match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+env = { BUILD_NUMBER = "42" }
+argv = ["dcm", "plan", "--env-file", ".env"]
+
+[[case]]
+name = "dcm deploy env missing"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n  env_secrets:\n    - API_KEY:\n", "sources/definitions/a.sql" = "x\n", ".env" = "API_KEY='s3cr3t'\n# c\nOTHER=1\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy"]
+
+[[case]]
+name = "dcm plan bad env name"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\ntemplating:\n  env_vars:\n    - 1BAD:\n  env_secrets:\n    - API_KEY:\n", "sources/definitions/a.sql" = "x\n", ".env" = "API_KEY='s3cr3t'\n# c\nOTHER=1\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm plan reserved env name"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\ntemplating:\n  env_vars:\n    - _snow:\n  env_secrets:\n    - API_KEY:\n", "sources/definitions/a.sql" = "x\n", ".env" = "API_KEY='s3cr3t'\n# c\nOTHER=1\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm plan overlap env"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n  env_secrets:\n    - BUILD_NUMBER:\n", "sources/definitions/a.sql" = "x\n", ".env" = "API_KEY='s3cr3t'\n# c\nOTHER=1\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm plan env file missing"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n  env_secrets:\n    - API_KEY:\n", "sources/definitions/a.sql" = "x\n", ".env" = "API_KEY='s3cr3t'\n# c\nOTHER=1\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan", "--env-file", "nope.env"]

@@ -1,0 +1,82 @@
+[[case]]
+name = "dcm refresh"
+covers = ["snow dcm refresh"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "REFRESH ALL", columns = ["result"], rows = [["{\"dts_refresh_result\": {\"refreshed_tables\": [{\"table_name\": \"DB.S.T1\", \"statistics\": {\"inserted_rows\": 1500, \"deleted_rows\": 0}}, {\"table_name\": \"DB.S.T2\", \"statistics\": {\"inserted_rows\": 0, \"deleted_rows\": 0}}, {\"table_name\": \"DB.S.T3\", \"statistics\": {\"inserted_rows\": 2500000, \"deleted_rows\": 12}}]}}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "refresh"]
+
+[[case]]
+name = "dcm refresh unknown"
+covers = ["snow dcm refresh"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "REFRESH ALL", columns = ["result"], rows = [["{\"dts_refresh_result\": {\"refreshed_tables\": [{\"table_name\": \"DB.S.T1\"}]}}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "refresh"]
+
+[[case]]
+name = "dcm refresh empty"
+covers = ["snow dcm refresh"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "REFRESH ALL", columns = ["result"], rows = [["{}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "refresh", "--format", "json"]
+
+[[case]]
+name = "dcm refresh identifier only"
+covers = ["snow dcm refresh"]
+connection = true
+files = { "x.txt" = "x" }
+rules = [{ match = "REFRESH ALL", columns = ["result"], rows = [["{\"dts_refresh_result\": null}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "refresh", "other.s.p"]
+
+[[case]]
+name = "dcm test"
+covers = ["snow dcm test"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}, {\"table_name\": \"T2\", \"expectation_name\": \"e2\", \"expectation_violated\": true, \"expectation_expression\": \"> 0\", \"value\": 0, \"metric_name\": \"row_count\"}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test"]
+
+[[case]]
+name = "dcm test pass"
+covers = ["snow dcm test"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test"]
+
+[[case]]
+name = "dcm test none"
+covers = ["snow dcm test"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--format", "json"]
+
+[[case]]
+name = "dcm test script conflict"
+covers = ["snow dcm test"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--script", "a", "--all-scripts"]
+
+[[case]]
+name = "dcm preview"
+covers = ["snow dcm preview"]
+connection = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\n    templating_config: prod\ntemplating:\n  configurations:\n    prod:\n      x: 1\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n", "sources/definitions/b.sql" = "x\n", "sources/macros/m.sql" = "m\n", "sources/.hidden/h.sql" = "h\n", "sources/top.sql" = "t\n" }
+rules = [{ match = "PREVIEW", columns = ["A", "B"], rows = [[1, "x"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+stages = true
+sort_sql = true
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "preview", "--object", "db.s.t", "--limit", "5", "-D", "a=1"]

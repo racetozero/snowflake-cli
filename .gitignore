@@ -1,0 +1,20 @@
+.DS_Store
+debug/
+target/
+**/*.rs.bk
+*.pdb
+.idea/*
+.vscode/*
+
+# Local agent instructions, plans, and design notes (at any depth), as in kiss.
+AGENTS.md
+CLAUDE.md
+.agent/
+/ARCHITECTURE.md
+
+# Python helper caches
+__pycache__/
+*.py[cod]
+
+# Stray screenshots
+Screenshot*.png

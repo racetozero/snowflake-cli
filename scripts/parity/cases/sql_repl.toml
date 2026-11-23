@@ -1,0 +1,75 @@
+[[case]]
+name = "sql repl piped"
+covers = ["snow sql"]
+connection = true
+stdin = "select 1;\n"
+compare = ["stderr", "exit", "sql"]
+argv = ["sql"]
+
+[[case]]
+name = "sql repl empty"
+covers = ["snow sql"]
+connection = true
+compare = ["stderr", "exit", "sql"]
+argv = ["sql"]
+
+[[case]]
+name = "sql repl no prompt exit"
+covers = ["snow sql"]
+connection = true
+compare = ["stderr", "exit", "sql"]
+argv = ["sql", "--no-prompt-exit-repl"]
+
+[[case]]
+name = "sql repl prompt format unknown tokens"
+covers = ["snow sql"]
+connection = true
+compare = ["stderr", "exit", "sql"]
+argv = ["sql", "--prompt-format", "[user]@[nope] [#00ff00][db]> "]
+
+[[case]]
+name = "sql repl config duplicate cli table"
+covers = ["snow sql"]
+connection = true
+config = "[cli]\nprompt_format = 5"
+argv = ["sql"]
+
+[[case]]
+name = "sql repl single transaction"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "--single-transaction"]
+
+[[case]]
+name = "sql repl prompt format not string"
+covers = ["snow sql"]
+no_config = true
+home_files = { "config.toml" = "[cli]\nignore_new_version_warning = true\nprompt_format = 5\n" }
+home_modes = { "config.toml" = "0600" }
+argv = ["sql"]
+
+[[case]]
+name = "sql repl prompt format list"
+covers = ["snow sql"]
+no_config = true
+home_files = { "config.toml" = "[cli]\nignore_new_version_warning = true\nprompt_format = [1]\n" }
+home_modes = { "config.toml" = "0600" }
+argv = ["sql"]
+
+[[case]]
+name = "sql set echo invalid"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!set echo=maybe"]
+
+[[case]]
+name = "sql set timing invalid"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!set timing=maybe"]
+
+[[case]]
+name = "sql set timing and echo"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!set timing=false; !set echo=true; !set timing_in_output_file=true; select 1"]

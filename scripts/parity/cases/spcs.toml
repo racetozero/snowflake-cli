@@ -1,0 +1,363 @@
+[[case]]
+name = "compute pool create"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "pool1", "--family", "CPU_X64_XS", "--max-nodes", "3", "--tag", "team=data", "--comment", "it's mine", "--init-suspend"]
+
+[[case]]
+name = "compute pool create defaults if not exists"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "pool1", "--family", "F", "--no-auto-resume", "--if-not-exists", "--format", "json"]
+
+[[case]]
+name = "compute pool create exists"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "pool1", "--family", "F"]
+rules = [{ match = "CREATE COMPUTE POOL", error = { code = "002002", message = "SQL compilation error:\nObject 'POOL1' already exists.", sqlState = "42710" } }]
+
+[[case]]
+name = "compute pool create bad name"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "\"Pool\"", "--family", "F"]
+
+[[case]]
+name = "compute pool create min max"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "p", "--family", "F", "--min-nodes", "3", "--max-nodes", "2"]
+
+[[case]]
+name = "compute pool create mutex"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "p", "--family", "F", "--auto-resume", "--no-auto-resume"]
+
+[[case]]
+name = "compute pool create bad tag"
+covers = ["snow spcs compute-pool create"]
+connection = true
+argv = ["spcs", "compute-pool", "create", "p", "--family", "F", "--tag", "nope"]
+
+[[case]]
+name = "compute pool stop-all"
+covers = ["snow spcs compute-pool stop-all"]
+connection = true
+argv = ["spcs", "compute-pool", "stop-all", "p"]
+
+[[case]]
+name = "compute pool suspend"
+covers = ["snow spcs compute-pool suspend"]
+connection = true
+argv = ["spcs", "compute-pool", "suspend", "p"]
+
+[[case]]
+name = "compute pool resume"
+covers = ["snow spcs compute-pool resume"]
+connection = true
+argv = ["spcs", "compute-pool", "resume", "p"]
+
+[[case]]
+name = "compute pool set"
+covers = ["snow spcs compute-pool set"]
+connection = true
+argv = ["spcs", "compute-pool", "set", "p", "--min-nodes", "2", "--auto-resume", "--comment", "c"]
+
+[[case]]
+name = "compute pool set nothing"
+covers = ["snow spcs compute-pool set"]
+connection = true
+argv = ["spcs", "compute-pool", "set", "p"]
+
+[[case]]
+name = "compute pool unset"
+covers = ["snow spcs compute-pool unset"]
+connection = true
+argv = ["spcs", "compute-pool", "unset", "p", "--auto-resume", "--comment"]
+
+[[case]]
+name = "compute pool unset nothing"
+covers = ["snow spcs compute-pool unset"]
+connection = true
+argv = ["spcs", "compute-pool", "unset", "p"]
+
+[[case]]
+name = "compute pool status"
+covers = ["snow spcs compute-pool status"]
+connection = true
+argv = ["spcs", "compute-pool", "status", "p"]
+
+[[case]]
+name = "image registry token"
+covers = ["snow spcs image-registry token"]
+connection = true
+argv = ["spcs", "image-registry", "token", "--format", "json"]
+
+[[case]]
+name = "image registry url"
+covers = ["snow spcs image-registry url"]
+connection = true
+argv = ["spcs", "image-registry", "url"]
+rules = [{ match = "show image repositories in schema snowflake.images", columns = ["name", "repository_url"], rows = [["IMAGES", "org-acc.registry.snowflakecomputing.com/snowflake/images/snowflake_images"]] }]
+
+[[case]]
+name = "image registry url fallback none"
+covers = ["snow spcs image-registry url"]
+connection = true
+argv = ["spcs", "image-registry", "url"]
+rules = [{ match = "show image repositories", columns = ["name", "repository_url"], rows = [] }]
+
+[[case]]
+name = "image registry login no docker"
+covers = ["snow spcs image-registry login"]
+connection = true
+env = { PATH = "/nonexistent" }
+argv = ["spcs", "image-registry", "login"]
+rules = [{ match = "show image repositories in schema snowflake.images", columns = ["name", "repository_url"], rows = [["IMAGES", "org-acc.registry.snowflakecomputing.com/a/b/c"]] }]
+
+[[case]]
+name = "image repository create"
+covers = ["snow spcs image-repository create"]
+connection = true
+argv = ["spcs", "image-repository", "create", "repo1", "--replace"]
+
+[[case]]
+name = "image repository create bad name"
+covers = ["snow spcs image-repository create"]
+connection = true
+argv = ["spcs", "image-repository", "create", "\"repo\""]
+
+[[case]]
+name = "image repository list-images"
+covers = ["snow spcs image-repository list-images"]
+connection = true
+argv = ["spcs", "image-repository", "list-images", "repo1", "--like", "img%"]
+
+[[case]]
+name = "image repository url"
+covers = ["snow spcs image-repository url"]
+connection = true
+argv = ["spcs", "image-repository", "url", "repo1"]
+rules = [{ match = "show image repositories like", columns = ["name", "repository_url"], rows = [["REPO1", "org-acc.registry.snowflakecomputing.com/db/public/repo1"]] }]
+
+[[case]]
+name = "image repository url missing"
+covers = ["snow spcs image-repository url"]
+connection = true
+argv = ["spcs", "image-repository", "url", "repo1"]
+rules = [{ match = "show image repositories like", columns = ["name", "repository_url"], rows = [] }]
+
+[[case]]
+name = "service create"
+covers = ["snow spcs service create"]
+connection = true
+files = { "spec.yml" = "spec:\n  containers:\n  - name: main\n    image: /db/s/r/img:latest\n    args: ['$$x']\n" }
+argv = ["spcs", "service", "create", "svc", "--compute-pool", "p", "--spec-path", "spec.yml", "--eai-name", "e1", "--eai-name", "e2", "--query-warehouse", "wh", "--comment", "c", "--max-instances", "2"]
+
+[[case]]
+name = "service execute-job"
+covers = ["snow spcs service execute-job"]
+connection = true
+files = { "spec.yml" = "spec:\n  containers:\n  - name: main\n    image: img\n" }
+argv = ["spcs", "service", "execute-job", "job1", "--compute-pool", "p", "--spec-path", "spec.yml", "--async", "--replicas", "2"]
+
+[[case]]
+name = "service drop"
+covers = ["snow spcs service drop"]
+connection = true
+argv = ["spcs", "service", "drop", "db.s.svc", "--if-exists", "--force"]
+
+[[case]]
+name = "service status"
+covers = ["snow spcs service status"]
+connection = true
+argv = ["spcs", "service", "status", "svc"]
+rules = [{ match = "SYSTEM\\$GET_SERVICE_STATUS", columns = ["SYSTEM$GET_SERVICE_STATUS"], rows = [["[{\"status\":\"READY\",\"message\":\"Running\",\"containerName\":\"main\"}]"]] }]
+
+[[case]]
+name = "service list endpoints"
+covers = ["snow spcs service list-endpoints"]
+connection = true
+argv = ["spcs", "service", "list-endpoints", "svc"]
+
+[[case]]
+name = "service list instances"
+covers = ["snow spcs service list-instances"]
+connection = true
+argv = ["spcs", "service", "list-instances", "svc"]
+
+[[case]]
+name = "service list containers"
+covers = ["snow spcs service list-containers"]
+connection = true
+argv = ["spcs", "service", "list-containers", "svc"]
+
+[[case]]
+name = "service list roles"
+covers = ["snow spcs service list-roles"]
+connection = true
+argv = ["spcs", "service", "list-roles", "svc"]
+
+[[case]]
+name = "service suspend"
+covers = ["snow spcs service suspend"]
+connection = true
+argv = ["spcs", "service", "suspend", "svc"]
+
+[[case]]
+name = "service resume"
+covers = ["snow spcs service resume"]
+connection = true
+argv = ["spcs", "service", "resume", "svc"]
+
+[[case]]
+name = "service upgrade"
+covers = ["snow spcs service upgrade"]
+connection = true
+files = { "spec.yml" = "spec:\n  containers:\n  - name: main\n    image: img2\n" }
+argv = ["spcs", "service", "upgrade", "svc", "--spec-path", "spec.yml"]
+
+[[case]]
+name = "service set"
+covers = ["snow spcs service set"]
+connection = true
+argv = ["spcs", "service", "set", "svc", "--min-instances", "2", "--query-warehouse", "wh", "--no-auto-resume", "--eai-name", "e1", "--comment", "x"]
+
+[[case]]
+name = "service set nothing"
+covers = ["snow spcs service set"]
+connection = true
+argv = ["spcs", "service", "set", "svc"]
+
+[[case]]
+name = "service unset"
+covers = ["snow spcs service unset"]
+connection = true
+argv = ["spcs", "service", "unset", "svc", "--min-instances", "--comment"]
+
+[[case]]
+name = "service bad name"
+covers = ["snow spcs service suspend"]
+connection = true
+argv = ["spcs", "service", "suspend", "\"Svc\""]
+
+[[case]]
+name = "image registry login fake docker"
+covers = ["snow spcs image-registry login"]
+connection = true
+files = { "bin/docker" = { mode = "755", text = "#!/bin/sh\necho \"docker $@\"\ncat\necho\necho Login Succeeded\n" } }
+env = { PATH = "<CWD>/bin:/usr/bin:/bin" }
+argv = ["spcs", "image-registry", "login"]
+rules = [{ match = "show image repositories in schema snowflake.images", columns = ["name", "repository_url"], rows = [["IMAGES", "org-acc.registry.snowflakecomputing.com/a/b/c"]] }]
+
+[[case]]
+name = "service logs"
+covers = ["snow spcs service logs"]
+connection = true
+argv = ["spcs", "service", "logs", "svc", "--container-name", "main", "--instance-id", "0", "--num-lines", "3", "--include-timestamps"]
+rules = [{ match = "GET_SERVICE_LOGS", columns = ["SYSTEM$GET_SERVICE_LOGS"], rows = [["line one\nline two\n"]] }]
+
+[[case]]
+name = "service logs follow conflict"
+covers = ["snow spcs service logs"]
+connection = true
+argv = ["spcs", "service", "logs", "svc", "--container-name", "main", "--instance-id", "0", "--follow", "--previous-logs"]
+
+[[case]]
+name = "service events"
+covers = ["snow spcs service events"]
+connection = true
+argv = ["spcs", "service", "events", "db.s.svc", "--since", "1 hour", "--last", "5"]
+rules = [
+  { match = "show parameters like 'event_table'", columns = ["key", "value"], rows = [["EVENT_TABLE", "db.s.events"]] },
+  { match = "record_type = 'EVENT'", columns = ["TIMESTAMP", "START_TIMESTAMP", "OBSERVED_TIMESTAMP", "TRACE", "RESOURCE", "RESOURCE_ATTRIBUTES", "SCOPE", "SCOPE_ATTRIBUTES", "RECORD_TYPE", "RECORD", "RECORD_ATTRIBUTES", "VALUE", "EXEMPLARS"], rows = [["2024-01-01", "<NULL>", "<NULL>", "<NULL>", "<NULL>", "{\"snow.database.name\": \"DB\", \"snow.service.name\": \"SVC\", \"snow.service.instance\": \"0\"}", "<NULL>", "<NULL>", "EVENT", "{\"name\": \"CONTAINER.STATUS_CHANGE\", \"severity_text\": \"INFO\"}", "<NULL>", "{\"message\": \"Running\"}", "<NULL>"]] },
+]
+
+[[case]]
+name = "service events none"
+covers = ["snow spcs service events"]
+connection = true
+argv = ["spcs", "service", "events", "svc", "--container-name", "main", "--instance-id", "0", "--first", "2", "--all"]
+rules = [{ match = "show parameters like 'event_table'", columns = ["key", "value"], rows = [["EVENT_TABLE", "ev"]] }, { match = "record_type = 'EVENT'", columns = ["TIMESTAMP"], rows = [] }]
+
+[[case]]
+name = "service events no table"
+covers = ["snow spcs service events"]
+connection = true
+argv = ["spcs", "service", "events", "svc"]
+rules = [{ match = "show parameters like 'event_table'", columns = ["key", "value"], rows = [] }]
+
+[[case]]
+name = "service metrics latest"
+covers = ["snow spcs service metrics"]
+connection = true
+argv = ["spcs", "service", "metrics", "db.s.svc", "--container-name", "main", "--instance-id", "0", "--format", "json"]
+rules = [
+  { match = "show parameters like 'event_table'", columns = ["key", "value"], rows = [["EVENT_TABLE", "ev"]] },
+  { match = "rankedmetrics", columns = ["TIMESTAMP", "START_TIMESTAMP", "OBSERVED_TIMESTAMP", "TRACE", "RESOURCE", "RESOURCE_ATTRIBUTES", "SCOPE", "SCOPE_ATTRIBUTES", "RECORD_TYPE", "RECORD", "RECORD_ATTRIBUTES", "VALUE", "EXEMPLARS"], rows = [["2024-01-01", "<NULL>", "<NULL>", "<NULL>", "<NULL>", "{\"snow.service.container.instance\": \"0\"}", "<NULL>", "<NULL>", "METRIC", "{\"metric\": {\"name\": \"container.cpu.usage\"}}", "<NULL>", "{\"double_value\": 0.5}", "<NULL>"]] },
+]
+
+[[case]]
+name = "service metrics range"
+covers = ["snow spcs service metrics"]
+connection = true
+argv = ["spcs", "service", "metrics", "svc", "--container-name", "main", "--instance-id", "0", "--since", "2 hours", "--until", "1 hour"]
+rules = [{ match = "show parameters like 'event_table'", columns = ["key", "value"], rows = [["EVENT_TABLE", "ev"]] }, { match = "record_type = 'METRIC'", columns = ["TIMESTAMP"], rows = [] }]
+
+[[case]]
+name = "image-repository list-tags missing"
+covers = ["snow spcs image-repository list-tags"]
+connection = true
+argv = ["spcs", "image-repository", "list-tags", "repo", "--image-name", "org/db/s/repo/img"]
+rules = [{ match = "show image repositories", columns = ["name", "repository_url"], rows = [] }]
+
+[[case]]
+name = "remote-build-status"
+covers = ["snow spcs service remote-build-status"]
+connection = true
+argv = ["spcs", "service", "remote-build-status", "--job-name", "job$1"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs/job", body = { job_name = "JOB$1", job_status = "RUNNING", creation_time = "2024-01-01T00:00:00Z" } }]
+
+[[case]]
+name = "remote-build-status missing"
+covers = ["snow spcs service remote-build-status"]
+connection = true
+argv = ["spcs", "service", "remote-build-status", "--job-name", "nope"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs/nope", status = 404, body = { message = "not found" } }]
+
+[[case]]
+name = "remote-build-history"
+covers = ["snow spcs service remote-build-history"]
+connection = true
+argv = ["spcs", "service", "remote-build-history", "--page-size", "2", "--format", "json"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs\\?limit=2$", body = { jobs = [{ job_name = "A", job_status = "DONE", creation_time = "t1", end_time = "t2" }], next_page_token = "MTAw" } }, { rest = "GET /api/v2/remote-build/jobs\\?limit=2&page_token=MTAw", body = { jobs = [{ job_name = "B", job_status = "FAILED" }] } }]
+
+[[case]]
+name = "remote-build-history empty"
+covers = ["snow spcs service remote-build-history"]
+connection = true
+argv = ["spcs", "service", "remote-build-history"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs", body = { jobs = [] } }]
+
+[[case]]
+name = "remote-build-status forbidden"
+covers = ["snow spcs service remote-build-status"]
+connection = true
+argv = ["spcs", "service", "remote-build-status", "--job-name", "j"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs/j", status = 403, body = { message = "forbidden" } }]
+
+[[case]]
+name = "remote-build-history bad request"
+covers = ["snow spcs service remote-build-history"]
+connection = true
+argv = ["spcs", "service", "remote-build-history"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs", status = 400, body = { message = "bad" } }]
+
+[[case]]
+name = "remote-build-history conflict"
+covers = ["snow spcs service remote-build-history"]
+connection = true
+argv = ["spcs", "service", "remote-build-history"]
+rules = [{ rest = "GET /api/v2/remote-build/jobs", status = 409, body = { message = "conflict" } }]

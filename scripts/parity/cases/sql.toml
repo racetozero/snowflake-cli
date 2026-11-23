@@ -1,0 +1,523 @@
+[[case]]
+name = "sql query single"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1 as a, 'x' as b"]
+rules = [{ match = "^select 1", columns = [{ name = "A", type = "fixed" }, "B"], rows = [[1, "x"]] }]
+
+[[case]]
+name = "sql query multiple table"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select 2;\nselect 3"]
+rules = [{ match = "^select 1", columns = [{ name = "ONE", type = "fixed" }], rows = [[1]] }, { match = "^select 2", columns = ["TWO"], rows = [] }]
+
+[[case]]
+name = "sql query multiple json"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select 2", "--format", "json"]
+rules = [{ match = "^select 1", columns = [{ name = "ONE", type = "fixed" }], rows = [[1], [2]] }]
+
+[[case]]
+name = "sql query multiple csv"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select 2", "--format", "csv"]
+rules = [{ match = "^select 1", columns = [{ name = "ONE", type = "fixed" }], rows = [[1], [2]] }]
+
+[[case]]
+name = "sql query single json"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "--format", "json"]
+rules = [{ match = "^select 1", columns = [{ name = "ONE", type = "fixed" }], rows = [[1]] }]
+
+[[case]]
+name = "sql query plain"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select 2", "--format", "plain"]
+rules = [{ match = "^select 1", columns = [{ name = "ONE", type = "fixed" }], rows = [[1]] }]
+
+[[case]]
+name = "sql file"
+covers = ["snow sql"]
+connection = true
+files = { "a.sql" = "-- leading comment\nselect 1; /* block */ select 2;\n\n// slash comment\nselect 'a;b' -- trailing\n;\n" }
+argv = ["sql", "-f", "a.sql"]
+
+[[case]]
+name = "sql two files"
+covers = ["snow sql"]
+connection = true
+files = { "a.sql" = "select 1;\n", "b.sql" = "select 2;\n" }
+argv = ["sql", "-f", "a.sql", "-f", "b.sql", "--format", "json"]
+
+[[case]]
+name = "sql file missing"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-f", "nope.sql"]
+
+[[case]]
+name = "sql stdin flag"
+covers = ["snow sql"]
+connection = true
+stdin = "select 1;\nselect 2;\n"
+argv = ["sql", "-i"]
+
+[[case]]
+name = "sql retain comments"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "-- hello\nselect 1; /* x */ select 2 -- t", "--retain-comments"]
+
+[[case]]
+name = "sql variables standard"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% name %>', <% n %>", "-D", "name=bob", "-D", "n=3"]
+
+[[case]]
+name = "sql variables legacy"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '&{ name }', &n, &{n}x, '$x'", "-D", "name=bob", "-D", "n=3"]
+
+[[case]]
+name = "sql variables mixed"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '&{ name }', <% n %>", "-D", "name=bob", "-D", "n=3"]
+
+[[case]]
+name = "sql variables undefined"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select <% missing %>; select 2"]
+
+[[case]]
+name = "sql variables reserved"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select <% ctx %>", "-D", "ctx=1"]
+
+[[case]]
+name = "sql variable bad format"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-D", "novalue"]
+
+[[case]]
+name = "sql ctx env"
+covers = ["snow sql"]
+connection = true
+env = { FOO_VAR = "fooval" }
+argv = ["sql", "-q", "select '<% ctx.env.FOO_VAR %>'"]
+
+[[case]]
+name = "sql templating none"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% a %>', '&{ b }'", "--enable-templating", "NONE"]
+
+[[case]]
+name = "sql templating legacy only"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% a %>', '&{ b }'", "--enable-templating", "legacy", "-D", "b=2"]
+
+[[case]]
+name = "sql templating standard only"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% a %>', '&{ b }'", "--enable-templating", "STANDARD", "-D", "a=1"]
+
+[[case]]
+name = "sql templating jinja"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "{% for i in range(2) %}select {{ i }};{% endfor %}\n-- {{ ignored }}\nselect '<% a %>';", "--enable-templating", "JINJA", "--enable-templating", "STANDARD", "-D", "a=1"]
+
+[[case]]
+name = "sql templating all with other"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "--enable-templating", "ALL", "--enable-templating", "JINJA"]
+
+[[case]]
+name = "sql templating invalid"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "--enable-templating", "FOO"]
+
+[[case]]
+name = "sql single transaction"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "insert into t values (1); insert into t values (2)", "--single-transaction"]
+
+[[case]]
+name = "sql async"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;> select 2;"]
+
+[[case]]
+name = "sql async only"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;>"]
+
+[[case]]
+name = "sql empty"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "  -- only a comment\n"]
+
+[[case]]
+name = "sql exclusive sources"
+covers = ["snow sql"]
+connection = true
+files = { "a.sql" = "select 1;\n" }
+argv = ["sql", "-q", "select 1", "-f", "a.sql"]
+
+[[case]]
+name = "sql error single"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select bad"]
+rules = [{ match = "^select bad", error = { code = "000904", message = "SQL compilation error: error line 1 at position 7\ninvalid identifier 'BAD'", sqlState = "42000" } }]
+
+[[case]]
+name = "sql error mid json"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select bad; select 3", "--format", "json"]
+rules = [{ match = "^select bad", error = { code = "000904", message = "SQL compilation error:\ninvalid identifier 'BAD'", sqlState = "42000" } }]
+
+[[case]]
+name = "sql error mid table"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select bad; select 3"]
+rules = [{ match = "^select bad", error = { code = "000904", message = "SQL compilation error:\ninvalid identifier 'BAD'", sqlState = "42000" } }]
+
+[[case]]
+name = "sql source file"
+covers = ["snow sql"]
+connection = true
+files = { "inc.sql" = "select 'inc <% v %>';\nselect 2;\n", "main.sql" = "select 1;\n!source inc.sql\n!load inc.sql;\nselect 3;\n" }
+argv = ["sql", "-f", "main.sql", "-D", "v=7"]
+
+[[case]]
+name = "sql source missing"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!source missing.sql\n!load 'other.sql'"]
+
+[[case]]
+name = "sql source recursion"
+covers = ["snow sql"]
+connection = true
+files = { "a.sql" = "select 'a';\n!source b.sql\n", "b.sql" = "select 'b';\n!source a.sql\n" }
+argv = ["sql", "-f", "a.sql"]
+
+[[case]]
+name = "sql source http"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!source http://example.com/x.sql"]
+
+[[case]]
+name = "sql source https local only"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!source https://example.com/x.sql", "--local-only"]
+
+[[case]]
+name = "sql source unknown scheme"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!source ftp://example.com/x.sql"]
+
+[[case]]
+name = "sql unknown command"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!foo bar"]
+
+[[case]]
+name = "sql queries help"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!queries help"]
+
+[[case]]
+name = "sql queries bad"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!queries amount=x"]
+
+[[case]]
+name = "sql queries errors"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!queries type=foo\n!queries status=nope\n!queries start=1 start_date=2024-01-01\n!queries bogus\n!queries a=1 b=2\n!queries amount=1 amount=2"]
+
+[[case]]
+name = "sql result bad"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!result\n!result abc\n!result 1 2\n!abort x=1"]
+
+[[case]]
+name = "sql abort"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!abort 01234567-89ab-cdef-0123-456789abcdef"]
+rules = [{ match = "CANCEL_QUERY", columns = ["SYSTEM$CANCEL_QUERY('01234567-89AB-CDEF-0123-456789ABCDEF')"], rows = [["Identified SQL statement is not currently executing."]] }]
+
+[[case]]
+name = "sql set errors"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!set\n!set a b\n!set foo=1\n!set quiet=maybe\n!set echo=yes\n!set output_format=xml\n!set output_file=\n!set quiet=1 timing=1\n!spool"]
+
+[[case]]
+name = "sql set quiet and format"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!set quiet=true\nselect 2;\n!set quiet=false\n!set output_format=json\nselect 3;"]
+
+[[case]]
+name = "sql spool"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!spool out.txt\nselect 2;\n!spool off\nselect 3;"]
+
+[[case]]
+name = "sql set output file"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!set output_file='my out.txt'\nselect 2;"]
+
+[[case]]
+name = "sql edit noninteractive"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!edit select 2"]
+
+[[case]]
+name = "sql option output file"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "output_file=res.txt", "-o", "quiet=true"]
+
+[[case]]
+name = "sql option output format"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "OUTPUT_FORMAT=csv"]
+
+[[case]]
+name = "sql option format conflict"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "output_format=csv", "--format", "json"]
+
+[[case]]
+name = "sql option unknown"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "timing=true"]
+
+[[case]]
+name = "sql option no equals"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "quiet"]
+
+[[case]]
+name = "sql option bad bool"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "quiet=maybe"]
+
+[[case]]
+name = "sql option bad format"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1", "-o", "output_format=xml"]
+
+[[case]]
+name = "sql dollar block"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "create procedure p() returns int language sql as $$\nbegin\n  select 1;\n  return 1;\nend\n$$;\ncall p();"]
+
+[[case]]
+name = "sql quotes and escapes"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 'it''s; ok', \"a;b\", 'back\\'slash;'; select 2"]
+
+[[case]]
+name = "sql silent"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; select 2", "--silent"]
+
+[[case]]
+name = "sql config variables"
+covers = ["snow sql"]
+connection = true
+config = "[cli.sql]\n"
+env = { SNOWFLAKE_CLI_SQL_LOCAL_ONLY = "true" }
+argv = ["sql", "-q", "!source https://example.com/a.sql"]
+
+[[case]]
+name = "sql ctx env missing"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% ctx.env.NOPE %>'"]
+
+[[case]]
+name = "sql ctx env override"
+covers = ["snow sql"]
+connection = true
+env = { FOO = "fromenv" }
+argv = ["sql", "-q", "select '<% ctx.env.FOO %>', '<% ctx.env.BAR %>'", "--env", "FOO=over", "--env", "BAR=b"]
+
+[[case]]
+name = "sql template filters"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% name | upper %>', '<% name ~ \"x\" %>', <%n%>", "-D", "name=bob", "-D", "n= 5 "]
+
+[[case]]
+name = "sql template syntax error"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select <% a + %>", "-D", "a=1"]
+
+[[case]]
+name = "sql template attr on str"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% name.x %>'", "-D", "name=bob"]
+
+[[case]]
+name = "sql template no vars"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '<% 1 %>', '&{ 2 }'"]
+
+[[case]]
+name = "sql jinja undefined"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select {{ nope }}", "--enable-templating", "JINJA"]
+
+[[case]]
+name = "sql jinja syntax error"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "{% if %}select 1", "--enable-templating", "JINJA"]
+
+[[case]]
+name = "sql legacy edge"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '&&', '&1abc', '& x', '&A_b9', &{a}, &{ a }", "-D", "a=1", "-D", "A_b9=z"]
+
+[[case]]
+name = "sql templating all"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select '&a', '<% a %>', {{ 1 + 1 }}", "--enable-templating", "ALL", "-D", "a=1"]
+
+[[case]]
+name = "sql dedent and blank"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "    select 1;\n    select 2;\n;\n  ;"]
+
+[[case]]
+name = "sql command first line"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!queries amount=3; select 3;"]
+
+[[case]]
+name = "sql put"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1 -- x\n; /* c */ select 2 /* d */;"]
+
+[[case]]
+name = "sql queries rest"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!queries\n!queries amount=3 user=u warehouse=w duration=5 type=select status=failed start=10 end=20 session"]
+normalize = [["_dc=[0-9.]+", "_dc=X"]]
+
+[[case]]
+name = "sql queries rows"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!queries start_date=2024-01-01T00:00:00 end_date=2024-01-02", "--format", "json"]
+normalize = [["_dc=[0-9.]+", "_dc=X"]]
+rules = [{ rest = "GET /monitoring/queries", body = { data = { queries = [{ id = "q1", sqlText = "select 1", state = "SUCCEEDED", totalDuration = 12 }, { id = "q2", sqlText = "select 2", state = "FAILED", totalDuration = 3 }] } } }]
+
+[[case]]
+name = "sql result"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!result 01234567-89ab-cdef-0123-456789abcdef"]
+
+[[case]]
+name = "sql spool existing broad"
+covers = ["snow sql"]
+connection = true
+files = { "out.txt" = { text = "old\n", mode = "644" } }
+argv = ["sql", "-q", "!spool out.txt\nselect 1;"]
+
+[[case]]
+name = "sql spool into dir"
+covers = ["snow sql"]
+connection = true
+files = { "d/x" = "" }
+argv = ["sql", "-q", "!spool d\nselect 1;"]
+
+[[case]]
+name = "sql three json with commands"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!queries help\nselect 2;> select 3;", "--format", "json"]
+
+[[case]]
+name = "sql csv commands"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1;\n!set output_format=table\nselect 2;", "--format", "csv"]
+
+[[case]]
+name = "sql enhanced exit"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "!foo", "--enhanced-exit-codes"]
+
+[[case]]
+name = "sql jinja comments protected"
+covers = ["snow sql"]
+connection = true
+argv = ["sql", "-q", "select 1; -- {{ x }}\n/* {% if %} */ select '{{ a }}'; select '--' as c", "--enable-templating", "JINJA", "-D", "a=A"]
+
+[[case]]
+name = "sql jinja source"
+covers = ["snow sql"]
+connection = true
+files = { "inc.sql" = "{% for i in [1,2] %}select {{ i }};{% endfor %}\n" }
+argv = ["sql", "-q", "!source inc.sql", "--enable-templating", "jinja"]

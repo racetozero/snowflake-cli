@@ -1,0 +1,14 @@
+[package]
+name = "snow-spec"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The Snowflake CLI command tree, generated from the pinned upstream"
+
+[lints]
+workspace = true
+
+[dependencies]
+snow-click.workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "snowflake-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "snow: a fast, identical Rust port of Snowflake CLI"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "snow"
+path = "src/main.rs"
+
+[dependencies]
+snow-click.workspace = true
+snow-spec.workspace = true
+snow-rich.workspace = true
+snow-api.workspace = true
+snow-plugins.workspace = true
+mimalloc.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

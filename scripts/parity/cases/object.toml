@@ -1,0 +1,115 @@
+[[case]]
+name = "object list table"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "table"]
+rules = [{ match = "^show tables", columns = ["created_on", "name", "kind", { name = "rows", type = "fixed" }], rows = [["2024-01-01", "T1", "TABLE", 3], ["2024-01-02", "T2", "TABLE", 10]] }]
+
+[[case]]
+name = "object list like in"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "schema", "--like", "a%'b", "--in", "database", "db1", "--format", "json"]
+rules = [{ match = "^show schemas", columns = ["name"], rows = [["A1"]] }]
+
+[[case]]
+name = "object list in account"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "warehouse", "--in-account", "--format", "csv"]
+
+[[case]]
+name = "object list bad scope"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "table", "--in", "nope", "x"]
+
+[[case]]
+name = "object list in and in-account"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "table", "--in", "database", "x", "--in-account"]
+
+[[case]]
+name = "object list unsupported"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "banana"]
+
+[[case]]
+name = "object list empty plain"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "role", "--format", "plain"]
+rules = [{ match = "^show roles", columns = ["name"], rows = [] }]
+
+[[case]]
+name = "object list sql error"
+covers = ["snow object list"]
+connection = true
+argv = ["object", "list", "table"]
+rules = [{ match = "^show", error = { code = "002043", message = "SQL compilation error:\nObject does not exist, or operation cannot be performed.", sqlState = "02000" } }]
+
+[[case]]
+name = "object drop"
+covers = ["snow object drop"]
+connection = true
+argv = ["object", "drop", "table", "db.sch.my_tbl"]
+
+[[case]]
+name = "object drop if exists quoted"
+covers = ["snow object drop"]
+connection = true
+argv = ["object", "drop", "view", "\"My View\"", "--if-exists"]
+
+[[case]]
+name = "object drop bad name"
+covers = ["snow object drop"]
+connection = true
+argv = ["object", "drop", "table", "a.b.c.d"]
+
+[[case]]
+name = "object describe"
+covers = ["snow object describe"]
+connection = true
+argv = ["object", "describe", "function", "f(INT, VARCHAR)", "--format", "json"]
+rules = [{ match = "^describe", columns = ["property", "value"], rows = [["signature", "(INT, VARCHAR)"], ["returns", "NUMBER"]] }]
+
+[[case]]
+name = "object describe image repository"
+covers = ["snow object describe"]
+connection = true
+argv = ["object", "describe", "image-repository", "r"]
+
+[[case]]
+name = "object create attributes"
+covers = ["snow object create"]
+connection = true
+argv = ["object", "create", "database", "name=my_db", "comment=hello", "kind={\"a\":1}"]
+rules = [{ rest = "^GET /api/v2/databases/$", body = [] }, { rest = "^POST /api/v2/databases/", body = { status = "Database MY_DB successfully created." } }]
+
+[[case]]
+name = "object create json schema level"
+covers = ["snow object create"]
+connection = true
+argv = ["object", "create", "table", "--json", "{\"name\": \"t\"}", "--if-not-exists"]
+rules = [{ rest = "^GET /api/v2/databases/db$", body = { name = "db" } }, { rest = "^GET /api/v2/databases/db/schemas/public/tables/$", body = [] }, { rest = "^POST /api/v2/databases/db/schemas/public/tables/", body = { status = "Table T successfully created." } }]
+
+[[case]]
+name = "object create conflict"
+covers = ["snow object create"]
+connection = true
+argv = ["object", "create", "database", "name=x", "--replace"]
+rules = [{ rest = "^GET /api/v2/databases/$", body = [] }, { rest = "^POST", status = 409, body = { message = "exists" } }]
+
+[[case]]
+name = "object create nothing"
+covers = ["snow object create"]
+connection = true
+argv = ["object", "create", "database"]
+
+[[case]]
+name = "object create both"
+covers = ["snow object create"]
+connection = true
+argv = ["object", "create", "database", "name=x", "--json", "{}"]

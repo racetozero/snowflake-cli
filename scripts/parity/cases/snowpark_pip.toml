@@ -1,0 +1,62 @@
+[[case]]
+name = "snowpark package create"
+covers = ["snow snowpark package create"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "package", "create", "mypkg", "--allow-shared-libraries"]
+
+[[case]]
+name = "snowpark package create shared libs"
+covers = ["snow snowpark package create"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "package", "create", "mypkg"]
+
+[[case]]
+name = "snowpark package create in anaconda"
+covers = ["snow snowpark package create"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "package", "create", "pandas"]
+
+[[case]]
+name = "snowpark package create ignore anaconda"
+covers = ["snow snowpark package create"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "package", "create", "mypkg", "--ignore-anaconda", "--allow-shared-libraries", "--index-url", "https://pypi.example/simple"]
+
+[[case]]
+name = "snowpark package create pip fails"
+covers = ["snow snowpark package create"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "package", "create", "failpkg"]
+
+[[case]]
+name = "snowpark package create http index"
+covers = ["snow snowpark package create"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "package", "create", "mypkg", "--index-url", "http://insecure/simple"]
+
+[[case]]
+name = "snowpark build with pip"
+covers = ["snow snowpark build"]
+connection = true
+bins = { "python" = "#!/bin/sh\n# Fake `python -m pip wheel -w DIR ...`: writes a wheel for mypkg (depends on pandas and extra_dep).\necho \"$@\" >> pip_calls.log\ndir=\"\"\nprev=\"\"\nfor a in \"$@\"; do\n  if [ \"$prev\" = \"-w\" ]; then dir=\"$a\"; fi\n  prev=\"$a\"\ndone\ncase \"$*\" in *failpkg*) echo \"ERROR: no matching distribution\" >&2; exit 1;; esac\n/usr/bin/python3 - \"$dir\" \"$*\" <<'PY'\nimport sys, zipfile, os\nd = sys.argv[1]\nnodeps = \"--no-deps\" in sys.argv[2]\ndef wheel(name, deps, files):\n    p = os.path.join(d, f\"{name}-1.0-py3-none-any.whl\")\n    with zipfile.ZipFile(p, \"w\") as z:\n        for f, c in files.items():\n            z.writestr(f, c)\n        z.writestr(f\"{name}-1.0.dist-info/METADATA\", \"Name: %s\\n\" % name + \"\".join(f\"Requires-Dist: {x}\\n\" for x in deps))\nwheel(\"mypkg\", [\"pandas>=1\", \"extra_dep\"], {\"mypkg/__init__.py\": \"X = 1\\n\", \"mypkg/native.so\": \"bin\"})\nif not nodeps:\n    wheel(\"extra_dep\", [], {\"extra_dep/__init__.py\": \"Y = 2\\n\"})\nPY\n" }
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  f:\n    type: function\n    identifier: f\n    handler: app.f\n    signature: []\n    returns: string\n    stage: st\n    artifacts: [app/]\n", "app/app.py" = "def f(): return 'x'\n", "requirements.txt" = "mypkg\nsnowflake-snowpark-python\n" }
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["snowflake-snowpark-python", "1.9.0"]] }]
+normalize = [["\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d (ERROR|WARNING|INFO)", "<TS> \\1"], ["-w \\S+", "-w <TMPDIR>"], ["-r \\S+", "-r <TMPDIR>/requirements.txt"]]
+argv = ["snowpark", "build", "--allow-shared-libraries"]

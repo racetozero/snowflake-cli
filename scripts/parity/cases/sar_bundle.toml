@@ -1,0 +1,280 @@
+[[case]]
+name = "sar bundle basic"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\nignore: [\"*.log\"]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle package name"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\npackage_name: pkg1\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle no name"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle fq name"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: d.s.svc\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle version 3"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 3\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle version 2.0 string"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: '2.0'\nname: a\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle version 2.5"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2.5\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle version 1 falls back"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 1\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle not mapping"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "- a\n- b\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle bad runtime"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nruntime: [ruby]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle runtime not list"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nruntime: 5\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle runtime mixed list"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nruntime: [node, 5]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle streamlit node"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nstreamlit: true\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle streamlit not bool"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nstreamlit: 'yes'\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle compute resource"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\ncompute_resource: gpu\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle compute resource int"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\ncompute_resource: 5\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle conflicting storage"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\ncode_stage: a\ncode_workspace: b\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle legacy targets default"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\ntargets:\n  default:\n    name: x\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle postgres bad mode"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\npostgres_instances:\n  - instance: p\n    authentication_mode: magic\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle postgres extra"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\npostgres_instances:\n  - instance: p\n    foo: 1\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle many errors"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nruntime: ruby\nstreamlit: 1\nmin_instances: abc\nenvironment_variables:\n  - name: A\n    value: [1]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle target type error"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\ntargets:\n  dev:\n    max_instances: lots\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar validate ok"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [["S"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate no db"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate no schema"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate missing fields"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: a\n" }
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate target missing"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ntargets:\n  dev:\n  stage: {}\n" }
+argv = ["app", "validate", "--target", "prod"]
+
+[[case]]
+name = "sar validate no target selected"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ntargets:\n  dev:\n" }
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate target no targets"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\n" }
+argv = ["app", "validate", "--target", "prod"]
+
+[[case]]
+name = "sar validate target override"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\ndefault_target: dev\ntargets:\n  dev:\n    name: other.sch.app2\n    code_stage: st\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [["S"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate python no run"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\nruntime: python\n" }
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate node python warns"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\nruntime: [node, python]\nrun:\n  command: [python, app.py]\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [["S"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate personal db"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: USER$\nschema: s\nquery_warehouse: wh\ncode_stage: st\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$TEST_USER"]] }, { match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [["S"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate personal db unresolved"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: user$\nschema: s\nquery_warehouse: wh\n" }
+rules = [{ match = "CURRENT_USER", columns = ["P"], rows = [["USER$"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate account mismatch"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "app.yml" = "version: 2\nname: my_app\ndatabase: db\nschema: s\nquery_warehouse: wh\naccount: other_acct\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [["S"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate target flag without app yml"
+covers = ["snow app validate"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: a\n    artifacts: [index.js]\n" }
+argv = ["app", "validate", "--target", "x"]
+
+[[case]]
+name = "sar bundle entity"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: a\n    artifacts: [index.js, src/*]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle entity many"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: a\n    artifacts: [index.js]\n  b:\n    type: snowflake-app\n    identifier: b\n    artifacts: [index.js]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle entity by id"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: a\n    artifacts: [index.js]\n  b:\n    type: snowflake-app\n    identifier: b\n    artifacts: [src/b.js]\n" }
+argv = ["app", "bundle", "--entity-id", "b"]
+
+[[case]]
+name = "sar validate entity offline"
+covers = ["snow app validate"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: a\n    artifacts: [index.js]\n" }
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar validate entity with db"
+covers = ["snow app validate"]
+connection = true
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier:\n      name: a\n      database: db\n    artifacts: [index.js]\n" }
+rules = [{ match = "SHOW DATABASES LIKE", columns = ["name"], rows = [["DB"]] }, { match = "SHOW SCHEMAS LIKE", columns = ["name"], rows = [["S"]] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "sar bundle mixed entities"
+covers = ["snow app bundle"]
+files = { "index.js" = "x\n", "a.log" = "l\n", "src/b.js" = "y\n", ".hidden" = "h\n", "snowflake.yml" = "definition_version: 2\nentities:\n  a:\n    type: snowflake-app\n    identifier: a\n    artifacts: [index.js]\n  pkg:\n    type: application package\n    identifier: p\n    artifacts: [index.js]\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "sar bundle duplicate keys"
+covers = ["snow app bundle"]
+files = { "app.yml" = "version: 2\nname: first\nname: second\npackage_name: p1\npackage_name: p2\n", "index.js" = "x\n" }
+argv = ["app", "bundle"]

@@ -1,0 +1,74 @@
+[[case]]
+name = "stage execute dir"
+covers = ["snow stage execute"]
+connection = true
+stage_files = { "my_stage/scripts/a.sql" = "select 1;", "my_stage/scripts/sub/b.sql" = "select 2;", "my_stage/scripts/readme.md" = "x", "my_stage/other/c.sql" = "select 3;" }
+argv = ["stage", "execute", "@my_stage/scripts", "-D", "a=1", "-D", "b='x'"]
+
+[[case]]
+name = "stage execute glob json"
+covers = ["snow stage execute"]
+connection = true
+stage_files = { "my_stage/s/a.sql" = "1", "my_stage/s/b.sql" = "2", "my_stage/s/c.txt" = "3" }
+argv = ["stage", "execute", "my_stage/s/*.sql", "--format", "json"]
+
+[[case]]
+name = "stage execute single file"
+covers = ["snow stage execute"]
+connection = true
+stage_files = { "my_stage/s/a.sql" = "1" }
+argv = ["stage", "execute", "@my_stage/s/a.sql"]
+
+[[case]]
+name = "stage execute bad extension"
+covers = ["snow stage execute"]
+connection = true
+stage_files = { "my_stage/s/a.txt" = "1" }
+argv = ["stage", "execute", "@my_stage/s/a.txt"]
+
+[[case]]
+name = "stage execute no files"
+covers = ["snow stage execute"]
+connection = true
+stages = true
+argv = ["stage", "execute", "@empty_stage"]
+
+[[case]]
+name = "stage execute continue on error"
+covers = ["snow stage execute"]
+connection = true
+stage_files = { "my_stage/a.sql" = "1", "my_stage/b.sql" = "2" }
+rules = [{ match = "execute immediate from @my_stage/a.sql", error = { code = 2003, message = "Object does not exist" } }]
+argv = ["stage", "execute", "@my_stage", "--on-error", "continue"]
+
+[[case]]
+name = "stage execute break on error"
+covers = ["snow stage execute"]
+connection = true
+stage_files = { "my_stage/a.sql" = "1", "my_stage/b.sql" = "2" }
+rules = [{ match = "execute immediate from @my_stage/a.sql", error = { code = 2003, message = "Object does not exist" } }]
+argv = ["stage", "execute", "@my_stage"]
+
+[[case]]
+name = "stage execute user stage config vars"
+covers = ["snow stage execute"]
+connection = true
+config = "[variables]\nenv = 'dev'"
+stage_files = { "~/x/a.sql" = "1" }
+argv = ["stage", "execute", "@~/x"]
+
+[[case]]
+name = "git execute"
+covers = ["snow git execute"]
+connection = true
+stage_files = { "repo/branches/main/sql/a.sql" = "1", "repo/branches/main/sql/b.py" = "print(1)", "repo/branches/main/top.sql" = "2" }
+argv = ["git", "execute", "@repo/branches/main/sql/a.sql", "-D", "x=1"]
+normalize = [['snowflake_cli_tmp_stage_[0-9]+', 'snowflake_cli_tmp_stage_N']]
+
+[[case]]
+name = "git execute dir"
+covers = ["snow git execute"]
+connection = true
+stage_files = { "repo/branches/main/sql/a.sql" = "1", "repo/branches/main/sql/c.sql" = "1" }
+argv = ["git", "execute", "@repo/branches/main/sql/", "--on-error", "continue", "--format", "json"]
+normalize = [['snowflake_cli_tmp_stage_[0-9]+', 'snowflake_cli_tmp_stage_N']]

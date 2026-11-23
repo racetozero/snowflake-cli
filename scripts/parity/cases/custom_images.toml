@@ -1,0 +1,53 @@
+[[case]]
+name = "custom-image validate pass"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"PATH=/bin\", \"DASHBOARD_PORT=12003\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\": \"ipykernel\"}, {\"name\": \"sqlparse\"}, {\"name\": \"jinja2\"}, {\"name\": \"notebook\"}, {\"name\": \"ipython\"}, {\"name\": \"psutil\"}, {\"name\": \"snowflake_snowpark_python\"}, {\"name\": \"jupyter-server\"}, {\"name\": \"ray\"}, {\"name\": \"lightgbm-ray\"}, {\"name\": \"xgboost-ray\"}, {\"name\": \"snowflake\"}, {\"name\": \"snowflake.core\"}, {\"name\": \"snowflake-connector-python\"}, {\"name\": \"snowflake-ml-python\"}]';;\n      \"pip check\") printf '%s\\n' \"\"; exit 0;;\n      *) exit 0;;\n    esac;;\nesac\n" }
+argv = ["custom-image", "validate", "myimg:1"]
+
+[[case]]
+name = "custom-image validate failures"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"DASHBOARD_PORT=1\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\":\"ipykernel\"},{\"name\":\"SQLParse\"},{\"name\":\"jinja2\"}]';;\n      \"pip check\") printf '%s\\n' \"jupyter-lsp 1.0 requires x\nfoo 2 has requirement bar\"; exit 1;;\n      *) exit 1;;\n    esac;;\nesac\n" }
+argv = ["custom-image", "validate", "myimg:1"]
+
+[[case]]
+name = "custom-image validate pip check ignored"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"PATH=/bin\", \"DASHBOARD_PORT=12003\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo 'not json';;\n      \"pip check\") printf '%s\\n' \"jupyter-lsp 1.0 requires x\"; exit 1;;\n      *) exit 0;;\n    esac;;\nesac\n" }
+argv = ["custom-image", "validate", "myimg:1"]
+
+[[case]]
+name = "custom-image validate no entrypoint"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": null, \"Env\": []}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\":\"ipykernel\"},{\"name\":\"SQLParse\"},{\"name\":\"jinja2\"}]';;\n      \"pip check\") printf '%s\\n' \"\"; exit 0;;\n      *) exit 0;;\n    esac;;\nesac\n" }
+argv = ["custom-image", "validate", "myimg:1"]
+
+[[case]]
+name = "custom-image validate not found"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 1 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"PATH=/bin\", \"DASHBOARD_PORT=12003\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\":\"ipykernel\"},{\"name\":\"SQLParse\"},{\"name\":\"jinja2\"}]';;\n      \"pip check\") printf '%s\\n' \"\"; exit 0;;\n      *) exit 0;;\n    esac;;\nesac\n" }
+argv = ["custom-image", "validate", "nope"]
+
+[[case]]
+name = "custom-image validate grype"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"PATH=/bin\", \"DASHBOARD_PORT=12003\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\": \"ipykernel\"}, {\"name\": \"sqlparse\"}, {\"name\": \"jinja2\"}, {\"name\": \"notebook\"}, {\"name\": \"ipython\"}, {\"name\": \"psutil\"}, {\"name\": \"snowflake_snowpark_python\"}, {\"name\": \"jupyter-server\"}, {\"name\": \"ray\"}, {\"name\": \"lightgbm-ray\"}, {\"name\": \"xgboost-ray\"}, {\"name\": \"snowflake\"}, {\"name\": \"snowflake.core\"}, {\"name\": \"snowflake-connector-python\"}, {\"name\": \"snowflake-ml-python\"}]';;\n      \"pip check\") printf '%s\\n' \"\"; exit 0;;\n      *) exit 0;;\n    esac;;\nesac\n", "grype" = "#!/bin/sh\necho '{\"matches\":[{\"artifact\":{\"name\":\"openssl\",\"version\":\"1.0\",\"type\":\"deb\"},\"vulnerability\":{\"id\":\"CVE-1\",\"severity\":\"Medium\"},\"relatedVulnerabilities\":[{\"severity\":\"High\"}]},{\"artifact\":{\"name\":\"zlib\"},\"vulnerability\":{\"id\":\"CVE-2\",\"severity\":\"Critical\"}},{\"vulnerability\":{\"severity\":\"Low\"}}]}'\nexit 1\n" }
+argv = ["custom-image", "validate", "myimg:1", "--scan-vulnerabilities"]
+
+[[case]]
+name = "custom-image validate grype garbage"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"PATH=/bin\", \"DASHBOARD_PORT=12003\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\": \"ipykernel\"}, {\"name\": \"sqlparse\"}, {\"name\": \"jinja2\"}, {\"name\": \"notebook\"}, {\"name\": \"ipython\"}, {\"name\": \"psutil\"}, {\"name\": \"snowflake_snowpark_python\"}, {\"name\": \"jupyter-server\"}, {\"name\": \"ray\"}, {\"name\": \"lightgbm-ray\"}, {\"name\": \"xgboost-ray\"}, {\"name\": \"snowflake\"}, {\"name\": \"snowflake.core\"}, {\"name\": \"snowflake-connector-python\"}, {\"name\": \"snowflake-ml-python\"}]';;\n      \"pip check\") printf '%s\\n' \"\"; exit 0;;\n      *) exit 0;;\n    esac;;\nesac\n", "grype" = "#!/bin/sh\necho boom >&2\nexit 2\n" }
+argv = ["custom-image", "validate", "myimg:1", "--scan-vulnerabilities"]
+
+[[case]]
+name = "custom-image validate no docker"
+covers = ["snow custom-image validate"]
+bins = {}
+argv = ["custom-image", "validate", "img"]
+
+[[case]]
+name = "custom-image validate no grype"
+covers = ["snow custom-image validate"]
+bins = { "docker" = "#!/bin/sh\necho \"$@\" >> docker.log\ncase \"$1\" in\n  inspect) [ 0 -ne 0 ] && { echo \"Error: No such object\" >&2; exit 1; }; cat <<'J'\n[{\"Config\": {\"Entrypoint\": [\"/usr/local/bin/entrypoint.sh\"], \"Env\": [\"PATH=/bin\", \"DASHBOARD_PORT=12003\"]}}]\nJ\n  ;;\n  run)\n    for a in \"$@\"; do last=\"$a\"; done\n    case \"$last\" in\n      \"pip list --format json\") echo '[{\"name\": \"ipykernel\"}, {\"name\": \"sqlparse\"}, {\"name\": \"jinja2\"}, {\"name\": \"notebook\"}, {\"name\": \"ipython\"}, {\"name\": \"psutil\"}, {\"name\": \"snowflake_snowpark_python\"}, {\"name\": \"jupyter-server\"}, {\"name\": \"ray\"}, {\"name\": \"lightgbm-ray\"}, {\"name\": \"xgboost-ray\"}, {\"name\": \"snowflake\"}, {\"name\": \"snowflake.core\"}, {\"name\": \"snowflake-connector-python\"}, {\"name\": \"snowflake-ml-python\"}]';;\n      \"pip check\") printf '%s\\n' \"\"; exit 0;;\n      *) exit 0;;\n    esac;;\nesac\n" }
+argv = ["custom-image", "validate", "img", "--scan-vulnerabilities"]

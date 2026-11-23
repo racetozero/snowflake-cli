@@ -1,0 +1,186 @@
+[[case]]
+name = "dcm assets mixed"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  data:\n    path: data\n  docs:\n    paths: [\"docs/*\", \"docs/b[1].txt\", \"*.txt\"]\n  all:\n    path: \"**/*.csv\"\n  none:\n    path: \"nothing/*\"\n  dup:\n    path: sources/definitions/dup.txt\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets star dir"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: \"*\"\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets bad name"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  1x:\n    path: a\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets not mapping"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets: [1]\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets unknown key"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a\n    foo: 1\n    bar: 2\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets both"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a\n    paths: [b]\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets empty paths"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    paths: []\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets abs"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: /etc\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets at"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: \"@st/x\"\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets dotdot"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a/../b\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets dot"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: ./b\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets trailing"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a/\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets qmark"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a?\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets star2"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a**/x\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets star2 last"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: a/**\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets spec str"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a: x\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "dcm assets int path"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "data/x.csv" = "1\n", "data/sub/y.csv" = "2\n", "data/.hid" = "h\n", "docs/readme.md" = "r\n", "docs/b[1].txt" = "b\n", "top.txt" = "t\n", "sources/definitions/dup.txt" = "d\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nassets:\n  a:\n    path: 5\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }, { match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]

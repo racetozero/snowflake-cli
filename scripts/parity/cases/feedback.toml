@@ -1,0 +1,78 @@
+[[case]]
+name = "feedback needs yes"
+covers = ["snow feedback"]
+connection = true
+argv = ["feedback", "-r", "3", "-m", "nice"]
+
+[[case]]
+name = "feedback needs yes json"
+covers = ["snow feedback"]
+connection = true
+argv = ["feedback", "-r", "3", "--format", "json"]
+
+[[case]]
+name = "feedback submitted"
+covers = ["snow feedback"]
+connection = true
+offline_success = true
+argv = ["feedback", "-r", "4", "-m", "great tool password=hunter2secret", "--category", "ux", "-y"]
+normalize = [['\([0-9a-f-]{36}\)', '(<UUID>)'], ['"timestamps": \[[0-9., ]+\]', '"timestamps": [<T>]']]
+
+[[case]]
+name = "feedback submitted json last error"
+covers = ["snow feedback"]
+connection = true
+home_files = { "last_cli_error.json" = "{\"id\": \"abc\", \"error_type\": \"CliError\", \"command\": \"sql\", \"timestamp\": \"2024-01-01T00:00:00Z\"}" }
+argv = ["feedback", "-r", "1", "--last-error", "-y", "--format", "json"]
+normalize = [['"feedback_id": "[0-9a-f-]{36}"', '"feedback_id": "<UUID>"'], ['"timestamps": \[[0-9., ]+\]', '"timestamps": [<T>]']]
+
+[[case]]
+name = "feedback empty message"
+covers = ["snow feedback"]
+connection = true
+argv = ["feedback", "-r", "2", "-m", "   ", "-y"]
+
+[[case]]
+name = "feedback control-only message"
+covers = ["snow feedback"]
+connection = true
+argv = ["feedback", "-r", "2", "-m", "\u0001\u0002", "-y"]
+
+[[case]]
+name = "feedback agent needs message"
+covers = ["snow feedback"]
+connection = true
+env = { CLAUDECODE = "1" }
+argv = ["feedback", "-r", "2", "-y"]
+
+[[case]]
+name = "feedback rate limited"
+covers = ["snow feedback"]
+connection = true
+home_files = { "feedback_rate.json" = "{\"timestamps\": [99999999990, 99999999991, 99999999992, 99999999993, 99999999994]}" }
+argv = ["feedback", "-r", "2", "-y"]
+normalize = [['Try again in [0-9]+ seconds', 'Try again in <N> seconds']]
+
+[[case]]
+name = "feedback no connection"
+covers = ["snow feedback"]
+argv = ["feedback", "-r", "2", "-y"]
+
+[[case]]
+name = "feedback connection failed"
+covers = ["snow feedback"]
+connection = true
+argv = ["feedback", "-r", "2", "-y", "--password", "wrong"]
+
+[[case]]
+name = "feedback bad rating"
+covers = ["snow feedback"]
+argv = ["feedback", "-r", "7"]
+
+[[case]]
+name = "feedback masks secrets"
+covers = ["snow feedback"]
+connection = true
+offline_success = true
+argv = ["feedback", "-r", "1", "-y", "-m", "aws_key_id='AKIAXXXX' sig=abcdefghijklmnop1234 url?password=abcdefghijklmnopq pwd: hunter22 token=abcdefgh12345 otp 123456 clientSecret=supersecret1 \"access_token\": \"abc.def\" -----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY----- eyJhbGc.eyJzdWI.sig ghp_abcdefghijkl"]
+normalize = [['\([0-9a-f-]{36}\)', '(<UUID>)'], ['"timestamps": \[[0-9., ]+\]', '"timestamps": [<T>]']]

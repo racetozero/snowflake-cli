@@ -1,0 +1,44 @@
+[[case]]
+name = "dcm plan save output"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+stage_files = { "x" = "x" }
+argv = ["dcm", "plan", "--save-output"]
+
+[[case]]
+name = "dcm deploy save output"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": [{\"type\": \"CREATE\", \"object_id\": {\"domain\": \"table\", \"fqn\": \"DB.S.T\"}}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy", "--save-output"]
+
+[[case]]
+name = "dcm refresh save output"
+covers = ["snow dcm refresh"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "REFRESH ALL", columns = ["result"], rows = [["{\"dts_refresh_result\": {\"refreshed_tables\": []}}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "refresh", "--save-output"]
+
+[[case]]
+name = "dcm raw-analyze save output"
+covers = ["snow dcm raw-analyze"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "ANALYZE", columns = ["result"], rows = [["{\"files\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "raw-analyze", "--save-output"]

@@ -1,0 +1,87 @@
+[[case]]
+name = "snowpark package lookup available"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "pandas"]
+
+[[case]]
+name = "snowpark package lookup version"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "pandas>=2,<3"]
+
+[[case]]
+name = "snowpark package lookup missing version"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "pandas==9.9"]
+
+[[case]]
+name = "snowpark package lookup ne"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "pandas!=1.5.3"]
+
+[[case]]
+name = "snowpark package lookup normalized name"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "snowflake-snowpark-python"]
+
+[[case]]
+name = "snowpark package lookup invalid versions"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "weird"]
+
+[[case]]
+name = "snowpark package lookup extras"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "pandas[sql]"]
+
+[[case]]
+name = "snowpark package lookup unknown"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [["pandas", "1.5.3"], ["pandas", "2.0.3"], ["pandas", "2.1.0rc1"], ["Snowflake-Snowpark-Python", "1.9.0"], ["weird", "notaversion"], ["weird", "1.0"]] }]
+argv = ["snowpark", "package", "lookup", "nope"]
+
+[[case]]
+name = "snowpark package lookup empty"
+covers = ["snow snowpark package lookup"]
+connection = true
+rules = [{ match = "information_schema.packages", columns = ["PACKAGE_NAME", "VERSION"], rows = [] }]
+argv = ["snowpark", "package", "lookup", "nope"]
+
+[[case]]
+name = "snowpark package upload"
+covers = ["snow snowpark package upload"]
+connection = true
+files = { "pkg.zip" = "zipdata" }
+stages = true
+normalize = [["file://\\S+/pkg.zip", "file://<TMPDIR>/pkg.zip"]]
+argv = ["snowpark", "package", "upload", "-f", "pkg.zip", "-s", "db.s.st/sub"]
+
+[[case]]
+name = "snowpark package upload exists"
+covers = ["snow snowpark package upload"]
+connection = true
+files = { "pkg.zip" = "zipdata" }
+stages = true
+stage_files = { "st/pkg.zip" = "zipdata" }
+normalize = [["file://\\S+/pkg.zip", "file://<TMPDIR>/pkg.zip"]]
+argv = ["snowpark", "package", "upload", "-f", "pkg.zip", "-s", "st"]
+
+[[case]]
+name = "snowpark package upload missing"
+covers = ["snow snowpark package upload"]
+connection = true
+argv = ["snowpark", "package", "upload", "-f", "nope.zip", "-s", "st"]

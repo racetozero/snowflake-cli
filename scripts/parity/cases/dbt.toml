@@ -1,0 +1,268 @@
+[[case]]
+name = "dbt list"
+covers = ["snow dbt list"]
+connection = true
+argv = ["dbt", "list", "--like", "p%"]
+rules = [{ match = "^show dbt projects", columns = ["name", "default_target"], rows = [["P1", "dev"]] }]
+
+[[case]]
+name = "dbt describe"
+covers = ["snow dbt describe"]
+connection = true
+argv = ["dbt", "describe", "my_proj", "--format", "json"]
+
+[[case]]
+name = "dbt drop"
+covers = ["snow dbt drop"]
+connection = true
+argv = ["dbt", "drop", "db.s.my_proj", "--if-exists"]
+
+[[case]]
+name = "dbt execute build"
+covers = ["snow dbt execute build"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "build", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute check"
+covers = ["snow dbt execute check"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "check", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute clean"
+covers = ["snow dbt execute clean"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "clean", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute clone"
+covers = ["snow dbt execute clone"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "clone", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute compile"
+covers = ["snow dbt execute compile"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "compile", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute debug"
+covers = ["snow dbt execute debug"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "debug", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute deps"
+covers = ["snow dbt execute deps"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "deps", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute deps_compile"
+covers = ["snow dbt execute deps_compile"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "deps_compile", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute docs"
+covers = ["snow dbt execute docs"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "docs", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute list"
+covers = ["snow dbt execute list"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "list", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute ls"
+covers = ["snow dbt execute ls"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "ls", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute parse"
+covers = ["snow dbt execute parse"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "parse", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute retry"
+covers = ["snow dbt execute retry"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "retry", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute run"
+covers = ["snow dbt execute run"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "run", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute run-operation"
+covers = ["snow dbt execute run-operation"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "run-operation", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute seed"
+covers = ["snow dbt execute seed"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "seed", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute show"
+covers = ["snow dbt execute show"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "show", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute snapshot"
+covers = ["snow dbt execute snapshot"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "snapshot", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute source"
+covers = ["snow dbt execute source"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "source", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute test"
+covers = ["snow dbt execute test"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "test", "--select", "m1", "--vars", "{a: 1}"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[true, "Done. PASS=1"]] }]
+
+[[case]]
+name = "dbt execute failure"
+covers = ["snow dbt execute run"]
+connection = true
+argv = ["dbt", "execute", "--dbt-version", "1.9.4", "--env", "prod", "--env-vars", "{DBT_A: 'x', DBT_ENV_SECRET_B: 'y'}", "--import", "@stage/s1 as f1", "--import", "SYSTEM$DBT_GET_LAST_RUN_TARGET('p')", "--no-writeback", "my_proj", "run"]
+rules = [{ match = "^EXECUTE DBT PROJECT", columns = [{ name = "SUCCESS", type = "boolean" }, "STDOUT"], rows = [[false, "Error: model failed"]] }]
+
+[[case]]
+name = "dbt execute async"
+covers = ["snow dbt execute test"]
+connection = true
+argv = ["dbt", "execute", "--run-async", "my_proj", "test"]
+
+[[case]]
+name = "dbt execute bad env vars"
+covers = ["snow dbt execute run"]
+connection = true
+argv = ["dbt", "execute", "--env-vars", "{dbt_a: 1}", "my_proj", "run"]
+
+[[case]]
+name = "dbt execute bad import"
+covers = ["snow dbt execute run"]
+connection = true
+argv = ["dbt", "execute", "--import", "nope", "my_proj", "run"]
+
+[[case]]
+name = "dbt execute malformed"
+covers = ["snow dbt execute run"]
+connection = true
+argv = ["dbt", "execute", "my_proj", "run"]
+
+[[case]]
+sort_sql = true
+name = "dbt deploy create"
+covers = ["snow dbt deploy"]
+connection = true
+stages = true
+files = { "proj/dbt_project.yml" = "name: p\nprofile: my_profile\n", "proj/models/a.sql" = "select 1\n", "proj/profiles.yml" = "my_profile:\n  target: dev\n  outputs:\n    dev:\n      type: snowflake\n      database: db\n      schema: s\n      role: '{{ env_var(\"R\") }}'\n      threads: 4\n      password: secret\n" }
+rules = [{ match = "describe dbt project", error = { code = 2003, message = "DBT PROJECT 'P1' does not exist or not authorized." } }]
+argv = ["dbt", "deploy", "p1", "--source", "proj", "--external-access-integration", "eai1", "--default-target", "dev"]
+normalize = [['DBT_PROJECT_P1_[0-9]+_STAGE', 'DBT_PROJECT_P1_N_STAGE'], ['file:///\S+/\*', 'file://<TMP>/*'], ['dbt_project_p1_[0-9]+_stage', 'dbt_project_p1_n_stage']]
+
+[[case]]
+sort_sql = true
+name = "dbt deploy alter"
+covers = ["snow dbt deploy"]
+connection = true
+stages = true
+files = { "dbt_project.yml" = "profile: pr\n", "profiles.yml" = "pr:\n  target: prod\n  outputs:\n    prod: {type: snowflake, database: d, schema: s, role: r1}\n" }
+rules = [{ match = "describe dbt project", columns = ["name", "default_target", "external_access_integrations", "default_writeback"], rows = [["P1", "dev", "[EAI1]", "false"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["R1"]] }]
+argv = ["dbt", "deploy", "p1", "--default-target", "prod", "--install-local-deps", "--default-writeback", "--unset-default-env"]
+normalize = [['DBT_PROJECT_P1_[0-9]+_STAGE', 'DBT_PROJECT_P1_N_STAGE'], ['file:///\S+/\*', 'file://<TMP>/*'], ['dbt_project_p1_[0-9]+_stage', 'dbt_project_p1_n_stage']]
+
+[[case]]
+sort_sql = true
+name = "dbt deploy force bad role"
+covers = ["snow dbt deploy"]
+connection = true
+files = { "dbt_project.yml" = "profile: pr\n", "profiles.yml" = "pr:\n  target: prod\n  outputs:\n    prod: {type: snowflake, database: d, role: nope}\n" }
+rules = [{ match = "use role nope", error = { code = 2003, message = "Role 'NOPE' does not exist" } }]
+argv = ["dbt", "deploy", "p1", "--force"]
+
+[[case]]
+sort_sql = true
+name = "dbt deploy missing project"
+covers = ["snow dbt deploy"]
+connection = true
+argv = ["dbt", "deploy", "p1"]
+
+[[case]]
+sort_sql = true
+name = "dbt deploy missing profile target"
+covers = ["snow dbt deploy"]
+connection = true
+files = { "dbt_project.yml" = "profile: pr\n", "profiles.yml" = "pr:\n  target: x\n  outputs:\n    a: {}\n    b: {}\n" }
+argv = ["dbt", "deploy", "p1"]
+
+[[case]]
+name = "dbt copy get"
+covers = ["snow dbt copy"]
+connection = true
+stage_files = { "st/x.sql" = "x" }
+argv = ["dbt", "copy", "@st/x.sql", "out"]
+
+[[case]]
+name = "dbt copy get missing"
+covers = ["snow dbt copy"]
+connection = true
+stage_files = { "other/x.sql" = "x" }
+argv = ["dbt", "copy", "@st/x.sql", "out"]
+
+[[case]]
+name = "dbt copy put"
+covers = ["snow dbt copy"]
+connection = true
+stages = true
+files = { "f.sql" = "select 1" }
+argv = ["dbt", "copy", "f.sql", "@st/dir"]
+
+[[case]]
+sort_sql = true
+name = "dbt deploy both profiles long values"
+covers = ["snow dbt deploy"]
+connection = true
+stages = true
+files = { "p/dbt_project.yml" = "profile: pr\n", "p/profiles.yml" = "pr:\n  target: t\n  outputs:\n    t: {type: snowflake, database: d, schema: s, role: '{{ x }}'}\n", "conf/profiles.yml" = "pr: {}\n", "conf/dbt_projects_profiles.yml" = "pr:\n  target: t\n  outputs:\n    t:\n      type: snowflake\n      database: d\n      schema: s\n      role: '{{ x }}'\n      query_tag: this is a very long query tag value that will certainly need to be folded by the yaml emitter at eighty columns\n      created: 2024-01-05\n      at: 2024-01-05T10:20:30Z\n      enabled: yes\n      mode: 0755\n" }
+rules = [{ match = "describe dbt project", error = { code = 2003, message = "DBT PROJECT 'P1' does not exist or not authorized." } }]
+argv = ["dbt", "deploy", "p1", "--source", "p", "--profiles-dir", "conf"]
+normalize = [['DBT_PROJECT_P1_[0-9]+_STAGE', 'DBT_PROJECT_P1_N_STAGE'], ['file:///\S+/\*', 'file://<TMP>/*'], ['dbt_project_p1_[0-9]+_stage', 'dbt_project_p1_n_stage']]

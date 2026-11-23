@@ -1,0 +1,49 @@
+[[case]]
+name = "ws bundle streamlit"
+covers = ["snow ws bundle"]
+connection = true
+offline_success = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["ws", "bundle", "--entity-id", "s"]
+
+[[case]]
+name = "ws deploy streamlit"
+covers = ["snow ws deploy"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["ws", "deploy", "--entity-id", "s"]
+
+[[case]]
+name = "ws drop streamlit"
+covers = ["snow ws drop"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["ws", "drop", "--entity-id", "s"]
+
+[[case]]
+name = "ws validate streamlit"
+covers = ["snow ws validate"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["ws", "validate", "--entity-id", "s"]
+
+[[case]]
+name = "ws version list streamlit"
+covers = ["snow ws version list"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  s:\n    type: streamlit\n    identifier: st1\n    query_warehouse: wh\n    main_file: app.py\n    artifacts: [app.py]\n", "app.py" = "x" }
+argv = ["ws", "version", "list", "--entity-id", "s"]
+
+[[case]]
+name = "ws bundle missing entity"
+covers = ["snow ws bundle"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\nentities: {}\n" }
+argv = ["ws", "bundle", "--entity-id", "nope"]
+
+[[case]]
+name = "ws bundle v1"
+covers = ["snow ws bundle"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 1\n" }
+argv = ["ws", "bundle", "--entity-id", "x"]

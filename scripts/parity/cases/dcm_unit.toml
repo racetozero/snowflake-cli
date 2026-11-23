@@ -1,0 +1,120 @@
+[[case]]
+name = "dcm test script fail"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = " TEST", columns = ["result"], rows = [["{\"scripts\": [{\"script_name\": \"t_a.sql\", \"passed\": true}, {\"script_name\": \"t_b.sql\", \"passed\": false, \"error_message\": \"assert failed\"}, {\"script_name\": \"t_c.sql\"}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--script", "t_a.sql", "--script", "q\"x"]
+
+[[case]]
+name = "dcm test all scripts pass"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = " TEST", columns = ["result"], rows = [["{\"scripts\": [{\"script_name\": \"t_a.sql\", \"passed\": true}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts"]
+
+[[case]]
+name = "dcm test all scripts json"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = " TEST", columns = ["result"], rows = [["{\"scripts\": [{\"script_name\": \"t_a.sql\", \"passed\": true}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts", "--format", "json"]
+
+[[case]]
+name = "dcm test combined json"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = " TEST", columns = ["result"], rows = [["{\"scripts\": [{\"script_name\": \"t_a.sql\", \"passed\": true}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts", "--expectations", "--format", "json"]
+
+[[case]]
+name = "dcm test combined table"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = " TEST", columns = ["result"], rows = [["{\"scripts\": [{\"script_name\": \"t_a.sql\", \"passed\": true}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts", "--expectations"]
+
+[[case]]
+name = "dcm test combined fail"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": true}]}"]] }, { match = " TEST", error = { code = 2003, sqlstate = "02000", message = "Script folder missing" } }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts", "--expectations"]
+
+[[case]]
+name = "dcm test script error"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = " TEST", error = { code = 2003, sqlstate = "02000", message = "Script folder missing" } }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts"]
+
+[[case]]
+name = "dcm test scripts no manifest"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts", "db.s.proj"]
+
+[[case]]
+name = "dcm test scripts save"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = "TEST ALL", columns = ["result"], rows = [["{\"expectations\": [{\"table_name\": \"T1\", \"expectation_name\": \"e1\", \"expectation_violated\": false}]}"]] }, { match = " TEST", columns = ["result"], rows = [["{\"scripts\": [{\"script_name\": \"t_a.sql\", \"passed\": true}]}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts", "--save-output"]
+
+[[case]]
+name = "dcm test scripts none"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = " TEST", columns = ["result"], rows = [["{\"scripts\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts"]
+
+[[case]]
+name = "dcm test scripts bad"
+covers = ["snow dcm test"]
+connection = true
+stages = true
+sort_sql = true
+files = { "sources/definitions/a.sql" = "x\n", "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\n" }
+rules = [{ match = " TEST", columns = ["result"], rows = [["{\"scripts\": 5}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_(PROJ_)?\\w*?\\d{6,}_(OUTPUT_)?TMP_STAGE", "DCM_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "test", "--all-scripts"]

@@ -1,0 +1,194 @@
+[[case]]
+name = "init local template"
+covers = ["snow init"]
+files = { "tpl/basic/template.yml" = "minimum_cli_version: 3.0.0\nfiles_to_render: [snowflake.yml, README.md]\nvariables:\n  - name: project_name\n    prompt: Project identifier\n    default: my_project\n  - name: warehouse\n    type: string\n  - name: threads\n    type: int\n    default: 4\n", "tpl/basic/snowflake.yml" = "definition_version: 2\nentities:\n  <! project_name | to_snowflake_identifier !>:\n    type: streamlit\n    query_warehouse: <! warehouse !>\n<!! if threads > 2 !!>    title: big <! threads !>\n<!! endif !!>", "tpl/basic/README.md" = "# <! project_dir_name !>\nCLI <! snowflake_cli_version !>\n", "tpl/basic/static.txt" = "<! not rendered !>\n" }
+argv = ["init", "out/proj", "--template-source", "tpl", "--template", "basic", "-D", "warehouse=wh1", "--no-interactive"]
+
+[[case]]
+name = "init prompts"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: name\n    prompt: Your name\n  - name: n\n    type: int\n    default: 1\n", "tpl/a.txt" = "hello <! name !> <! n + 1 !>\n" }
+stdin = "Ann\nabc\n5\n"
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init missing value"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "variables:\n  - name: x\n" }
+argv = ["init", "proj", "--template-source", "tpl", "--no-interactive"]
+
+[[case]]
+name = "init no template yml"
+covers = ["snow init"]
+files = { "tpl/a.txt" = "a" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init exists"
+covers = ["snow init"]
+files = { "proj/x" = "x" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init http"
+covers = ["snow init"]
+argv = ["init", "proj", "--template-source", "http://example.com/t"]
+
+[[case]]
+name = "init bad min version"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "minimum_cli_version: 99.0.0\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init min version equal release"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "minimum_cli_version: 3.35.0\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init min version dev ok"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "minimum_cli_version: 3.35.0.dev0\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init min version invalid"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "minimum_cli_version: banana\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init syntax error"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\n", "tpl/a.txt" = "line1\n<!! if x !!>\nno end\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init syntax error unclosed var"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\n", "tpl/a.txt" = "a <! x \n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init undefined"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\n", "tpl/a.txt" = "a <! nope !>\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init undefined attr"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: x\n    default: s\n", "tpl/a.txt" = "a <! x.y.z !>\n" }
+argv = ["init", "proj", "--template-source", "tpl", "--no-interactive"]
+
+[[case]]
+name = "init filter error"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: x\n    default: '1bad'\n", "tpl/a.txt" = "a <! x | to_snowflake_identifier !>\n" }
+argv = ["init", "proj", "--template-source", "tpl", "--no-interactive"]
+
+[[case]]
+name = "init filter quoted"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: x\n    default: '\"Quoted id\"'\n  - name: y\n    default: 'my app.v-1'\n", "tpl/a.txt" = "a <! x | to_snowflake_identifier !> <! y | to_snowflake_identifier !>\n" }
+argv = ["init", "proj", "--template-source", "tpl", "--no-interactive"]
+
+[[case]]
+name = "init runtime error"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\n", "tpl/a.txt" = "<!! raise_it() !!>\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init int flag invalid"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "variables:\n  - name: n\n    type: int\n" }
+argv = ["init", "proj", "--template-source", "tpl", "-D", "n=abc"]
+
+[[case]]
+name = "init float flag"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: n\n    type: float\n", "tpl/a.txt" = "<! n !> <! n * 2 !>\n" }
+argv = ["init", "proj", "--template-source", "tpl", "-D", "n=1.5"]
+
+[[case]]
+name = "init malformed yaml"
+covers = ["snow init"]
+# PyYAML's error text (with the random temp path) is not reproduced; see [deviations].
+normalize = [["(?s)Exception message:\n\n.*", "Exception message:\n\n<YAML ERROR>\n"], ["\"error_type\": \"\\w+Error\"", "\"error_type\": \"<YAMLError>\""]]
+files = { "tpl/template.yml" = "files_to_render: [a\n  - b: c\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init bad type"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "variables:\n  - name: n\n    type: bool\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init missing name"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "variables:\n  - prompt: hi\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init unknown key"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "bogus: 1\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init default and computed"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "variables:\n  - name: n\n    default: 1\n    default_computed: connection.role\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init unknown computed"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "variables:\n  - name: n\n    default_computed: connection.bogus\n" }
+argv = ["init", "proj", "--template-source", "tpl", "--no-interactive"]
+
+[[case]]
+name = "init render missing file"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [nope.txt]\n" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init render dir"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [d]\n", "tpl/d/x" = "x" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init empty yaml"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "", "tpl/f.txt" = "<! x !>" }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init template not found"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "" }
+argv = ["init", "proj", "--template-source", "tpl", "--template", "nope"]
+
+[[case]]
+name = "init source missing"
+covers = ["snow init"]
+files = {  }
+argv = ["init", "proj", "--template-source", "tpl"]
+
+[[case]]
+name = "init variable default types"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: i\n    default: 3\n  - name: f\n    type: float\n    default: 2\n  - name: b\n    default: true\n", "tpl/a.txt" = "<! i !> <! f !> <! b !> <! i + 1 !>\n" }
+argv = ["init", "proj", "--template-source", "tpl", "--no-interactive"]
+
+[[case]]
+name = "init prompt int default"
+covers = ["snow init"]
+files = { "tpl/template.yml" = "files_to_render: [a.txt]\nvariables:\n  - name: n\n    type: int\n    default: 7\n", "tpl/a.txt" = "<! n !>\n" }
+stdin = "\n"
+argv = ["init", "proj", "--template-source", "tpl"]

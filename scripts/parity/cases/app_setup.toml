@@ -1,0 +1,78 @@
+[[case]]
+name = "app setup app space"
+covers = ["snow app setup"]
+connection = true
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME", "QUERY_WAREHOUSE", "BUILD_EXTERNAL_ACCESS_INTEGRATION"], rows = [["APPS_DB", "APPS_WH", "<NULL>"]] }, { match = "CURRENT_USER\\(\\)", columns = ["PERSONAL_DATABASE"], rows = [["USER$TEST_USER"]] }, { match = "SHOW APPLICATION SERVICES", columns = ["name"], rows = [] }]
+argv = ["app", "setup", "--app-name", "myapp"]
+
+[[case]]
+name = "app setup dry run json"
+covers = ["snow app setup"]
+connection = true
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME", "QUERY_WAREHOUSE", "BUILD_EXTERNAL_ACCESS_INTEGRATION"], rows = [["APPS_DB", "APPS_WH", "<NULL>"]] }, { match = "CURRENT_USER\\(\\)", columns = ["PERSONAL_DATABASE"], rows = [["USER$TEST_USER"]] }, { match = "SHOW APPLICATION SERVICES", columns = ["name"], rows = [["MYAPP"]] }]
+argv = ["app", "setup", "--app-name", "myapp", "--dry-run", "--format", "json"]
+
+[[case]]
+name = "app setup system defaults python"
+covers = ["snow app setup"]
+connection = true
+files = { "requirements.txt" = "streamlit==1.30\n" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME"], rows = [] }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", columns = ["x"], rows = [["{\"database\": \"D1\", \"schema\": \"S1\", \"query_warehouse\": \"\", \"build_eai\": \"EAI1\"}"]] }, { match = "CURRENT_USER\\(\\)", columns = ["PERSONAL_DATABASE"], rows = [["USER$TEST_USER"]] }, { match = "SHOW APPLICATION SERVICES", columns = ["name"], rows = [] }]
+argv = ["app", "setup", "--app-name", "myapp"]
+
+[[case]]
+name = "app setup personal db hybrid"
+covers = ["snow app setup"]
+connection = true
+files = { "requirements.txt" = "x\n", "package.json" = "{}" }
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME"], rows = [] }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", columns = ["x"], rows = [["{}"]] }, { match = "CURRENT_USER\\(\\)", columns = ["PERSONAL_DATABASE"], rows = [["USER$TEST_USER"]] }, { match = "SHOW APPLICATION SERVICES", columns = ["name"], rows = [["MYAPP"]] }]
+argv = ["app", "setup", "--app-name", "my_app", "--warehouse", "W"]
+
+[[case]]
+name = "app setup existing"
+covers = ["snow app setup"]
+connection = true
+files = { "snowflake.yml" = "definition_version: 2\n" }
+rules = []
+argv = ["app", "setup"]
+
+[[case]]
+name = "app setup bad name"
+covers = ["snow app setup"]
+connection = true
+rules = []
+argv = ["app", "setup", "--app-name", "a-b"]
+
+[[case]]
+name = "app setup database without schema"
+covers = ["snow app setup"]
+connection = true
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME", "QUERY_WAREHOUSE", "BUILD_EXTERNAL_ACCESS_INTEGRATION"], rows = [["APPS_DB", "APPS_WH", "<NULL>"]] }, { match = "CURRENT_USER\\(\\)", columns = ["PERSONAL_DATABASE"], rows = [["USER$TEST_USER"]] }]
+argv = ["app", "setup", "--app-name", "x", "--database", "db", "--dry-run"]
+
+[[case]]
+name = "app setup missing warehouse"
+covers = ["snow app setup"]
+connection = true
+rules = [{ match = "GET_DEFAULT_APP_SPACE", columns = ["DATABASE_NAME"], rows = [] }, { match = "GET_APPLICATION_SERVICE_DEFAULTS", columns = ["x"], rows = [["{}"]] }, { match = "CURRENT_USER\\(\\)", columns = ["PERSONAL_DATABASE"], rows = [["USER$TEST_USER"]] }]
+config = "warehouse = \"\""
+argv = ["app", "setup", "--app-name", "x"]
+
+[[case]]
+name = "app setup capabilities"
+covers = ["snow app setup"]
+connection = true
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"FEATURE_APPLICATION_SERVICE_COMPUTE_RESOURCE_SERVERLESS\", \"value\": \"ENABLED\"}, {\"name\": \"ENABLE_APP_SERVICE_PYTHON_RUNTIME_SERVERLESS\", \"value\": true}, {\"name\": \"ENABLE_APP_SERVICE_STREAMLIT_SERVERLESS\", \"value\": \"DISABLED_PRIVATE_PREVIEW\"}]}"]] }]
+argv = ["app", "setup", "--capabilities"]
+
+[[case]]
+name = "app setup capabilities json"
+covers = ["snow app setup"]
+connection = true
+argv = ["app", "setup", "--capabilities", "--format", "json"]
+
+[[case]]
+name = "app setup capabilities conflict"
+covers = ["snow app setup"]
+connection = true
+argv = ["app", "setup", "--capabilities", "--app-name", "x", "--dry-run"]

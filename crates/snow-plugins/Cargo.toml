@@ -1,0 +1,36 @@
+[package]
+name = "snow-plugins"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "snow CLI command implementations (one module per Snowflake CLI plugin)"
+
+[lints]
+workspace = true
+
+[dependencies]
+snow-api.workspace = true
+snow-click.workspace = true
+snow-connector.workspace = true
+snow-rich.workspace = true
+snow-spec.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+toml_edit.workspace = true
+regex.workspace = true
+md-5.workspace = true
+tempfile.workspace = true
+semver.workspace = true
+self-replace.workspace = true
+chrono.workspace = true
+crossterm.workspace = true
+flate2.workspace = true
+uuid.workspace = true
+base64.workspace = true
+serde_yaml.workspace = true
+minijinja = { workspace = true, features = ["custom_syntax"] }
+serde = { workspace = true }
+ureq.workspace = true
+url.workspace = true

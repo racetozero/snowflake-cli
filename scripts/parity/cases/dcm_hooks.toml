@@ -1,0 +1,45 @@
+[[case]]
+name = "dcm deploy post hooks"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nrun_post_hooks: true\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n", "sources/definitions/a.sql" = "x\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+env = { SNOWFLAKE_CLI_FEATURES_ENABLE_DCM_POST_HOOKS = "true", BUILD_NUMBER = "7" }
+argv = ["dcm", "deploy"]
+
+[[case]]
+name = "dcm deploy post hooks flag off"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nrun_post_hooks: true\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n", "sources/definitions/a.sql" = "x\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy"]
+
+[[case]]
+name = "dcm deploy from deployment env"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nrun_post_hooks: true\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n", "sources/definitions/a.sql" = "x\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+env = { BUILD_NUMBER = "7" }
+argv = ["dcm", "deploy", "--deployment", "d1"]
+
+[[case]]
+name = "dcm deploy from deployment env missing"
+covers = ["snow dcm deploy"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: myorg-myacc\n    project_owner: owner_role\ndefault_target: dev\nrun_post_hooks: true\ntemplating:\n  env_vars:\n    - BUILD_NUMBER:\n", "sources/definitions/a.sql" = "x\n" }
+rules = [{ match = "DEPLOY", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_TMP_STAGE", "DCM_PROJ_<TS>_TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "deploy", "--deployment", "d1"]

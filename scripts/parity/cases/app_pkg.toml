@@ -1,0 +1,347 @@
+[[case]]
+name = "app deploy new package"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "app deploy existing package"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "show stages like", columns = ["name"], rows = [["STAGE"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+stage_files = { "my_pkg.app_src.stage/README.md" = "old\n", "my_pkg.app_src.stage/stale.txt" = "x" }
+argv = ["app", "deploy", "--no-validate"]
+
+[[case]]
+name = "app deploy no prune"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "show stages like", columns = ["name"], rows = [["STAGE"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+stage_files = { "my_pkg.app_src.stage/stale.txt" = "x" }
+argv = ["app", "deploy", "--no-prune", "--no-validate"]
+
+[[case]]
+name = "app deploy foreign package"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "someone else", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "--no-validate"]
+
+[[case]]
+name = "app deploy foreign package force"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "someone else", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "--no-validate", "--force"]
+
+[[case]]
+name = "app deploy external distribution"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "someone else", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "EXTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "--no-validate"]
+
+[[case]]
+name = "app deploy validation fails"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"FAIL\", \"errors\": [{\"message\": \"bad sql\", \"errorCode\": \"093000\"}], \"warnings\": [{\"message\": \"careful\", \"errorCode\": null}]}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy"]
+
+[[case]]
+name = "app deploy paths"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "app/setup.sql", "--no-validate"]
+
+[[case]]
+name = "app deploy paths and prune"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "app/setup.sql", "--prune"]
+
+[[case]]
+name = "app deploy dir without recursive"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "app", "--no-validate"]
+
+[[case]]
+name = "app deploy missing path"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "nope.sql", "--no-validate"]
+
+[[case]]
+name = "app deploy runtime option"
+covers = ["snow app deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "deploy", "--upload-only"]
+
+[[case]]
+name = "app validate"
+covers = ["snow app validate"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "app validate fails"
+covers = ["snow app validate"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"FAIL\", \"errors\": [{\"message\": \"bad sql\", \"errorCode\": \"093000\"}], \"warnings\": [{\"message\": \"careful\", \"errorCode\": null}]}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "validate"]
+
+[[case]]
+name = "app validate json"
+covers = ["snow app validate"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"FAIL\", \"errors\": [{\"message\": \"bad sql\", \"errorCode\": \"093000\"}], \"warnings\": [{\"message\": \"careful\", \"errorCode\": null}]}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "validate", "--format", "json"]
+
+[[case]]
+name = "app version create from manifest"
+covers = ["snow app version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "create", "--skip-git-check"]
+
+[[case]]
+name = "app version create explicit"
+covers = ["snow app version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "create", "v2", "--label", "L", "--skip-git-check", "--format", "json"]
+
+[[case]]
+name = "app version create patch"
+covers = ["snow app version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show versions like", columns = ["version", "patch"], rows = [["V1", 1], ["V1", 2]] }, { match = "add patch", columns = ["version", "patch"], rows = [["V1", 3]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "create", "v1", "--patch", "3", "--skip-git-check", "--force"]
+
+[[case]]
+name = "app version create patch missing version"
+covers = ["snow app version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "create", "v9", "--patch", "1", "--skip-git-check"]
+
+[[case]]
+name = "app version create in release directive"
+covers = ["snow app version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [["DEFAULT", "V1", 0]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "create", "--skip-git-check"]
+
+[[case]]
+name = "app version create from stage missing package"
+covers = ["snow app version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "create", "--from-stage", "--skip-git-check"]
+
+[[case]]
+name = "app version drop force"
+covers = ["snow app version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "drop", "v1", "--force"]
+
+[[case]]
+name = "app version drop from manifest"
+covers = ["snow app version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "drop"]
+
+[[case]]
+name = "app version drop interactive no"
+covers = ["snow app version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+stdin = "n\n"
+argv = ["app", "version", "drop", "v1", "--interactive"]
+
+[[case]]
+name = "app version drop sync"
+covers = ["snow app version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": [{\"name\": \"ENABLE_SYNC_GLOBAL_VERSION_DROP\", \"value\": \"true\"}]}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "drop", "v1", "--force"]
+
+[[case]]
+name = "app version drop no package"
+covers = ["snow app version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "drop", "v1", "--force"]
+
+[[case]]
+name = "app version drop missing version"
+covers = ["snow app version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "drop version", error = { code = 93031, message = "Version does not exist" } }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["app", "version", "drop", "v1", "--force"]
+
+[[case]]
+name = "app bundle"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle templates"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/manifest.yml\n        dest: ./\n      - src: app/setup.sql\n        dest: ./\n        processors:\n          - templates\n      - src: app/README.md\n        dest: ./\n        processors:\n          - name: templates\nenv:\n  foo: bar\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "select '<% ctx.entities.pkg.identifier %>', '<% ctx.env.foo %>';\n", "app/README.md" = "pkg <% ctx.entities.pkg.stage %>\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle template error"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/manifest.yml\n        dest: ./\n      - src: app/setup.sql\n        dest: ./\n        processors:\n          - templates\n      - src: app/README.md\n        dest: ./\n        processors:\n          - name: templates\nenv:\n  foo: bar\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "select '<% ctx.entities.pkg.identifier %>', '<% ctx.env.foo %>';\n", "app/README.md" = "bad <% ctx.nope %>\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle no artifacts"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts: []\n" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "app bundle v1"
+covers = ["snow app bundle"]
+files = { "snowflake.yml" = "definition_version: 1\nnative_app:\n  name: myapp\n  artifacts:\n    - src: app/*\n      dest: ./\n", "app/manifest.yml" = "x: 1\n", "app/setup.sql" = "" }
+argv = ["app", "bundle"]
+
+[[case]]
+name = "ws deploy package"
+covers = ["snow ws deploy"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "deploy", "--entity-id", "pkg"]
+
+[[case]]
+name = "ws validate package"
+covers = ["snow ws validate"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "validate", "--entity-id", "pkg"]
+
+[[case]]
+name = "ws version list package"
+covers = ["snow ws version list"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "show versions in", columns = ["version", "patch"], rows = [["V1", 0]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "version", "list", "--entity-id", "pkg"]
+
+[[case]]
+name = "ws version create package"
+covers = ["snow ws version create"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "validate_native_app_setup", columns = ["x"], rows = [["{\"status\": \"SUCCESS\", \"errors\": [], \"warnings\": []}"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "version", "create", "--entity-id", "pkg", "--skip-git-check"]
+
+[[case]]
+name = "ws version drop package"
+covers = ["snow ws version drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "version", "drop", "v1", "--entity-id", "pkg", "--force"]
+
+[[case]]
+name = "ws bundle package"
+covers = ["snow ws bundle"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "bundle", "--entity-id", "pkg"]
+
+[[case]]
+name = "ws drop package"
+covers = ["snow ws drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "drop", "--entity-id", "pkg"]
+
+[[case]]
+name = "ws drop package with versions"
+covers = ["snow ws drop"]
+connection = true
+stages = true
+files = { "snowflake.yml" = "definition_version: 2\nentities:\n  pkg:\n    type: application package\n    identifier: my_pkg\n    artifacts:\n      - src: app/*\n        dest: ./\n", "app/manifest.yml" = "manifest_version: 1\nversion:\n  name: v1\n  label: First\nartifacts:\n  setup_script: setup.sql\n", "app/setup.sql" = "create application role app_public;\n", "app/README.md" = "# readme\n" }
+rules = [{ match = "bootstrap_data_request", columns = ["x"], rows = [["{\"clientParamsInfo\": []}"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [["2024-01-01", "MY_PKG", "GENERATED_BY_SNOWFLAKECLI", "TEST_ROLE", "INTERNAL"]] }, { match = "describe application package", columns = ["property", "value"], rows = [["name", "MY_PKG"], ["distribution", "INTERNAL"]] }, { match = "show versions in", columns = ["version", "patch"], rows = [["V1", 0]] }, { match = "select current_role\\(\\)", columns = ["CURRENT_ROLE()"], rows = [["TEST_ROLE"]] }, { match = "show application packages like", columns = ["created_on", "name", "comment", "owner", "distribution"], rows = [] }, { match = "show stages like", columns = ["name"], rows = [] }, { match = "show versions like", columns = ["version", "patch"], rows = [] }, { match = "show release directives", columns = ["name", "version", "patch"], rows = [] }, { match = "show versions in", columns = ["version", "patch"], rows = [] }, { match = "show release channels", columns = ["name"], rows = [] }]
+argv = ["ws", "drop", "--entity-id", "pkg"]

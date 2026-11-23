@@ -1,0 +1,65 @@
+[[case]]
+name = "spcs build-image"
+covers = ["snow spcs service build-image"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ match = "describe service", columns = ["name", "status"], rows = [["J", "DONE"]] }, { match = "GET_SERVICE_LOGS", columns = ["SYSTEM$GET_SERVICE_LOGS"], rows = [["2024-01-01T00:00:01Z step 1\n2024-01-01T00:00:02Z step 2"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["build_image_[0-9a-f]{8}", "build_image_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "build-image", "--compute-pool", "pool", "--image-repository", "db.s.repo", "--image-name", "my_img", "--image-tag", "v1", "--build-context-dir", "ctx"]
+
+[[case]]
+name = "spcs build-image existing stage"
+covers = ["snow spcs service build-image"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ match = "describe service", columns = ["name", "status"], rows = [["J", "FAILED"]] }, { match = "GET_SERVICE_LOGS", columns = ["SYSTEM$GET_SERVICE_LOGS"], rows = [["2024-01-01T00:00:01Z step 1\n2024-01-01T00:00:02Z step 2"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["build_image_[0-9a-f]{8}", "build_image_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "build-image", "--compute-pool", "pool", "--image-repository", "db.s.repo", "--image-name", "my_img", "--image-tag", "v1", "--build-context-dir", "ctx", "--stage", "st", "--job-name", "my_job", "--eai-name", "e1"]
+
+[[case]]
+name = "spcs build-image no dockerfile"
+covers = ["snow spcs service build-image"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/x" = "1" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["build_image_[0-9a-f]{8}", "build_image_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "build-image", "--compute-pool", "pool", "--image-repository", "db.s.repo", "--image-name", "my_img", "--image-tag", "v1", "--build-context-dir", "ctx"]
+
+[[case]]
+name = "spcs build-image bad tag"
+covers = ["snow spcs service build-image"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["build_image_[0-9a-f]{8}", "build_image_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "build-image", "--compute-pool", "pool", "--image-repository", "db.s.repo", "--image-name", "my_img", "--image-tag", "bad tag!", "--build-context-dir", "ctx"]
+
+[[case]]
+name = "spcs build-image bad job"
+covers = ["snow spcs service build-image"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["build_image_[0-9a-f]{8}", "build_image_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "build-image", "--compute-pool", "pool", "--image-repository", "db.s.repo", "--image-name", "my_img", "--image-tag", "v1", "--build-context-dir", "ctx", "--job-name", "a-b"]
+
+[[case]]
+name = "spcs build-image repo no db"
+covers = ["snow spcs service build-image"]
+connection = true
+stages = true
+sort_sql = true
+files = { "ctx/Dockerfile" = "FROM python:3.11\n", "ctx/app/main.py" = "print(1)\n" }
+rules = [{ match = "describe service", columns = ["name", "status"], rows = [["J", "DONE"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }]
+normalize = [["build_image_[0-9a-f]{8}", "build_image_<UUID>"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"]]
+argv = ["spcs", "service", "build-image", "--compute-pool", "pool", "--image-repository", "repo", "--image-name", "my_img", "--image-tag", "v1", "--build-context-dir", "ctx", "--database", ""]

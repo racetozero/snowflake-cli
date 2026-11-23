@@ -1,0 +1,81 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/snow-rich",
+  "crates/snow-click",
+  "crates/snow-spec",
+  "crates/snow-connector",
+  "crates/snow-api",
+  "crates/snow-plugins",
+  "crates/snow",
+]
+
+[workspace.package]
+version = "3.35.0-dev0"
+edition = "2024"
+rust-version = "1.100"
+license = "Apache-2.0"
+repository = "https://github.com/racetozero/snowflake-cli"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+# The Python reference that this port is verified against. scripts/upstream.sh
+# clones this commit; scripts/gen_cli_spec.py extracts the command tree from it.
+[workspace.metadata.snowflake-cli]
+repository = "snowflakedb/snowflake-cli"
+commit = "3ba03140b05959ebf8d20e3e756c696907e8f110"
+version = "3.35.0.dev0"
+checked_at = "2026-11-20T09:20:00Z"
+
+[workspace.dependencies]
+snow-rich = { path = "crates/snow-rich" }
+snow-click = { path = "crates/snow-click" }
+snow-spec = { path = "crates/snow-spec" }
+snow-connector = { path = "crates/snow-connector" }
+snow-api = { path = "crates/snow-api" }
+snow-plugins = { path = "crates/snow-plugins" }
+aes = "0.8"
+base64 = "0.22"
+crossterm = { version = "0.29", default-features = false, features = ["events", "windows"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dirs = "6"
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+hmac = "0.12"
+indexmap = { version = "2", features = ["serde"] }
+md-5 = "0.10"
+mimalloc = "0.1.52"
+minijinja = "2"
+rand = "0.8"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+regex = "1"
+rsa = { version = "0.9", features = ["sha2", "pem"] }
+pkcs8 = { version = "0.10", features = ["encryption", "pem", "std"] }
+chrono-tz = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
+serde_yaml = "0.9"
+sha2 = "0.10"
+tempfile = "3"
+semver = "1"
+sha1 = "0.10"
+self-replace = "1.5"
+toml_edit = "0.22"
+unicode-width = "0.2"
+url = "2"
+webpki-roots = "0.26"
+ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
+uuid = { version = "1", features = ["v4"] }
+yaml-rust2 = { version = "0.13", default-features = false }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.dist]
+inherits = "release"
+lto = "fat"

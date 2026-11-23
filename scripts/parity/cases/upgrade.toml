@@ -1,0 +1,17 @@
+[[case]]
+name = "upgrade refused"
+covers = ["snow upgrade"]
+argv = ["upgrade"]
+normalize = [["This install is \\w+\\.", "This install is <CHANNEL>."]]
+
+[[case]]
+name = "upgrade dry-run json"
+covers = ["snow upgrade"]
+argv = ["upgrade", "--dry-run", "--format", "json"]
+normalize = [["\"channel\": \"\\w+\"", "\"channel\": \"<CHANNEL>\""]]
+
+[[case]]
+name = "upgrade air gapped"
+covers = ["snow upgrade"]
+config = "air_gapped = true"
+argv = ["upgrade", "--revert"]

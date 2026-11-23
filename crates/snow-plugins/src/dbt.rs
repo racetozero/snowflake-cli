@@ -515,14 +515,14 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
         .str("source")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    let project = crate::stage::resolve(&abs(&project));
+    let project = crate::paths::resolve(abs(&project));
     let profiles_dir = cli
         .str("profiles_dir")
-        .map(|p| crate::stage::resolve(&abs(std::path::Path::new(&p))))
+        .map(|p| crate::paths::resolve(abs(std::path::Path::new(&p))))
         .unwrap_or_else(|| project.clone());
     let env_dir = cli
         .str("env_file_dir")
-        .map(|p| crate::stage::resolve(&abs(std::path::Path::new(&p))));
+        .map(|p| crate::paths::resolve(abs(std::path::Path::new(&p))));
     let dbt_project = project.join("dbt_project.yml");
     if !dbt_project.exists() {
         return Err(SnowError::cli(format!(

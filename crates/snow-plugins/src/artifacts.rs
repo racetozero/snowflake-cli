@@ -548,9 +548,7 @@ pub fn build_native_bundle(
     deploy_root: &Path,
     artifacts: &[PyV],
 ) -> Result<BundleMap> {
-    let resolved = deploy_root
-        .canonicalize()
-        .unwrap_or_else(|_| resolve_without_follow(deploy_root));
+    let resolved = crate::paths::resolve(deploy_root);
     if resolved.exists() && !resolved.is_dir() {
         return Err(SnowError::click(format!(
             "Deploy root {} exists, but is not a directory!",
@@ -558,9 +556,7 @@ pub fn build_native_bundle(
         ))
         .named("DeployRootError"));
     }
-    let proot = project_root
-        .canonicalize()
-        .unwrap_or_else(|_| project_root.to_path_buf());
+    let proot = crate::paths::resolve(project_root);
     if !resolved.starts_with(&proot) || resolved == proot {
         return Err(SnowError::click(format!(
             "Deploy root {} is not a descendent of the project directory!",
@@ -640,7 +636,7 @@ fn sync_inner(
         ))?;
     }
     let path = crate::stage_execute::parts_path(stage_root)?;
-    let resolved = crate::stage::resolve(deploy_root);
+    let resolved = crate::paths::resolve(deploy_root);
     cli.console.step(&format!(
         "Performing a diff between the Snowflake stage: {path} and your local deploy_root: {}.",
         resolved.display()

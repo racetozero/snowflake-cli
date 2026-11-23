@@ -118,7 +118,7 @@ pub fn copy(cli: &mut Cli) -> Result<Output> {
     let recursive = cli.flag("recursive");
     if get {
         let cwd = std::env::current_dir().unwrap_or_default();
-        let target = resolve(&cwd.join(&dest));
+        let target = crate::paths::resolve(cwd.join(&dest));
         if !recursive {
             cli.console.warning(
                 "Use `--recursive` flag, which copy files recursively with directory structure. This will be the default behavior in the future.",
@@ -149,7 +149,7 @@ pub fn copy(cli: &mut Cli) -> Result<Output> {
         )?)
     } else {
         let cwd = std::env::current_dir().unwrap_or_default();
-        let abs = resolve(&cwd.join(&local));
+        let abs = crate::paths::resolve(cwd.join(&local));
         let c = put(
             cli,
             &abs.to_string_lossy(),
@@ -165,27 +165,6 @@ pub fn copy(cli: &mut Cli) -> Result<Output> {
         cli.execute_query(&format!("ALTER STAGE {} REFRESH", stage.stage()))?;
     }
     Ok(out)
-}
-
-/// `Path.resolve()` (non-strict): absolute, `..` folded, symlinks followed where they exist.
-pub fn resolve(p: &std::path::Path) -> std::path::PathBuf {
-    if let Ok(c) = p.canonicalize() {
-        return c;
-    }
-    let mut out = std::path::PathBuf::new();
-    for c in p.components() {
-        match c {
-            std::path::Component::ParentDir => {
-                out.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => out.push(other),
-        }
-    }
-    match (out.parent(), out.file_name()) {
-        (Some(par), Some(name)) if par.exists() => resolve(par).join(name),
-        _ => out,
-    }
 }
 
 static UNQUOTED_URI: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
@@ -399,13 +378,13 @@ pub fn get_recursive(
         StagePath::from_stage_str(src)
     };
     let files = iter_stage(cli, &root, git)?;
-    let resolved = resolve(dest);
+    let resolved = crate::paths::resolve(dest);
     let mut singles = Vec::new();
     let mut groups: indexmap::IndexMap<Vec<String>, Vec<StagePath>> = indexmap::IndexMap::new();
     let mut rels: Vec<Vec<String>> = Vec::new();
     for f in &files {
         let local = local_target(f, dest, &root);
-        let rl = resolve(&local);
+        let rl = crate::paths::resolve(&local);
         if !rl.starts_with(&resolved) {
             return Err(SnowError::cli(format!(
                 "Refusing to write outside the destination directory: the server returned a path that would resolve to '{}', which is outside '{}'. Aborting download.",

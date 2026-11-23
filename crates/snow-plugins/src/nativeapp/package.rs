@@ -851,7 +851,7 @@ pub fn sync_package_stage(
         )?;
         facade::create_stage(cli, &stage_fqn)?;
     }
-    let resolved_root = crate::stage::resolve(deploy_root);
+    let resolved_root = crate::paths::resolve(deploy_root);
     if print_diff {
         cli.console.step(&format!(
             "Performing a diff between the Snowflake stage: {} and your local deploy_root: {}.",

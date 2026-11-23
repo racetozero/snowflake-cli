@@ -66,7 +66,7 @@ pub fn copy(cli: &mut Cli) -> snow_api::Result<snow_api::output::Output> {
     }
     let parallel = cli.int("parallel").unwrap_or(4);
     let cwd = std::env::current_dir().unwrap_or_default();
-    let target = crate::stage::resolve(&cwd.join(&dest));
+    let target = crate::paths::resolve(cwd.join(&dest));
     let rows = crate::stage::get_recursive(cli, &src, &target, parallel, true)?;
     Ok(snow_api::output::Output::Collection(rows))
 }

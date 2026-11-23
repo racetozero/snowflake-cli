@@ -25,7 +25,9 @@ pub fn convert(ty: &'static str, raw: &str) -> Result<Value> {
                     "Stage paths are not supported. Please provide a local {noun} path."
                 )));
             }
-            Ok(Value::Str(crate::paths::resolve(raw)))
+            Ok(Value::Str(
+                crate::paths::resolve(raw).to_string_lossy().into_owned(),
+            ))
         }
         "_parse_tag" => {
             crate::spcs::parse_tag(raw)?;

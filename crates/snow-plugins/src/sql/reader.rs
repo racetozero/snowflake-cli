@@ -408,7 +408,7 @@ impl Reader<'_> {
             }
             let src = parsed.source_path.clone().unwrap_or_default();
             let identity = if parsed.kind == Kind::File {
-                crate::paths::resolve(&src)
+                crate::paths::resolve(&src).to_string_lossy().into_owned()
             } else {
                 src.clone()
             };
@@ -474,7 +474,7 @@ impl Reader<'_> {
             };
             let content = self.renderer.pre_render(console, &content)?;
             let stmts = split_raw(&content, self.remove_comments);
-            let mut seen = vec![crate::paths::resolve(f)];
+            let mut seen = vec![crate::paths::resolve(f).to_string_lossy().into_owned()];
             self.recurse(console, stmts, &mut seen, 0, &mut 0)?;
         }
         Ok(())

@@ -15,24 +15,13 @@ pub fn for_terminal(text: &str) -> String {
 }
 
 /// Strip escapes and prefix `'` to values a spreadsheet would evaluate.
-pub fn for_csv(text: &str) -> String {
+pub(crate) fn for_csv(text: &str) -> String {
     let t = for_terminal(text);
     if t.starts_with(['=', '+', '-', '@', '\t', '\r']) {
         format!("'{t}")
     } else {
         t
     }
-}
-
-/// Strip escapes and prompt-unsafe C0 controls (keeps TAB and LF).
-pub fn for_prompt(text: &str) -> String {
-    for_terminal(text)
-        .chars()
-        .filter(|c| {
-            let u = *c as u32;
-            !(u <= 0x08 || (0x0b..=0x1f).contains(&u) || u == 0x7f)
-        })
-        .collect()
 }
 
 /// `snowflake.connector.secret_detector.SecretDetector.mask_secrets`.

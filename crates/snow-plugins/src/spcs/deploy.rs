@@ -56,10 +56,6 @@ fn boolean(m: &PyV, k: &str) -> Option<bool> {
     }
 }
 
-fn opt_str(m: &PyV, k: &str) -> Option<String> {
-    m.get(k).filter(|v| !v.is_none()).map(PyV::py_str)
-}
-
 /// `Tag` models as `name=value` strings for `tags_clause`.
 fn tags(m: &PyV) -> Vec<String> {
     m.get("tags")
@@ -89,11 +85,11 @@ pub fn compute_pool(cli: &mut Cli) -> Result<Output> {
     let name = ident(&m, &id)?;
     let auto_resume = boolean(&m, "auto_resume");
     let secs = int(&m, "auto_suspend_seconds");
-    let comment = opt_str(&m, "comment");
+    let comment = m.str_of("comment");
     let sql = if cli.flag("upgrade") {
         super::compute_pool::set_sql(&name, Some(min), Some(max), auto_resume, secs, comment)?
     } else {
-        let family = opt_str(&m, "instance_family").unwrap_or_else(|| "None".into());
+        let family = m.str_of("instance_family").unwrap_or_else(|| "None".into());
         super::compute_pool::create_sql(
             &name,
             min,
@@ -131,7 +127,7 @@ pub fn service(cli: &mut Cli) -> Result<Output> {
     let min = int(&m, "min_instances").unwrap_or(1);
     let max = validate_and_set_instances(min, int(&m, "max_instances"), "instances")?;
     let name = ident(&m, &id)?;
-    let stage = opt_str(&m, "stage").unwrap_or_else(|| "None".into());
+    let stage = m.str_of("stage").unwrap_or_else(|| "None".into());
     let stage_fqn = Fqn::from_stage(&stage)?;
     cli.execute_query(&crate::stage::create_query(
         &stage_fqn, false, None, false, None,
@@ -178,15 +174,15 @@ pub fn service(cli: &mut Cli) -> Result<Output> {
         std::fs::remove_dir_all(out)?;
     }
     let stage_sql = snow_api::stage_path::StagePath::from_stage_str(&stage).path_for_sql();
-    let spec = to_string_literal(&opt_str(&m, "spec_file").unwrap_or_else(|| "None".into()));
+    let spec = to_string_literal(&m.str_of("spec_file").unwrap_or_else(|| "None".into()));
     let eai: Option<Vec<String>> = m
         .get("external_access_integrations")
         .and_then(PyV::as_list)
         .map(|l| l.iter().map(PyV::py_str).collect());
-    let wh = opt_str(&m, "query_warehouse");
+    let wh = m.str_of("query_warehouse");
     let auto_resume = boolean(&m, "auto_resume").unwrap_or(true);
     let secs = int(&m, "auto_suspend_secs");
-    let comment = opt_str(&m, "comment");
+    let comment = m.str_of("comment");
     if cli.flag("upgrade") {
         let set = super::services::set_sql(
             &name,
@@ -207,7 +203,7 @@ pub fn service(cli: &mut Cli) -> Result<Output> {
         let c = cli.execute_query(&q)?;
         return Ok(cli.single_query_result(&c));
     }
-    let pool = to_identifier(&opt_str(&m, "compute_pool").unwrap_or_else(|| "None".into()));
+    let pool = to_identifier(&m.str_of("compute_pool").unwrap_or_else(|| "None".into()));
     let mut q = vec![
         format!("CREATE SERVICE {name}"),
         format!("IN COMPUTE POOL {pool}"),
@@ -230,10 +226,7 @@ pub fn service(cli: &mut Cli) -> Result<Output> {
     if let Some(e) = eai.filter(|e| !e.is_empty()) {
         q.push(format!(
             "EXTERNAL_ACCESS_INTEGRATIONS = ({})",
-            e.iter()
-                .map(|x| to_identifier(x))
-                .collect::<Vec<_>>()
-                .join(",")
+            super::services::eai_list(&e)
         ));
     }
     if let Some(c) = comment.filter(|c| !c.is_empty()) {

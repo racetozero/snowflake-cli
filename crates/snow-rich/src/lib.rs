@@ -14,12 +14,11 @@ pub mod style;
 pub mod text;
 
 pub use markdown::{MdKind, MdTok};
-pub use render::{Column, M, Opts, R, Table, measure, render, render_lines, segments_to_string};
-pub use segment::{Segment, cell_len};
+pub use render::{Column, R, Table, segments_to_string};
 pub use style::{Style, theme};
 pub use text::{Justify, Overflow, Text};
 
 /// Render `r` at `width` columns and return the printed text.
 pub fn to_string(r: &R, width: usize, color: bool) -> String {
-    segments_to_string(&render(r, Opts::new(width)), color)
+    segments_to_string(&render::render(r, render::Opts::new(width)), color)
 }

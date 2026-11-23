@@ -5,7 +5,7 @@ use snow_rich::segment::{cell_len, chop_cells};
 
 const PIPE_MAX_COLUMN_WIDTH: usize = 256;
 const COLUMN_FLOOR: usize = 8;
-pub const LARGE_RESULT_HINT: &str =
+pub(crate) const LARGE_RESULT_HINT: &str =
     "Large result: table output is streamed. Use --format csv for faster export.";
 
 fn content_width(line: &str) -> usize {
@@ -209,17 +209,12 @@ pub fn stream(columns: &[String], rows: &[Vec<String>], plain: bool, sink: &mut 
     if !plain {
         out.push_str(rule().trim_end_matches('\n'));
     }
-    sink_write(sink, &out);
-    // on_success trailer
+    sink.write_str(&out);
     if plain {
         return;
     }
     if sink.is_tty {
-        sink_write(sink, "\n");
+        sink.write_str("\n");
     }
-    sink_write(sink, "\n");
-}
-
-fn sink_write(sink: &mut Sink, s: &str) {
-    let _ = sink.out.write_all(s.as_bytes());
+    sink.write_str("\n");
 }

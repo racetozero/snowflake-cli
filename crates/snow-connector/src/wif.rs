@@ -5,10 +5,10 @@
 //! ECS container credentials, EC2 instance metadata) and signs a
 //! `GetCallerIdentity` request with SigV4 exactly as `SigV4Auth` does.
 
-use crate::{DbError, ErrorKind};
+use crate::cloud::xml_text;
+use crate::{DbError, ErrorKind, hex};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use hmac::{Hmac, Mac};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
@@ -39,12 +39,10 @@ fn env(k: &str) -> Option<String> {
     std::env::var(k).ok().filter(|v| !v.is_empty())
 }
 
-/// An INI file as `section -> key -> value`.
-fn ini(
-    path: &std::path::Path,
-) -> std::collections::HashMap<String, std::collections::HashMap<String, String>> {
-    let mut out: std::collections::HashMap<String, std::collections::HashMap<String, String>> =
-        Default::default();
+type Ini = std::collections::HashMap<String, std::collections::HashMap<String, String>>;
+
+fn ini(path: &std::path::Path) -> Ini {
+    let mut out = Ini::default();
     let Ok(text) = std::fs::read_to_string(path) else {
         return out;
     };
@@ -65,6 +63,26 @@ fn ini(
         }
     }
     out
+}
+
+/// The active profile (`AWS_PROFILE`) and the parsed `~/.aws/config` (`AWS_CONFIG_FILE`).
+fn aws_profile_config() -> (String, Ini) {
+    let profile = env("AWS_PROFILE")
+        .or_else(|| env("AWS_DEFAULT_PROFILE"))
+        .unwrap_or_else(|| "default".into());
+    let config_path: std::path::PathBuf = env("AWS_CONFIG_FILE")
+        .map(Into::into)
+        .unwrap_or_else(|| home().join(".aws/config"));
+    (profile, ini(&config_path))
+}
+
+/// The `~/.aws/config` section of a profile.
+fn profile_section(profile: &str) -> String {
+    if profile == "default" {
+        "default".to_string()
+    } else {
+        format!("profile {profile}")
+    }
 }
 
 fn home() -> std::path::PathBuf {
@@ -107,13 +125,6 @@ pub fn aws_region() -> Result<String, DbError> {
         .ok_or_else(|| fail("No AWS region was found. Ensure the application is running on AWS."))
 }
 
-fn xml_text(xml: &str, tag: &str) -> Option<String> {
-    let open = format!("<{tag}>");
-    let s = xml.find(&open)? + open.len();
-    let e = xml[s..].find(&format!("</{tag}>"))? + s;
-    Some(xml[s..e].to_string())
-}
-
 /// botocore's default credential chain, for the providers a workload uses.
 pub fn aws_credentials(region: &str) -> Option<AwsCreds> {
     if let (Some(k), Some(s)) = (env("AWS_ACCESS_KEY_ID"), env("AWS_SECRET_ACCESS_KEY")) {
@@ -140,20 +151,7 @@ pub fn aws_credentials(region: &str) -> Option<AwsCreds> {
             token: xml_text(&xml, "SessionToken"),
         });
     }
-    let profile = env("AWS_PROFILE")
-        .or_else(|| env("AWS_DEFAULT_PROFILE"))
-        .unwrap_or_else(|| "default".into());
-    let config_path: std::path::PathBuf = env("AWS_CONFIG_FILE")
-        .map(Into::into)
-        .unwrap_or_else(|| home().join(".aws/config"));
-    let config = ini(&config_path);
-    let section_of = |p: &str| {
-        if p == "default" {
-            "default".to_string()
-        } else {
-            format!("profile {p}")
-        }
-    };
+    let (profile, config) = aws_profile_config();
     let static_creds = |p: &str| -> Option<AwsCreds> {
         let creds_file: std::path::PathBuf = env("AWS_SHARED_CREDENTIALS_FILE")
             .map(Into::into)
@@ -171,10 +169,10 @@ pub fn aws_credentials(region: &str) -> Option<AwsCreds> {
         ini(&creds_file)
             .get(p)
             .and_then(from)
-            .or_else(|| config.get(&section_of(p)).and_then(from))
+            .or_else(|| config.get(&profile_section(p)).and_then(from))
     };
     // assume-role profile (`role_arn` + `source_profile`).
-    if let Some(sec) = config.get(&section_of(&profile))
+    if let Some(sec) = config.get(&profile_section(&profile))
         && let (Some(role), Some(source)) = (sec.get("role_arn"), sec.get("source_profile"))
     {
         let base = static_creds(source)?;
@@ -203,7 +201,7 @@ pub fn aws_credentials(region: &str) -> Option<AwsCreds> {
         });
     }
     // SSO (`SSOProvider`): a profile with sso_account_id / sso_role_name.
-    if let Some(sec) = config.get(&section_of(&profile))
+    if let Some(sec) = config.get(&profile_section(&profile))
         && (sec.contains_key("sso_role_name") || sec.contains_key("sso_account_id"))
     {
         return sso_credentials(&profile, sec, &config);
@@ -213,7 +211,7 @@ pub fn aws_credentials(region: &str) -> Option<AwsCreds> {
     }
     // `credential_process` (botocore ProcessProvider): shell-split, JSON on stdout.
     if let Some(cmd) = config
-        .get(&section_of(&profile))
+        .get(&profile_section(&profile))
         .and_then(|s| s.get("credential_process"))
     {
         PROCESS_ERROR.with(|e| *e.borrow_mut() = None);
@@ -315,33 +313,8 @@ pub fn sts_authority(region: &str) -> String {
     }
 }
 
-fn hmac(key: &[u8], msg: &str) -> Vec<u8> {
-    let mut m = Hmac::<Sha256>::new_from_slice(key).expect("hmac key");
-    m.update(msg.as_bytes());
-    m.finalize().into_bytes().to_vec()
-}
-
-fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
 /// `SigV4Auth(creds, "sts", region).add_auth(request)` for the GetCallerIdentity POST;
 /// the credential is base64 of `{"url", "method", "headers"}`.
-pub fn aws_attestation_with(
-    creds: &AwsCreds,
-    region: &str,
-    authority: &str,
-    amzdate: &str,
-) -> String {
-    aws_attestation_with_base(
-        creds,
-        region,
-        authority,
-        &format!("https://{authority}"),
-        amzdate,
-    )
-}
-
 fn aws_attestation_with_base(
     creds: &AwsCreds,
     region: &str,
@@ -373,28 +346,16 @@ fn aws_attestation_with_base(
     let canonical = format!(
         "POST\n/\nAction=GetCallerIdentity&Version=2011-06-15\n{canon_headers}\n{signed}\n{payload}"
     );
-    let short = &amzdate[..8];
-    let scope = format!("{short}/{region}/sts/aws4_request");
-    let to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{}",
-        hex(&Sha256::digest(canonical.as_bytes()))
-    );
-    let k = hmac(
-        &hmac(
-            &hmac(
-                &hmac(format!("AWS4{}", creds.secret).as_bytes(), short),
-                region,
-            ),
-            "sts",
-        ),
-        "aws4_request",
-    );
-    let sig = hex(&hmac(&k, &to_sign));
     headers.push((
         "Authorization".into(),
-        format!(
-            "AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed}, Signature={sig}",
-            creds.key_id
+        crate::sigv4::authorization(
+            &canonical,
+            &signed,
+            amzdate,
+            region,
+            "sts",
+            &creds.key_id,
+            &creds.secret,
         ),
     ));
     let mut h = serde_json::Map::new();
@@ -570,26 +531,14 @@ fn sts_call(
         "POST\n/\n\n{canon}\n{signed}\n{}",
         hex(&Sha256::digest(body.as_bytes()))
     );
-    let short = &amzdate[..8];
-    let scope = format!("{short}/{region}/sts/aws4_request");
-    let to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{}",
-        hex(&Sha256::digest(canonical.as_bytes()))
-    );
-    let k = hmac(
-        &hmac(
-            &hmac(
-                &hmac(format!("AWS4{}", creds.secret).as_bytes(), short),
-                region,
-            ),
-            "sts",
-        ),
-        "aws4_request",
-    );
-    let auth = format!(
-        "AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed}, Signature={}",
-        creds.key_id,
-        hex(&hmac(&k, &to_sign))
+    let auth = crate::sigv4::authorization(
+        &canonical,
+        &signed,
+        &amzdate,
+        region,
+        "sts",
+        &creds.key_id,
+        &creds.secret,
     );
     let mut req = agent()
         .post(&format!("{base_url}/"))
@@ -859,19 +808,10 @@ pub fn aws_attestation(opts: &Options) -> Result<String, DbError> {
     // botocore builds an STS client to resolve the endpoint; an SSO profile naming a
     // missing sso-session fails there first.
     if !overridden {
-        let profile = env("AWS_PROFILE")
-            .or_else(|| env("AWS_DEFAULT_PROFILE"))
-            .unwrap_or_else(|| "default".into());
-        let config_path: std::path::PathBuf = env("AWS_CONFIG_FILE")
-            .map(Into::into)
-            .unwrap_or_else(|| home().join(".aws/config"));
-        let config = ini(&config_path);
-        let section = if profile == "default" {
-            "default".to_string()
-        } else {
-            format!("profile {profile}")
-        };
-        if let Some(name) = config.get(&section).and_then(|s| s.get("sso_session"))
+        let (profile, config) = aws_profile_config();
+        if let Some(name) = config
+            .get(&profile_section(&profile))
+            .and_then(|s| s.get("sso_session"))
             && !config.contains_key(&format!("sso-session {name}"))
         {
             return Err(fail(format!(
@@ -897,37 +837,21 @@ pub fn aws_attestation(opts: &Options) -> Result<String, DbError> {
     let outbound = opts.aws_use_outbound_token
         || env("SNOWFLAKE_ENABLE_AWS_WIF_OUTBOUND_TOKEN")
             .is_some_and(|v| v.eq_ignore_ascii_case("true"));
-    aws_attestation_from(
-        &region,
-        creds,
-        opts,
-        (authority, base_url, overridden),
-        outbound,
-    )
+    aws_attestation_from(&region, creds, opts, (authority, base_url), outbound)
 }
 
 fn aws_attestation_from(
     region: &str,
     mut creds: AwsCreds,
     opts: &Options,
-    endpoint: (String, String, bool),
+    endpoint: (String, String),
     outbound: bool,
 ) -> Result<String, DbError> {
-    let (authority, base_url, overridden) = endpoint;
+    let (authority, base_url) = endpoint;
     let region = region.to_string();
     // Role chaining (`get_aws_session`): each AssumeRole uses the previous credentials.
-    let sts_base = if overridden {
-        base_url.clone()
-    } else {
-        format!("https://{}", sts_authority(&region))
-    };
-    let sts_auth = if overridden {
-        authority.clone()
-    } else {
-        sts_authority(&region)
-    };
     for arn in &opts.impersonation_path {
-        let xml = sts_call(&creds, &region, &sts_base, &sts_auth, &[("Action", "AssumeRole"), ("Version", "2011-06-15"), ("RoleArn", arn), ("RoleSessionName", "identity-federation-session")])
+        let xml = sts_call(&creds, &region, &base_url, &authority, &[("Action", "AssumeRole"), ("Version", "2011-06-15"), ("RoleArn", arn), ("RoleSessionName", "identity-federation-session")])
             .map_err(|e| fail(format!("An error occurred (AssumeRole) when calling the AssumeRole operation for role '{arn}': {e}")))?;
         creds = AwsCreds {
             key_id: xml_text(&xml, "AccessKeyId")
@@ -938,7 +862,7 @@ fn aws_attestation_from(
         };
     }
     if outbound {
-        let xml = sts_call(&creds, &region, &sts_base, &sts_auth, &[("Action", "GetWebIdentityToken"), ("Version", "2011-06-15"), ("Audience.member.1", AUDIENCE), ("SigningAlgorithm", "ES384")])
+        let xml = sts_call(&creds, &region, &base_url, &authority, &[("Action", "GetWebIdentityToken"), ("Version", "2011-06-15"), ("Audience.member.1", AUDIENCE), ("SigningAlgorithm", "ES384")])
             .map_err(|e| fail(format!("An error occurred (GetWebIdentityToken) when calling the GetWebIdentityToken operation: {e}")))?;
         return xml_text(&xml, "WebIdentityToken")
             .ok_or_else(|| fail("GetWebIdentityToken returned no token"));
@@ -1192,10 +1116,11 @@ mod tests {
             secret: "SECRET".into(),
             token: Some("TOK".into()),
         };
-        let got = aws_attestation_with(
+        let got = aws_attestation_with_base(
             &c,
             "us-west-2",
             "sts.us-west-2.amazonaws.com",
+            "https://sts.us-west-2.amazonaws.com",
             "20240102T030405Z",
         );
         assert_eq!(
@@ -1265,8 +1190,7 @@ mod tests {
             secret: "S0".into(),
             token: None,
         };
-        let cred =
-            aws_attestation_from("us-west-2", creds, &opts, (a.clone(), b, true), false).unwrap();
+        let cred = aws_attestation_from("us-west-2", creds, &opts, (a.clone(), b), false).unwrap();
         let bodies = bodies.lock().unwrap();
         assert_eq!(
             bodies[0].0,

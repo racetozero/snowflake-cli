@@ -59,7 +59,10 @@ fn process_source(cli: &mut Cli, source: &str) -> Result<String> {
         } else {
             source
         };
-        let stage = format!("tmp_bundle_stage_{}", 1_000_000 + rand_u32() % 9_000_000);
+        let stage = format!(
+            "tmp_bundle_stage_{}",
+            1_000_000 + uuid::Uuid::new_v4().as_u128() as u32 % 9_000_000
+        );
         cli.execute_query(&format!("CREATE OR REPLACE TEMPORARY STAGE {stage}"))?;
         let root = std::path::Path::new(local);
         if !root.is_dir() {
@@ -105,14 +108,6 @@ fn process_source(cli: &mut Cli, source: &str) -> Result<String> {
     Err(SnowError::cli(format!(
         "Invalid source: '{source}'. Source must be a Snowflake stage path (starting with '@'), a Snowflake workspace path (starting with 'snow://'), or a local file system path (starting with 'file://' or no protocol prefix)."
     )))
-}
-
-fn rand_u32() -> u32 {
-    let n = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0);
-    n ^ std::process::id().wrapping_mul(2_654_435_761)
 }
 
 pub fn list(cli: &mut Cli) -> Result<Output> {
@@ -219,7 +214,7 @@ pub fn execute(cli: &mut Cli) -> Result<Output> {
         let verbose = cli.connector_info;
         let c = cli
             .connection()?
-            .execute_async(&snow_api::sql::dedent(&q))
+            .execute_async(&snow_rich::render::dedent(&q))
             .map_err(|e| snow_api::connect::db_error_to_cli(&e, verbose))?;
         return Ok(Output::message(format!(
             "Request submitted. Query ID: {}",

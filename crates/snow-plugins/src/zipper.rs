@@ -18,6 +18,7 @@ struct Entry {
     utf8: bool,
 }
 
+#[derive(Default)]
 pub struct ZipWriter {
     buf: Vec<u8>,
     entries: Vec<Entry>,
@@ -53,13 +54,6 @@ fn mode(p: &Path) -> u32 {
 }
 
 impl ZipWriter {
-    pub fn new() -> ZipWriter {
-        ZipWriter {
-            buf: Vec::new(),
-            entries: Vec::new(),
-        }
-    }
-
     /// `ZipFile.write(path, arcname)`.
     pub fn add_path(&mut self, path: &Path, arcname: &str) -> std::io::Result<()> {
         let (time, date) = dos_time(path);
@@ -154,12 +148,6 @@ impl ZipWriter {
     }
 }
 
-impl Default for ZipWriter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// `zipper.IGNORED_FILES` matched with `fnmatch` on the absolute path.
 fn ignored(p: &Path) -> bool {
     const PATTERNS: &[&str] = &[
@@ -196,29 +184,9 @@ pub fn zip_dir(source: &Path, dest: &Path) -> std::io::Result<()> {
     if let Some(p) = dest.parent() {
         std::fs::create_dir_all(p)?;
     }
-    let abs = if source.is_absolute() {
-        source.to_path_buf()
-    } else {
-        std::env::current_dir()?.join(source)
-    };
-    let mut z = ZipWriter::new();
-    let mut stack = vec![abs.clone()];
-    let mut all = Vec::new();
-    while let Some(d) = stack.pop() {
-        let mut kids: Vec<_> = std::fs::read_dir(&d)?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .collect();
-        kids.sort();
-        for k in kids.into_iter().rev() {
-            if k.is_dir() {
-                stack.push(k.clone());
-            }
-            all.push(k);
-        }
-    }
-    all.sort();
-    for f in all {
+    let abs = std::env::current_dir()?.join(source);
+    let mut z = ZipWriter::default();
+    for f in crate::artifacts::walk(&abs) {
         if ignored(&f) {
             continue;
         }

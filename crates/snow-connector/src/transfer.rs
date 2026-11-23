@@ -311,9 +311,6 @@ fn text_col(name: &str) -> Column {
         name: name.into(),
         type_name: "text".into(),
         scale: None,
-        precision: None,
-        length: Some(16_777_216),
-        nullable: true,
     }
 }
 
@@ -322,14 +319,11 @@ fn fixed_col(name: &str) -> Column {
         name: name.into(),
         type_name: "fixed".into(),
         scale: Some(0),
-        precision: Some(38),
-        length: None,
-        nullable: true,
     }
 }
 
 pub(crate) fn execute(conn: &mut Connection, sql: &str) -> Result<Cursor, DbError> {
-    let v = conn.query_request(sql, false)?;
+    let v = conn.query_request(sql, false, None)?;
     if v["success"].as_bool() != Some(true) {
         return conn.cursor_from(sql, v);
     }
@@ -372,7 +366,6 @@ pub(crate) fn execute(conn: &mut Connection, sql: &str) -> Result<Cursor, DbErro
     let mut cursor = Cursor {
         query: sql.to_string(),
         sfqid: qid,
-        statement_type_id: data["statementTypeId"].as_i64(),
         ..Default::default()
     };
     if command == "UPLOAD" {

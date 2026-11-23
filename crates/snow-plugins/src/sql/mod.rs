@@ -5,13 +5,13 @@ pub mod complete;
 pub mod reader;
 pub mod repl;
 
-use crate::app::{print_output, write_result};
-use commands::{open_spool, parse_bool_value, parse_format, set_format, strip_matching_quotes};
+use crate::app::{die_on_json_error, print_output, write_result};
+use crate::rendering::SyntaxConfig;
+use commands::{open_spool, parse_bool_value, parse_format, strip_matching_quotes};
 use indexmap::IndexMap;
 use reader::{Compiled, Reader, Renderer, compile_statements};
 use snow_api::connect::db_error_to_cli;
-use snow_api::output::{Format, Output, Pv, Row, csv_result, json_multiple_item};
-use snow_api::rendering::SyntaxConfig;
+use snow_api::output::{Format, JsonStream, Output, Pv, Row, print_csv};
 use snow_api::splitter::split_statements;
 use snow_api::{Cli, Result, SnowError};
 use snow_connector::Cursor;
@@ -83,10 +83,10 @@ fn apply_startup_options(cli: &mut Cli, raw: &[String]) -> Result<()> {
         open_spool(cli, &f)?;
     }
     if let Some(q) = quiet {
-        cli.quiet = q;
+        cli.sql.quiet = q;
     }
     if let Some(f) = format {
-        set_format(cli, f);
+        cli.set_format(f);
     }
     Ok(())
 }
@@ -106,71 +106,67 @@ fn env_overrides(cli: &Cli) -> IndexMap<String, String> {
 struct Executor {
     stmts: Vec<Compiled>,
     idx: usize,
-    in_stmt: bool,
     pending: VecDeque<String>,
     /// `!` commands run with `is_repl` (e.g. `!edit`).
     repl: bool,
 }
 
 impl Executor {
+    fn new(stmts: Vec<Compiled>, repl: bool) -> Executor {
+        Executor {
+            stmts,
+            idx: 0,
+            pending: VecDeque::new(),
+            repl,
+        }
+    }
+
+    /// Run one statement. `VerboseCursor` echoes it; the REPL uses a plain cursor.
+    fn execute(&self, cli: &mut Cli, sql: &str, is_async: bool) -> Result<Cursor> {
+        if !self.repl {
+            cli.console.plain_message(sql);
+        }
+        let verbose = cli.connector_info;
+        let conn = cli.connection()?;
+        let c = if is_async {
+            conn.execute_async(sql)
+        } else {
+            conn.execute(sql)
+        };
+        c.map_err(|e| db_error_to_cli(&e, verbose))
+    }
+
     fn next(&mut self, cli: &mut Cli) -> Result<Option<Cursor>> {
         loop {
             if let Some(sql) = self.pending.pop_front() {
-                // `VerboseCursor` echoes the statement; the REPL uses a plain cursor.
-                if !self.repl {
-                    cli.console.plain_message(&sql);
-                }
                 // `_echo_repl_statement`: the REPL `!set echo=true` prints the SQL first.
-                if self.repl
-                    && cli.echo
-                    && !matches!(cli.format, Format::Json | Format::JsonExt | Format::Csv)
-                {
+                if self.repl && cli.sql.echo && !cli.format.is_structured() {
                     write_result(cli, |s| {
                         s.write_str(&sql);
                         s.write_str("\n");
                     });
                 }
-                let verbose = cli.connector_info;
-                let c = cli
-                    .connection()?
-                    .execute(&sql)
-                    .map_err(|e| db_error_to_cli(&e, verbose))?;
-                return Ok(Some(c));
+                return self.execute(cli, &sql, false).map(Some);
             }
-            if self.in_stmt {
-                self.in_stmt = false;
-                if let Some(cmd) = self.stmts[self.idx].command.take() {
-                    cmd.execute(cli, self.repl)?;
-                }
-                self.idx += 1;
-                continue;
-            }
-            if self.idx >= self.stmts.len() {
+            let Some(st) = self.stmts.get(self.idx) else {
                 return Ok(None);
-            }
-            self.in_stmt = true;
-            let st = &self.stmts[self.idx];
-            if st.execute_async {
-                let sql = st.statement.clone().unwrap_or_default();
-                // `VerboseCursor` echoes the statement; the REPL uses a plain cursor.
-                if !self.repl {
-                    cli.console.plain_message(&sql);
+            };
+            self.idx += 1;
+            match st {
+                Compiled::Sql(s) => {
+                    self.pending = split_statements(&snow_rich::render::dedent(s), false)
+                        .into_iter()
+                        .map(|s| s.text)
+                        .collect();
                 }
-                let verbose = cli.connector_info;
-                let c = cli
-                    .connection()?
-                    .execute_async(&sql)
-                    .map_err(|e| db_error_to_cli(&e, verbose))?;
-                let row: Row = [("scheduled query ID".to_string(), Pv::opt(c.sfqid.clone()))]
-                    .into_iter()
-                    .collect();
-                print_output(cli, &Output::Collection(vec![row]), None);
-            } else if let Some(s) = &st.statement {
-                let text = snow_api::sql::dedent(s);
-                self.pending = split_statements(&text, false)
-                    .into_iter()
-                    .map(|s| s.text)
-                    .collect();
+                Compiled::Async(sql) => {
+                    let c = self.execute(cli, sql, true)?;
+                    let row: Row = [("scheduled query ID".to_string(), Pv::opt(c.sfqid.clone()))]
+                        .into_iter()
+                        .collect();
+                    print_output(cli, &Output::Collection(vec![row]), None);
+                }
+                Compiled::Command(cmd) => cmd.execute(cli, self.repl)?,
             }
         }
     }
@@ -184,13 +180,6 @@ impl Executor {
 /// Print `MultipleResults` as it is produced.
 fn print_multiple(cli: &mut Cli, ex: &mut Executor) -> Result<()> {
     let format = cli.format;
-    let json_err = |cli: &mut Cli, e: snow_api::output::JsonTypeError| {
-        cli.console.warning(&format!(
-            "\nAn unexpected exception occurred. Use --debug option to see the traceback. Exception message:\n\n{}",
-            e.0
-        ));
-        std::process::exit(1);
-    };
     if cli.agent {
         let mut all = Vec::new();
         while let Some(c) = ex.next(cli)? {
@@ -204,28 +193,23 @@ fn print_multiple(cli: &mut Cli, ex: &mut Executor) -> Result<()> {
             while let Some(c) = ex.next(cli)? {
                 let out = cli.query_result(&c);
                 write_result(cli, |s| {
-                    csv_result(&out, s);
+                    print_csv(&out, s);
                     s.write_str("\n");
                 });
             }
         }
         Format::Json | Format::JsonExt => {
-            write_result(cli, |s| s.write_str("[\n"));
-            let mut first = true;
+            let mut stream = write_result(cli, JsonStream::open);
             while let Some(c) = ex.next(cli)? {
                 let out = cli.query_result(&c);
-                let r = write_result(cli, |s| {
-                    if !first {
-                        s.write_str(",\n");
-                    }
-                    json_multiple_item(&out, s)
-                });
-                if let Err(e) = r {
-                    json_err(cli, e);
+                if let Err(e) = write_result(cli, |s| stream.item(&out, s)) {
+                    die_on_json_error(cli, e);
                 }
-                first = false;
             }
-            write_result(cli, |s| s.write_str("\n]\n\n"));
+            write_result(cli, |s| {
+                JsonStream::close(s);
+                s.write_str("\n");
+            });
         }
         _ => {
             while let Some(c) = ex.next(cli)? {
@@ -237,9 +221,17 @@ fn print_multiple(cli: &mut Cli, ex: &mut Executor) -> Result<()> {
     Ok(())
 }
 
+/// Print the template and `!` command errors and fail with "SQL rendering error".
+fn render_failed(cli: &mut Cli, errors: &[String]) -> SnowError {
+    for e in errors {
+        cli.console.warning(e);
+    }
+    SnowError::sql("SQL rendering error")
+}
+
 pub fn execute(cli: &mut Cli) -> Result<Output> {
     let r = run(cli);
-    cli.spool = None;
+    cli.sql = snow_api::context::SqlSession::default();
     r
 }
 
@@ -284,6 +276,17 @@ fn run(cli: &mut Cli) -> Result<Output> {
         }
     }
     apply_startup_options(cli, &cli.list("option"))?;
+    let env = env_overrides(cli);
+    let make_reader = || Reader {
+        renderer: Renderer {
+            cfg,
+            data: &data,
+            env_overrides: &env,
+        },
+        remove_comments: !retain_comments,
+        local_only,
+        out: Vec::new(),
+    };
     if no_source {
         let no_prompt_exit = match cli.opt_bool("no_prompt_exit_repl") {
             Some(b) => b,
@@ -292,34 +295,15 @@ fn run(cli: &mut Cli) -> Result<Output> {
                 .bool_value(&["cli"], "no_prompt_exit_repl", Some(false))?
                 .unwrap_or(false),
         };
-        let env = env_overrides(cli);
         let mut run_text = |cli: &mut Cli, text: &str, print: bool| -> Result<usize> {
-            let mut reader = Reader {
-                renderer: Renderer {
-                    cfg,
-                    data: &data,
-                    env_overrides: &env,
-                },
-                remove_comments: !retain_comments,
-                local_only,
-                out: Vec::new(),
-            };
+            let mut reader = make_reader();
             reader.read_query(&mut cli.console, text)?;
             let parsed = std::mem::take(&mut reader.out);
             let (errors, count, compiled) = compile_statements(parsed);
             if !errors.is_empty() {
-                for e in &errors {
-                    cli.console.warning(e);
-                }
-                return Err(SnowError::sql("SQL rendering error"));
+                return Err(render_failed(cli, &errors));
             }
-            let mut ex = Executor {
-                stmts: compiled,
-                idx: 0,
-                in_stmt: false,
-                pending: VecDeque::new(),
-                repl: true,
-            };
+            let mut ex = Executor::new(compiled, true);
             if print {
                 print_multiple(cli, &mut ex)?;
             } else {
@@ -331,17 +315,7 @@ fn run(cli: &mut Cli) -> Result<Output> {
         return Ok(Output::Empty);
     }
 
-    let env = env_overrides(cli);
-    let mut reader = Reader {
-        renderer: Renderer {
-            cfg,
-            data: &data,
-            env_overrides: &env,
-        },
-        remove_comments: !retain_comments,
-        local_only,
-        out: Vec::new(),
-    };
+    let mut reader = make_reader();
     if std_in {
         let mut s = String::new();
         let _ = std::io::stdin().read_to_string(&mut s);
@@ -363,32 +337,18 @@ fn run(cli: &mut Cli) -> Result<Output> {
         return Err(SnowError::argument("No SQL statements found to execute."));
     }
     if !errors.is_empty() {
-        for e in &errors {
-            cli.console.warning(e);
-        }
-        return Err(SnowError::sql("SQL rendering error"));
+        return Err(render_failed(cli, &errors));
     }
     if single_transaction {
         let verbose = cli.connector_info;
         cli.connection()?
             .execute("ALTER SESSION SET autocommit=False")
             .map_err(|e| db_error_to_cli(&e, verbose))?;
-        let wrap = |s: &str| Compiled {
-            statement: Some(s.to_string()),
-            execute_async: false,
-            command: None,
-        };
-        compiled.insert(0, wrap("BEGIN;"));
-        compiled.push(wrap("COMMIT;"));
+        compiled.insert(0, Compiled::Sql("BEGIN;".into()));
+        compiled.push(Compiled::Sql("COMMIT;".into()));
         count = compiled.len();
     }
-    let mut ex = Executor {
-        stmts: compiled,
-        idx: 0,
-        in_stmt: false,
-        pending: VecDeque::new(),
-        repl: false,
-    };
+    let mut ex = Executor::new(compiled, false);
     match count {
         0 => ex.drain(cli)?,
         1 => {

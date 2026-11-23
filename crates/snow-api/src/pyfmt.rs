@@ -52,7 +52,7 @@ pub fn float_repr(f: f64) -> String {
 }
 
 /// Python `json.dumps` string escaping (`ensure_ascii=True`).
-pub fn json_str(s: &str, out: &mut String) {
+pub(crate) fn json_str(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -82,7 +82,12 @@ pub fn json_dumps(v: &serde_json::Value, indent: Option<usize>) -> String {
     out
 }
 
-pub fn write_json(v: &serde_json::Value, indent: Option<usize>, level: usize, out: &mut String) {
+pub(crate) fn write_json(
+    v: &serde_json::Value,
+    indent: Option<usize>,
+    level: usize,
+    out: &mut String,
+) {
     use serde_json::Value as J;
     match v {
         J::Null => out.push_str("null"),

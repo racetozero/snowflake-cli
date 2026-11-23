@@ -14,7 +14,6 @@ pub struct WebSocket {
     io: BufReader<Box<dyn Stream>>,
 }
 
-/// A received frame.
 pub enum Frame {
     Binary(Vec<u8>),
     Text(String),
@@ -23,6 +22,21 @@ pub enum Frame {
 
 fn err(m: impl Into<String>) -> std::io::Error {
     std::io::Error::other(m.into())
+}
+
+/// A rustls client trusting the webpki roots, with the `ring` provider.
+fn tls_config(
+    versions: &[&'static rustls::SupportedProtocolVersion],
+) -> Result<rustls::ClientConfig, rustls::Error> {
+    let roots = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    Ok(rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(versions)?
+    .with_root_certificates(roots)
+    .with_no_client_auth())
 }
 
 impl WebSocket {
@@ -42,16 +56,7 @@ impl WebSocket {
         let tcp = TcpStream::connect_timeout(&addr, timeout)?;
         tcp.set_read_timeout(Some(Duration::from_secs(90)))?;
         let stream: Box<dyn Stream> = if tls {
-            let roots = rustls::RootCertStore {
-                roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-            };
-            let config = rustls::ClientConfig::builder_with_provider(Arc::new(
-                rustls::crypto::ring::default_provider(),
-            ))
-            .with_safe_default_protocol_versions()
-            .map_err(|e| err(e.to_string()))?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
+            let config = tls_config(rustls::DEFAULT_VERSIONS).map_err(|e| err(e.to_string()))?;
             let name = rustls::pki_types::ServerName::try_from(host.clone())
                 .map_err(|e| err(e.to_string()))?;
             let conn = rustls::ClientConnection::new(Arc::new(config), name)
@@ -178,7 +183,6 @@ impl WebSocket {
         }
     }
 
-    /// Send a normal-closure close frame.
     pub fn close(&mut self) -> std::io::Result<()> {
         self.send(0x8, &1000u16.to_be_bytes())
     }
@@ -198,16 +202,9 @@ pub fn tls_probe(host: &str, port: u16, timeout: Duration) -> Option<bool> {
         return None;
     };
     let _ = tcp.set_read_timeout(Some(timeout));
-    let roots = rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    };
-    let Ok(builder) = rustls::ClientConfig::builder_with_provider(Arc::new(
-        rustls::crypto::ring::default_provider(),
-    ))
-    .with_protocol_versions(&[&rustls::version::TLS13]) else {
+    let Ok(config) = tls_config(&[&rustls::version::TLS13]) else {
         return None;
     };
-    let config = builder.with_root_certificates(roots).with_no_client_auth();
     let Ok(name) = rustls::pki_types::ServerName::try_from(host.to_string()) else {
         return None;
     };

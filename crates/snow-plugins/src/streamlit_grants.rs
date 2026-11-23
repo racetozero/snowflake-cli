@@ -10,10 +10,10 @@
 use snow_api::project::PyV;
 use std::path::Path;
 
+/// A grant to a user (`share --to-user` records only those).
 pub struct Grant {
     pub privilege: String,
-    pub role: Option<String>,
-    pub user: Option<String>,
+    pub user: String,
     pub with_grant_option: bool,
 }
 
@@ -47,8 +47,11 @@ fn already_recorded(entity: &indexmap::IndexMap<String, PyV>, g: &Grant) -> bool
     let Some(PyV::List(recorded)) = entity.get("grants") else {
         return false;
     };
-    let up = |s: &Option<String>| s.as_ref().map(|x| x.to_uppercase());
-    let wanted = (Some(g.privilege.to_uppercase()), up(&g.role), up(&g.user));
+    let wanted = (
+        Some(g.privilege.to_uppercase()),
+        None,
+        Some(g.user.to_uppercase()),
+    );
     recorded.iter().any(|e| {
         let PyV::Dict(m) = e else { return false };
         let key = (
@@ -124,13 +127,9 @@ fn entity_key_line(lines: &[&str], id: &str) -> Option<usize> {
 
 fn render(g: &Grant, indent: usize) -> Vec<String> {
     let pad = " ".repeat(indent);
-    let grantee = match &g.role {
-        Some(r) => format!("role: {r}"),
-        None => format!("user: {}", g.user.clone().unwrap_or_default()),
-    };
     let mut out = vec![
         format!("{pad}- privilege: {}\n", g.privilege),
-        format!("{pad}  {grantee}\n"),
+        format!("{pad}  user: {}\n", g.user),
     ];
     if g.with_grant_option {
         out.push(format!("{pad}  with_grant_option: true\n"));
@@ -138,13 +137,9 @@ fn render(g: &Grant, indent: usize) -> Vec<String> {
     out
 }
 
-/// Python `str.splitlines(keepends=True)` for `\n` / `\r\n` files.
-fn split_keep(text: &str) -> Vec<&str> {
-    text.split_inclusive('\n').collect()
-}
-
 fn insert_grants(text: &str, id: &str, grants: &[Grant]) -> Option<String> {
-    let lines = split_keep(text);
+    // Python `str.splitlines(keepends=True)` for `\n` / `\r\n` files.
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
     let start = entity_key_line(&lines, id)?;
     if !opens_block(lines[start]) {
         return None;
@@ -199,10 +194,7 @@ fn insert_grants(text: &str, id: &str, grants: &[Grant]) -> Option<String> {
 fn as_mapping(g: &Grant) -> PyV {
     let mut m = indexmap::IndexMap::new();
     m.insert("privilege".into(), PyV::Str(g.privilege.clone()));
-    match &g.role {
-        Some(r) => m.insert("role".into(), PyV::Str(r.clone())),
-        None => m.insert("user".into(), PyV::Str(g.user.clone().unwrap_or_default())),
-    };
+    m.insert("user".into(), PyV::Str(g.user.clone()));
     if g.with_grant_option {
         m.insert("with_grant_option".into(), PyV::Bool(true));
     }
@@ -287,8 +279,7 @@ mod tests {
     fn user(u: &str) -> Grant {
         Grant {
             privilege: "USAGE".into(),
-            role: None,
-            user: Some(u.into()),
+            user: u.into(),
             with_grant_option: false,
         }
     }

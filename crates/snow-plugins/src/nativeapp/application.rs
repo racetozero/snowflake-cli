@@ -2,7 +2,7 @@
 //! upgrade (run), drop (teardown), events and the Snowsight URL.
 
 use super::facade::{self, InstallMethod};
-use super::package::{Package, Policy, StageParts, drop_generic_object, exit, generic_sql_error};
+use super::package::{Package, Policy, StageParts, drop_generic_object, generic_sql_error};
 use snow_api::identifiers::{to_identifier, to_string_literal, unquote_identifier};
 use snow_api::output::{Pv, Row};
 use snow_api::project::PyV;
@@ -48,7 +48,6 @@ fn manifest_events(deploy_root: &std::path::Path) -> Result<Vec<(String, String,
 
 /// `EventSharingHandler`.
 struct EventSharing {
-    enabled: bool,
     enforced: bool,
     share_mandatory: Option<bool>,
     optional: Vec<String>,
@@ -71,17 +70,14 @@ impl EventSharing {
             "ENFORCE_MANDATORY_FILTERS_FOR_SAME_ACCOUNT_INSTALLATION",
             serde_json::json!(true),
         ));
-        let mut share_mandatory = telemetry.and_then(|t| match t.get("share_mandatory_events") {
+        let share_mandatory = telemetry.and_then(|t| match t.get("share_mandatory_events") {
             Some(PyV::Bool(b)) => Some(*b),
             _ => None,
         });
         let optional: Vec<String> = telemetry
-            .and_then(|t| t.get("optional_shared_events"))
-            .and_then(PyV::as_list)
-            .map(|l| l.iter().map(PyV::py_str).collect())
+            .map(|t| t.str_list("optional_shared_events"))
             .unwrap_or_default();
         let mut s = EventSharing {
-            enabled,
             enforced,
             share_mandatory,
             optional,
@@ -100,22 +96,14 @@ impl EventSharing {
             let mandatory = manifest_events(deploy_root)?
                 .iter()
                 .any(|e| e.2 == "MANDATORY");
-            if mandatory && enforced && share_mandatory.is_none() {
+            if mandatory && enforced && s.share_mandatory.is_none() {
                 cli.console.warning(
                     "WARNING: Mandatory events are present in the manifest file. Automatically authorizing event sharing in dev mode. To suppress this warning, please add 'share_mandatory_events: true' in the application telemetry section.",
                 );
-                share_mandatory = Some(true);
-                s.share_mandatory = share_mandatory;
+                s.share_mandatory = Some(true);
             }
         }
         Ok(s)
-    }
-
-    fn should_authorize(&self) -> Option<bool> {
-        if !self.enabled {
-            return None;
-        }
-        self.share_mandatory
     }
 
     /// `events_to_share(events_definitions)`.
@@ -169,33 +157,13 @@ impl App {
         super::role_of(cli, &self.model)
     }
     pub fn warehouse(&self, cli: &mut Cli) -> Result<Option<String>> {
-        if let Some(w) = self
-            .model
-            .get_some("meta")
-            .and_then(|m| m.str_of("warehouse"))
-            .filter(|w| !w.is_empty())
-        {
-            return Ok(Some(to_identifier(&w)));
-        }
-        Ok(cli
-            .connection()?
-            .params
-            .warehouse
-            .clone()
-            .filter(|w| !w.is_empty())
-            .map(|w| to_identifier(&w)))
+        super::warehouse_of(cli, &self.model)
     }
     fn debug(&self) -> Option<bool> {
         match self.model.get("debug") {
             Some(PyV::Bool(b)) => Some(*b),
             _ => None,
         }
-    }
-    pub fn package_target(&self) -> String {
-        self.model
-            .get("from_")
-            .and_then(|f| f.str_of("target"))
-            .unwrap_or_default()
     }
 
     /// `action_deploy(...)` (`snow app run`).
@@ -220,7 +188,7 @@ impl App {
                 cli,
                 pkg,
                 &stage,
-                &InstallMethod::release_directive(),
+                &InstallMethod::ReleaseDirective,
                 policy,
                 interactive,
                 channel.as_deref(),
@@ -254,7 +222,7 @@ impl App {
                 cli,
                 pkg,
                 &stage,
-                &InstallMethod::versioned_dev(&v, patch),
+                &InstallMethod::VersionedDev { version: v, patch },
                 policy,
                 interactive,
                 None,
@@ -277,7 +245,7 @@ impl App {
             cli,
             pkg,
             &stage,
-            &InstallMethod::unversioned_dev(),
+            &InstallMethod::UnversionedDev,
             policy,
             interactive,
             None,
@@ -313,7 +281,7 @@ impl App {
                 role.as_deref(),
                 warehouse.as_deref(),
                 self.debug(),
-                sharing.should_authorize(),
+                sharing.share_mandatory,
                 channel,
             ) {
                 Ok(r) => result = Some(r),
@@ -369,7 +337,7 @@ impl App {
                 &self.project_root,
                 &self.project,
                 &hooks,
-                "application",
+                crate::entities::EntityType::Application,
                 role.as_deref(),
                 warehouse.as_deref(),
                 Some(&name),
@@ -432,7 +400,7 @@ impl App {
             role.as_deref(),
             warehouse.as_deref(),
             self.debug(),
-            sharing.should_authorize(),
+            sharing.share_mandatory,
             channel,
         )?;
         for w in warnings {
@@ -488,7 +456,7 @@ impl App {
                     }
                     Ok(_) => {}
                     Err(e) => {
-                        if e.errno != 93079 {
+                        if e.errno != facade::errno::APPLICATION_NO_LONGER_AVAILABLE {
                             return Err(generic_sql_error(cli, e));
                         }
                         cli.console.warning(
@@ -500,16 +468,13 @@ impl App {
             } else {
                 "Do you want the Snowflake CLI to drop the existing application object and recreate it?"
             };
-            if !policy.should_proceed(cli, prompt)? {
-                if interactive {
-                    cli.console.message("Not upgrading the application object.");
-                    return Err(exit(0));
-                }
-                cli.console.message(
-                    "Cannot upgrade the application object non-interactively without --force.",
-                );
-                return Err(exit(1));
-            }
+            policy.proceed_or_exit(
+                cli,
+                prompt,
+                interactive,
+                "Not upgrading the application object.",
+                "Cannot upgrade the application object non-interactively without --force.",
+            )?;
             let cascade_msg = if cascade { " (cascade)" } else { "" };
             cli.console
                 .step(&format!("Dropping application object {name}{cascade_msg}."));
@@ -568,53 +533,42 @@ impl App {
             }
         }
         let mut cascade = cascade;
-        let (has, objects, prefix, yes_msg, no_msg, prompt, abort_msg) = match self
-            .owned_objects(cli)?
-        {
-            Ok(objs) if !objs.is_empty() => {
+        // `None`: the application owns nothing; an unknown set has no objects listed.
+        let owned = match self.owned_objects(cli)? {
+            Ok(objs) if objs.is_empty() => None,
+            Ok(objs) => {
                 let prefix = format!("The following objects are owned by application {name}");
-                (
-                    true,
+                Some((
                     objs,
-                    prefix.clone(),
                     format!("{prefix} and will be dropped:"),
                     format!("{prefix} and will NOT be dropped:"),
-                    "Would you like to drop these objects in addition to the application? [y/n/ABORT]".to_string(),
-                    "Re-run teardown again with --cascade or --no-cascade to specify whether these objects should be dropped along with the application".to_string(),
-                )
+                    prefix,
+                    "Would you like to drop these objects in addition to the application? [y/n/ABORT]",
+                    "Re-run teardown again with --cascade or --no-cascade to specify whether these objects should be dropped along with the application",
+                ))
             }
-            Ok(_) => (
-                false,
-                vec![],
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-            ),
-            Err(e) if e.errno == 93079 => {
+            Err(e) if e.errno == facade::errno::APPLICATION_NO_LONGER_AVAILABLE => {
                 let prefix =
                     format!("Could not determine which objects are owned by application {name}");
-                (
-                    true,
+                Some((
                     vec![],
-                    prefix.clone(),
                     format!("{prefix}, an unknown number of objects will be dropped."),
                     format!("{prefix}, they will NOT be dropped."),
-                    "Would you like to drop an unknown set of objects in addition to the application? [y/n/ABORT]".to_string(),
-                    "Re-run teardown again with --cascade or --no-cascade to specify whether any objects should be dropped along with the application.".to_string(),
-                )
+                    prefix,
+                    "Would you like to drop an unknown set of objects in addition to the application? [y/n/ABORT]",
+                    "Re-run teardown again with --cascade or --no-cascade to specify whether any objects should be dropped along with the application.",
+                ))
             }
             Err(e) => return Err(snow_api::connect::db_error_to_cli(&e, cli.connector_info)),
         };
-        let list = |cli: &mut Cli| {
-            cli.console.indent();
-            for (n, t) in &objects {
-                cli.console.message(&format!("({t}) {n}"));
-            }
-            cli.console.dedent();
-        };
-        if has {
+        if let Some((objects, yes_msg, no_msg, prefix, prompt, abort_msg)) = owned {
+            let list = |cli: &mut Cli| {
+                cli.console.indent();
+                for (n, t) in &objects {
+                    cli.console.message(&format!("({t}) {n}"));
+                }
+                cli.console.dedent();
+            };
             match cascade {
                 Some(true) => {
                     cli.console.message(&yes_msg);
@@ -627,7 +581,7 @@ impl App {
                 None if interactive => {
                     cli.console.message(&prefix);
                     list(cli);
-                    let answer = crate::common::prompt(cli, &prompt, false)?
+                    let answer = crate::common::prompt(cli, prompt, false)?
                         .unwrap_or_else(|| "ABORT".into())
                         .to_lowercase();
                     cascade = match answer.as_str() {
@@ -639,7 +593,7 @@ impl App {
                 None => {
                     cli.console.message(&prefix);
                     list(cli);
-                    cli.console.message(&abort_msg);
+                    cli.console.message(abort_msg);
                     return Err(SnowError::Click(ClickError::Abort));
                 }
             }
@@ -663,11 +617,7 @@ impl App {
         };
         let new = to_identifier(&wh);
         let c = cli.execute_query("select current_warehouse()")?;
-        let prev = c
-            .rows
-            .first()
-            .and_then(|r| r.first().cloned().flatten())
-            .map(|w| to_identifier(&w));
+        let prev = Cli::first_cell_opt(&c).map(|w| to_identifier(&w));
         let different = prev.as_deref() != Some(new.as_str());
         if different {
             cli.execute_query(&format!("use warehouse {new}"))?;
@@ -695,11 +645,6 @@ impl App {
         first: i64,
         last: i64,
     ) -> Result<Vec<Row>> {
-        if first >= 0 && last >= 0 {
-            return Err(
-                SnowError::unexpected("first and last cannot be used together").named("ValueError"),
-            );
-        }
         let table = account_event_table(cli)?;
         let Some(table) = table else {
             return Err(SnowError::click(

@@ -1,8 +1,7 @@
 //! Root options: `--info`, `--structure`, `--docs`.
 
-use crate::app::App;
+use snow_api::Cli;
 use snow_api::output::{Output, Pv, Row};
-use snow_api::{Cli, Result};
 use snow_click::Spec;
 
 /// How this build was installed, in upstream's `CLIInstallationSource` vocabulary.
@@ -57,8 +56,7 @@ fn feature_flags(cli: &Cli) -> Pv {
 }
 
 /// `build_command_catalog`.
-pub fn structure(spec: &Spec, app: &App) -> Output {
-    let _ = app;
+pub fn structure(spec: &Spec) -> Output {
     Output::Object(Some(node(spec, 0, "snow")))
 }
 
@@ -130,9 +128,4 @@ fn node(spec: &Spec, idx: u16, name: &str) -> Row {
         r.insert("commands".into(), Pv::List(kids));
     }
     r
-}
-
-pub fn docs(cli: &mut Cli) -> Result<()> {
-    let _ = cli;
-    Ok(())
 }

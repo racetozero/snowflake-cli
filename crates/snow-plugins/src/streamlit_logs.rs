@@ -43,6 +43,7 @@ fn varint(b: &[u8], i: &mut usize) -> Option<u64> {
     None
 }
 
+#[derive(Default)]
 struct Entry {
     source: u64,
     content: String,
@@ -54,14 +55,7 @@ struct Entry {
 
 /// `LogEntry` (log_source=1, content=2, timestamp=3 {seconds=1, nanos=2}, sequence=4, level=5).
 fn decode_entry(b: &[u8]) -> Option<Entry> {
-    let mut e = Entry {
-        source: 0,
-        content: String::new(),
-        secs: 0,
-        nanos: 0,
-        sequence: 0,
-        level: 0,
-    };
+    let mut e = Entry::default();
     let mut i = 0;
     while i < b.len() {
         let key = varint(b, &mut i)?;
@@ -160,11 +154,7 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
         .iter()
         .position(|col| col.name.to_lowercase() == "runtime_name")
         .and_then(|i| row.get(i).cloned().flatten());
-    let norm = runtime.clone().unwrap_or_default().trim().to_uppercase();
-    if !regex::Regex::new(r"^SYSTEM\$ST_CONTAINER_RUNTIME[A-Z0-9_]*$")
-        .expect("re")
-        .is_match(&norm)
-    {
+    if !crate::streamlit::is_container_runtime(runtime.as_deref().unwrap_or_default()) {
         return Err(SnowError::cli(format!(
             "Log streaming is only supported for Streamlit apps running on an SPCS container runtime (SYSTEM$ST_CONTAINER_RUNTIME*). App '{}' has runtime_name='{}'.",
             fqn.identifier(),
@@ -222,7 +212,6 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
     cli.console.step(&format!(
         "Streaming logs (tail={tail}). Press Ctrl+C to stop."
     ));
-    let mut items = Vec::new();
     loop {
         match ws.recv() {
             Ok(snow_connector::ws::Frame::Binary(data)) => {
@@ -261,7 +250,6 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
                     ))
                 };
                 crate::app::print_output(cli, &Output::Stream(vec![item]), None);
-                items.push(());
             }
             Ok(snow_connector::ws::Frame::Text(_)) => continue,
             Ok(snow_connector::ws::Frame::Close) => break,

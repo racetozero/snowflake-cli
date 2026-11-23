@@ -9,7 +9,7 @@ fn esc(s: &str) -> String {
 
 fn query_result(cli: &mut Cli, sql: &str) -> Result<String> {
     let verbose = cli.connector_info;
-    let text = snow_api::sql::dedent(sql);
+    let text = snow_rich::render::dedent(sql);
     let stmt = snow_api::splitter::split_statements(&text, true)
         .into_iter()
         .last()

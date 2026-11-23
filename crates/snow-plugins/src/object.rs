@@ -63,10 +63,8 @@ pub fn sf_name(object_type: &str) -> &'static str {
 pub type Scope = (Option<String>, Option<String>);
 
 pub fn scope_of(cli: &Cli) -> Scope {
-    let v = cli.list("scope");
     let l = cli.param("scope").as_list().to_vec();
     let get = |i: usize| l.get(i).and_then(|x| x.as_str()).map(str::to_string);
-    let _ = v;
     (get(0), get(1))
 }
 
@@ -145,6 +143,13 @@ pub fn drop_object(cli: &mut Cli, object_type: &str, fqn: &Fqn, if_exists: bool)
     cli.execute_query(&format!("drop {name}{ie} {}", fqn.sql_identifier()))
 }
 
+/// `ObjectManager.object_exists`: `describe <kind> <fqn>` succeeds.
+pub fn object_exists(cli: &mut Cli, kind: &str, fqn: &Fqn) -> Result<bool> {
+    Ok(cli
+        .try_query(&format!("describe {kind} {}", fqn.sql_identifier()))?
+        .is_ok())
+}
+
 pub fn describe_object(cli: &mut Cli, object_type: &str, fqn: &Fqn) -> Result<Cursor> {
     if object_type == "image-repository" {
         return Err(SnowError::click(
@@ -153,14 +158,6 @@ pub fn describe_object(cli: &mut Cli, object_type: &str, fqn: &Fqn) -> Result<Cu
     }
     let (name, _) = names(object_type)?;
     cli.execute_query(&format!("describe {name} {}", fqn.sql_identifier()))
-}
-
-pub fn object_exists(cli: &mut Cli, object_type: &str, fqn: &Fqn) -> bool {
-    let Ok((name, _)) = names(object_type) else {
-        return false;
-    };
-    cli.try_execute(&format!("describe {name} {}", fqn.sql_identifier()))
-        .is_ok()
 }
 
 /// `list_` shared by `snow object list` and the group aliases.

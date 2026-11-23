@@ -100,10 +100,6 @@ fn s(v: &serde_json::Value) -> String {
     }
 }
 
-fn pv_of(v: &serde_json::Value) -> Pv {
-    Pv::from_json(v)
-}
-
 /// `_epoch_to_iso(value)`.
 fn epoch_to_iso(v: &serde_json::Value) -> String {
     let f = match v {
@@ -117,11 +113,6 @@ fn epoch_to_iso(v: &serde_json::Value) -> String {
         Some(d) => d.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         None => s(v),
     }
-}
-
-/// Python `str(float)`.
-fn py_float(f: f64) -> String {
-    snow_api::pyfmt::float_repr(f)
 }
 
 /// `format_bytes(num_bytes)`.
@@ -203,7 +194,7 @@ fn metric_records(raw: &str, category: Option<&str>, raw_values: bool) -> Vec<Ro
         };
         let mut r = Row::new();
         r.insert("time".into(), Pv::Str(epoch_to_iso(&row[0])));
-        r.insert("metric".into(), pv_of(&row[1]));
+        r.insert("metric".into(), Pv::from_json(&row[1]));
         let unit = s(&row[3]).to_lowercase();
         let (raw_key, raw_num, human) = match unit.as_str() {
             "byte" => {
@@ -215,7 +206,11 @@ fn metric_records(raw: &str, category: Option<&str>, raw_values: bool) -> Vec<Ro
                 Pv::Float(numeric),
                 format!("{} cores", fmt_g(numeric)),
             ),
-            _ => ("raw", Pv::Float(numeric), py_float(numeric)),
+            _ => (
+                "raw",
+                Pv::Float(numeric),
+                snow_api::pyfmt::float_repr(numeric),
+            ),
         };
         r.insert(
             "value".into(),
@@ -231,7 +226,7 @@ fn metric_records(raw: &str, category: Option<&str>, raw_values: bool) -> Vec<Ro
             if row[4].is_null() {
                 Pv::s("")
             } else {
-                pv_of(&row[4])
+                Pv::from_json(&row[4])
             },
         );
         r.insert(
@@ -239,7 +234,7 @@ fn metric_records(raw: &str, category: Option<&str>, raw_values: bool) -> Vec<Ro
             if row[5].is_null() || row[5].as_str() == Some("") {
                 Pv::s("")
             } else {
-                pv_of(&row[5])
+                Pv::from_json(&row[5])
             },
         );
         out.push(r);
@@ -257,7 +252,7 @@ fn lifecycle_records(raw: &str) -> Vec<Row> {
         }
         let mut r = Row::new();
         r.insert("time".into(), Pv::Str(epoch_to_iso(&row[0])));
-        r.insert("event".into(), pv_of(&row[2]));
+        r.insert("event".into(), Pv::from_json(&row[2]));
         let (status, message) = match &row[3] {
             serde_json::Value::String(b) => match serde_json::from_str::<serde_json::Value>(b) {
                 Ok(serde_json::Value::Object(o)) => (
@@ -274,14 +269,14 @@ fn lifecycle_records(raw: &str) -> Vec<Row> {
         };
         r.insert("status".into(), Pv::Str(status));
         r.insert("message".into(), Pv::Str(message));
-        r.insert("severity".into(), pv_of(&row[1]));
+        r.insert("severity".into(), Pv::from_json(&row[1]));
         let inst = row.get(4).cloned().unwrap_or(serde_json::Value::Null);
         r.insert(
             "instance".into(),
             if inst.is_null() {
                 Pv::s("")
             } else {
-                pv_of(&inst)
+                Pv::from_json(&inst)
             },
         );
         let cont = row.get(5).cloned().unwrap_or(serde_json::Value::Null);
@@ -290,7 +285,7 @@ fn lifecycle_records(raw: &str) -> Vec<Row> {
             if cont.is_null() || cont.as_str() == Some("") {
                 Pv::s("")
             } else {
-                pv_of(&cont)
+                Pv::from_json(&cont)
             },
         );
         out.push(r);
@@ -349,12 +344,6 @@ fn event_table_data(
             Some(v.and_then(|v| v.trim().parse::<i64>().ok()).unwrap_or(500))
         }
     };
-    let first_cell = |c: &snow_connector::Cursor| {
-        c.rows
-            .first()
-            .and_then(|r| r.first().cloned().flatten())
-            .unwrap_or_default()
-    };
     match (limit, cap) {
         (Some(l), Some(cap)) if l > cap => {
             let q = format!(
@@ -367,7 +356,7 @@ fn event_table_data(
                 Ok(c) => c,
                 Err(e) => return Ok(Err(e)),
             };
-            let qid = first_cell(&c);
+            let qid = Cli::first_cell_opt(&c).unwrap_or_default();
             if qid.is_empty() {
                 return Ok(Ok(String::new()));
             }
@@ -398,7 +387,7 @@ fn event_table_data(
                                                 Utc.from_utc_datetime(&d).timestamp_micros() as f64
                                                     / 1e6
                                             })
-                                            .map(py_float)
+                                            .map(snow_api::pyfmt::float_repr)
                                             .unwrap_or_else(|_| x.clone());
                                     serde_json::Value::String(ts)
                                 }
@@ -414,7 +403,7 @@ fn event_table_data(
             )))
         }
         _ => match cli.try_query(&format!("CALL {EVENT_TABLE_FN}({})", args.join(", ")))? {
-            Ok(c) => Ok(Ok(first_cell(&c))),
+            Ok(c) => Ok(Ok(Cli::first_cell_opt(&c).unwrap_or_default())),
             Err(e) => Ok(Err(e)),
         },
     }
@@ -422,35 +411,19 @@ fn event_table_data(
 
 /// `app_events` SAR branch + `snowflake_app_events(...)`.
 pub fn events(cli: &mut Cli, flow: Flow) -> Result<Output> {
-    let mut native: Vec<&str> = Vec::new();
-    if !cli.list("scopes").is_empty() {
-        native.push("--scope");
-    }
-    for (opt, k) in [
-        ("--consumer-org", "consumer_org"),
-        ("--consumer-account", "consumer_account"),
-        ("--consumer-app-hash", "consumer_app_hash"),
-    ] {
-        if cli.str(k).is_some_and(|v| !v.is_empty()) {
-            native.push(opt);
-        }
-    }
-    if cli.int("first").is_some_and(|f| f >= 0) {
-        native.push("--first");
-    }
-    if cli.flag("follow") {
-        native.push("--follow");
-    }
-    if cli.int("follow_interval").is_some() {
-        native.push("--follow-interval");
-    }
-    if !native.is_empty() {
-        native.sort();
-        return Err(SnowError::click(format!(
-            "'snow app events' was invoked against a Snowflake App Runtime entity (type: snowflake-app), but the following Native App options were provided: {}. Remove them and try again.",
-            native.join(", ")
-        )));
-    }
+    let set = |k: &str| cli.str(k).is_some_and(|v| !v.is_empty());
+    super::reject_native_options(
+        "events",
+        &[
+            ("--scope", !cli.list("scopes").is_empty()),
+            ("--consumer-org", set("consumer_org")),
+            ("--consumer-account", set("consumer_account")),
+            ("--consumer-app-hash", set("consumer_app_hash")),
+            ("--first", cli.int("first").is_some_and(|f| f >= 0)),
+            ("--follow", cli.flag("follow")),
+            ("--follow-interval", cli.int("follow_interval").is_some()),
+        ],
+    )?;
     let types = cli.list("record_types");
     if types.len() > 1 {
         return Err(SnowError::incompatible(&["--type", "--type"]));
@@ -499,7 +472,7 @@ pub fn events(cli: &mut Cli, flow: Flow) -> Result<Output> {
             "--instance can only be used with the live log tail (--type log with no --since/--until).",
         ));
     }
-    let svc = super::command_service_pub(cli, flow)?;
+    let svc = super::command_service(cli, flow)?.fqn;
     let ident = svc.identifier();
     if stream == Stream::Log && since.is_none() && until.is_none() {
         let (sql, params) = match (instance, last) {
@@ -518,12 +491,7 @@ pub fn events(cli: &mut Cli, flow: Flow) -> Result<Output> {
         };
         let r = cli.connection()?.execute_bound(sql, &params);
         return match r {
-            Ok(c) => Ok(Output::message(
-                c.rows
-                    .first()
-                    .and_then(|r| r.first().cloned().flatten())
-                    .unwrap_or_default(),
-            )),
+            Ok(c) => Ok(Output::message(Cli::first_cell_opt(&c).unwrap_or_default())),
             Err(e) => {
                 let hint = match instance {
                     Some(i) => format!(" Instance {i} may not exist — verify the index is valid and the service is running."),

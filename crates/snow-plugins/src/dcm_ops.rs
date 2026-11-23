@@ -16,13 +16,48 @@ enum State {
     Failed,
 }
 
+/// A step of a DCM command. The server steps match the `phase` of
+/// `SYSTEM$GET_DCM_PROJECT_PROGRESS`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Upload,
+    Render,
+    Compile,
+    Plan,
+    Deploy,
+    PostHook,
+    Test,
+    Expectations,
+    Refresh,
+    Preview,
+    Analyze,
+}
+
+impl Step {
+    fn key(self) -> &'static str {
+        match self {
+            Step::Upload => "UPLOAD",
+            Step::Render => "RENDER",
+            Step::Compile => "COMPILE",
+            Step::Plan => "PLAN",
+            Step::Deploy => "DEPLOY",
+            Step::PostHook => "POST_HOOK",
+            Step::Test => "TEST",
+            Step::Expectations => "EXPECTATIONS",
+            Step::Refresh => "REFRESH",
+            Step::Preview => "PREVIEW",
+            Step::Analyze => "ANALYZE",
+        }
+    }
+}
+
 /// `MultiStepProgress` in its non-TTY form: one line per state change.
-pub struct Progress {
-    steps: Vec<(&'static str, &'static str, State, Option<Instant>)>,
+struct Progress {
+    steps: Vec<(Step, &'static str, State, Option<Instant>)>,
 }
 
 impl Progress {
-    pub fn new(steps: &[(&'static str, &'static str)]) -> Progress {
+    fn new(steps: &[(Step, &'static str)]) -> Progress {
         Progress {
             steps: steps
                 .iter()
@@ -30,7 +65,7 @@ impl Progress {
                 .collect(),
         }
     }
-    fn idx(&self, key: &str) -> usize {
+    fn idx(&self, key: Step) -> usize {
         self.steps
             .iter()
             .position(|s| s.0 == key)
@@ -64,7 +99,7 @@ impl Progress {
             None => String::new(),
         }
     }
-    pub fn start(&mut self, cli: &mut Cli, key: &str) {
+    fn start(&mut self, cli: &mut Cli, key: Step) {
         let i = self.idx(key);
         let already = self.steps[i].2 == State::Running;
         if self.steps[i].3.is_none() {
@@ -75,32 +110,32 @@ impl Progress {
             self.line(cli, i, "⠋ Running...");
         }
     }
-    pub fn complete(&mut self, cli: &mut Cli, key: &str) {
+    fn complete(&mut self, cli: &mut Cli, key: Step) {
         let i = self.idx(key);
         self.steps[i].2 = State::Done;
         let e = self.elapsed(i);
         self.line(cli, i, &format!("✓ Completed{e}"));
     }
-    pub fn fail(&mut self, cli: &mut Cli, key: &str) {
+    fn fail(&mut self, cli: &mut Cli, key: Step) {
         let i = self.idx(key);
         self.steps[i].2 = State::Failed;
         let e = self.elapsed(i);
         self.line(cli, i, &format!("✗ Failed{e}"));
     }
-    fn terminal(&self, key: &str) -> bool {
+    fn terminal(&self, key: Step) -> bool {
         matches!(self.steps[self.idx(key)].2, State::Done | State::Failed)
     }
-    pub fn fail_running(&mut self, cli: &mut Cli) {
+    fn fail_running(&mut self, cli: &mut Cli) {
         if let Some(i) = self.steps.iter().position(|s| s.2 == State::Running) {
             let key = self.steps[i].0;
             self.fail(cli, key);
         }
     }
     /// `run_step(key, fn)`.
-    pub fn run<T>(
+    fn run<T>(
         &mut self,
         cli: &mut Cli,
-        key: &str,
+        key: Step,
         f: impl FnOnce(&mut Cli, &mut Progress) -> Result<T>,
     ) -> Result<T> {
         self.start(cli, key);
@@ -118,23 +153,18 @@ impl Progress {
 }
 
 /// `progress_session(progress)`: a blank line once the session ends.
-pub fn session<T>(
+fn session<T>(
     cli: &mut Cli,
     p: &mut Progress,
     f: impl FnOnce(&mut Cli, &mut Progress) -> Result<T>,
 ) -> Result<T> {
-    if cli.console.silent {
-        let r = f(cli, p);
-        if r.is_err() {
-            p.fail_running(cli);
-        }
-        return r;
-    }
     let r = f(cli, p);
     if r.is_err() {
         p.fail_running(cli);
     }
-    cli.console.message("");
+    if !cli.console.silent {
+        cli.console.message("");
+    }
     r
 }
 
@@ -268,21 +298,16 @@ fn is_hidden(rel: &str) -> bool {
     rel.split('/').any(|p| p.starts_with('.'))
 }
 
-fn walk_files(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return out;
-    };
-    let mut kids: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
-    kids.sort();
-    for k in kids {
-        if k.is_dir() {
-            out.extend(walk_files(&k));
-        } else {
-            out.push(k);
-        }
-    }
-    out
+/// `DCM_<project>_<unix seconds>_<suffix>` next to the project, completed from the connection.
+fn temp_stage(cli: &mut Cli, project: &Fqn, suffix: &str) -> Result<Fqn> {
+    let safe = snow_api::identifiers::sanitize_identifier(
+        &snow_api::identifiers::unquote_identifier(&project.name),
+    );
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    crate::stage::temp_stage_name(cli, project, format!("DCM_{safe}_{now}_{suffix}"))
 }
 
 /// `DCMProjectManager.sync_local_files(...)`: the temporary stage name.
@@ -290,28 +315,7 @@ fn sync_local_files(cli: &mut Cli, project: &Fqn, source: &Path) -> Result<Strin
     let source = source
         .canonicalize()
         .unwrap_or_else(|_| source.to_path_buf());
-    let name = snow_api::identifiers::unquote_identifier(&project.name);
-    let safe: String = name
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '$')
-        .collect();
-    let safe = if safe
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-    {
-        safe
-    } else {
-        format!("_{safe}")
-    };
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let stage = Fqn::from_string(&format!("DCM_{safe}_{now}_TMP_STAGE"))?
-        .set_database(project.database.as_deref())
-        .set_schema(project.schema.as_deref());
-    let stage = cli.using_connection(stage)?;
+    let stage = temp_stage(cli, project, "TMP_STAGE")?;
     let stage_id = stage.identifier();
     // `_build_upload_plan`: manifest.yml, sources/ (hidden files uploaded one by one).
     let mut rel = vec!["manifest.yml".to_string()];
@@ -326,7 +330,10 @@ fn sync_local_files(cli: &mut Cli, project: &Fqn, source: &Path) -> Result<Strin
             snow_api::project::PyV::List(vec![snow_api::project::PyV::s(".*")]),
         );
         artifacts.push(snow_api::project::PyV::Dict(m));
-        for f in walk_files(&sources) {
+        for f in crate::artifacts::walk(&sources)
+            .into_iter()
+            .filter(|f| !f.is_dir())
+        {
             let r = f
                 .strip_prefix(&sources)
                 .unwrap_or(&f)
@@ -405,14 +412,10 @@ struct Context {
 
 fn context(cli: &mut Cli, required_manifest: bool) -> Result<Context> {
     let (project, configuration) = crate::dcm::resolve(cli, required_manifest)?;
-    let from = cli
-        .str("from_location")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     Ok(Context {
         project,
         configuration,
-        from,
+        from: crate::dcm::from_dir(cli),
     })
 }
 
@@ -458,6 +461,22 @@ fn first_json(
         Ok(v) => Ok(Some((v, cell))),
         Err(_) => Err(SnowError::cli("Could not process response.")),
     }
+}
+
+/// The tail of a single-cell JSON command: save and report the response, then the
+/// format-aware result.
+fn finish_json(
+    cli: &mut Cli,
+    c: &snow_connector::Cursor,
+    command: &str,
+    report: impl FnOnce(&mut Cli, &serde_json::Value) -> Result<()>,
+) -> Result<Output> {
+    let Some((v, raw)) = first_json(cli, c)? else {
+        return Ok(Output::Empty);
+    };
+    save_response(cli, command, &v)?;
+    report(cli, &v)?;
+    Ok(format_aware(cli, c, raw))
 }
 
 /// `format_aware_result`: nothing more for TABLE, the raw cell for JSON/CSV.
@@ -611,7 +630,7 @@ fn report_test(cli: &mut Cli, v: &serde_json::Value) -> Result<()> {
                 None => "UNKNOWN".to_string(),
                 Some(serde_json::Value::String(s)) => s.clone(),
                 Some(serde_json::Value::Null) => "None".to_string(),
-                Some(serde_json::Value::Bool(b)) => if *b { "True" } else { "False" }.to_string(),
+                Some(serde_json::Value::Bool(b)) => crate::spcs::py_bool(*b).to_string(),
                 Some(other) => other.to_string(),
             })
         };
@@ -673,21 +692,16 @@ pub fn refresh(cli: &mut Cli) -> Result<Output> {
 
 fn refresh_inner(cli: &mut Cli) -> Result<Output> {
     let ctx = context(cli, false)?;
-    let mut p = Progress::new(&[("REFRESH", "REFRESH")]);
+    let mut p = Progress::new(&[(Step::Refresh, "REFRESH")]);
     let c = session(cli, &mut p, |cli, p| {
-        p.run(cli, "REFRESH", |cli, _| {
+        p.run(cli, Step::Refresh, |cli, _| {
             cli.execute_query(&format!(
                 "EXECUTE DCM PROJECT {} REFRESH ALL",
                 ctx.project.sql_identifier()
             ))
         })
     })?;
-    let Some((v, raw)) = first_json(cli, &c)? else {
-        return Ok(Output::Empty);
-    };
-    save_response(cli, "refresh", &v)?;
-    report_refresh(cli, &v)?;
-    Ok(format_aware(cli, &c, raw))
+    finish_json(cli, &c, "refresh", report_refresh)
 }
 
 pub fn test(cli: &mut Cli) -> Result<Output> {
@@ -714,41 +728,34 @@ fn test_inner(cli: &mut Cli) -> Result<Output> {
     } else {
         context(cli, false)?
     };
-    let label = if use_scripts
-        || cli
-            .config
-            .feature("ENABLE_DCM_UNIT_TEST_FEATURES", Some(false))
-            == Some(true)
-    {
+    let flag_on = cli
+        .config
+        .feature(snow_api::config::FeatureFlag::EnableDcmUnitTestFeatures);
+    let label = if use_scripts || flag_on {
         "EXPECTATIONS"
     } else {
         "TEST"
     };
-    let mut steps: Vec<(&str, &str)> = Vec::new();
+    let mut steps: Vec<(Step, &str)> = Vec::new();
     if use_scripts {
-        steps.extend([("UPLOAD", "UPLOAD"), ("TEST", "TEST")]);
+        steps.extend([(Step::Upload, "UPLOAD"), (Step::Test, "TEST")]);
     }
     if use_expectations {
-        steps.push(("EXPECTATIONS", label));
+        steps.push((Step::Expectations, label));
     }
     let mut p = Progress::new(&steps);
     let combined = use_scripts && use_expectations;
-    let flag_on = cli
-        .config
-        .feature("ENABLE_DCM_UNIT_TEST_FEATURES", Some(false))
-        == Some(true);
-    // (reporter name, cursor)
     let mut outcomes: Vec<(&str, snow_connector::Cursor)> = Vec::new();
     let mut failures: Vec<String> = Vec::new();
     session(cli, &mut p, |cli, p| {
         if use_scripts {
             let env = resolve_env(cli)?;
             let r = (|| -> Result<snow_connector::Cursor> {
-                let stage = p.run(cli, "UPLOAD", |cli, _| {
+                let stage = p.run(cli, Step::Upload, |cli, _| {
                     sync_local_files(cli, &ctx.project, &ctx.from)
                 })?;
                 let out = output_stage(cli, &ctx.project)?;
-                let r = p.run(cli, "TEST", |cli, _| {
+                let r = p.run(cli, Step::Test, |cli, _| {
                     let mut q =
                         format!("EXECUTE DCM PROJECT {} TEST", ctx.project.sql_identifier());
                     q.push_str(&using_env(cli, ctx.configuration.as_deref(), &env)?);
@@ -780,7 +787,7 @@ fn test_inner(cli: &mut Cli) -> Result<Output> {
                     "⚠️  This checks expectations against already-deployed objects. The newer --script/--all-scripts option runs test scripts against a fresh, isolated data branch instead, and will eventually replace this check.",
                 );
             }
-            let r = p.run(cli, "EXPECTATIONS", |cli, _| {
+            let r = p.run(cli, Step::Expectations, |cli, _| {
                 cli.execute_query(&format!(
                     "EXECUTE DCM PROJECT {} TEST ALL",
                     ctx.project.sql_identifier()
@@ -904,20 +911,16 @@ fn report_unit_test(cli: &mut Cli, v: &serde_json::Value) -> Result<()> {
 }
 
 pub fn preview(cli: &mut Cli) -> Result<Output> {
-    preview_inner(cli)
-}
-
-fn preview_inner(cli: &mut Cli) -> Result<Output> {
     let ctx = context(cli, true)?;
     let env = resolve_env(cli)?.filter(|_| cli.str("deployment").is_none());
     let object = crate::object::fqn_arg(cli, "object_identifier")?;
     let limit = cli.int("limit");
-    let mut p = Progress::new(&[("UPLOAD", "UPLOAD"), ("PREVIEW", "PREVIEW")]);
+    let mut p = Progress::new(&[(Step::Upload, "UPLOAD"), (Step::Preview, "PREVIEW")]);
     let c = session(cli, &mut p, |cli, p| {
-        let stage = p.run(cli, "UPLOAD", |cli, _| {
+        let stage = p.run(cli, Step::Upload, |cli, _| {
             sync_local_files(cli, &ctx.project, &ctx.from)
         })?;
-        p.run(cli, "PREVIEW", |cli, _| {
+        p.run(cli, Step::Preview, |cli, _| {
             let mut q = format!(
                 "EXECUTE DCM PROJECT {} PREVIEW {}",
                 ctx.project.sql_identifier(),
@@ -938,11 +941,11 @@ fn preview_inner(cli: &mut Cli) -> Result<Output> {
 fn server_poll(
     cli: &mut Cli,
     p: &mut Progress,
-    steps: &[&'static str],
+    steps: &[Step],
     sfqid: &str,
 ) -> Result<snow_connector::Cursor> {
     if let Some(first) = steps.first() {
-        p.start(cli, first);
+        p.start(cli, *first);
     }
     let running = [
         "RUNNING",
@@ -981,20 +984,17 @@ fn server_poll(
         if let Ok(Ok(c)) = cli.try_query(&format!(
             "SELECT SYSTEM$GET_DCM_PROJECT_PROGRESS({})",
             snow_api::identifiers::to_string_literal(sfqid)
-        )) && let Some(cell) = c.rows.first().and_then(|r| r.first().cloned().flatten())
+        )) && let Some(cell) = Cli::first_cell_opt(&c)
             && let Ok(v) = serde_json::from_str::<serde_json::Value>(&cell)
         {
-            let phase = v["phase"].as_str().unwrap_or("").to_string();
-            if steps.contains(&phase.as_str()) {
-                let mut found = false;
-                for s in steps {
-                    if *s == phase {
-                        found = true;
-                        p.start(cli, s);
-                    } else if !found && !p.terminal(s) {
+            let phase = v["phase"].as_str().unwrap_or("");
+            if let Some(at) = steps.iter().position(|s| s.key() == phase) {
+                for &s in &steps[..at] {
+                    if !p.terminal(s) {
                         p.complete(cli, s);
                     }
                 }
+                p.start(cli, steps[at]);
             }
         }
         let wait = if start.elapsed().as_secs() < 60 {
@@ -1009,7 +1009,7 @@ fn server_poll(
             .map_err(|e| snow_api::connect::db_error_to_cli(&e, verbose))?;
     }
     if failed.contains(&status.as_str()) {
-        for s in steps {
+        for &s in steps {
             if !p.terminal(s) {
                 p.fail(cli, s);
             }
@@ -1018,7 +1018,7 @@ fn server_poll(
             "Query {sfqid} failed, but Snowflake reported no error for it."
         )));
     }
-    for s in steps {
+    for &s in steps {
         if !p.terminal(s) {
             p.complete(cli, s);
         }
@@ -1039,7 +1039,6 @@ fn submit_async(cli: &mut Cli, q: &str, env: &Option<String>) -> Result<String> 
     Ok(c.sfqid.unwrap_or_default())
 }
 
-/// One node of a plan change tree: its label and children.
 struct ChangeNode {
     label: String,
     sort: (i32, i32),
@@ -1404,7 +1403,7 @@ fn with_artifacts(cli: &mut Cli, f: impl FnOnce(&mut Cli) -> Result<Output>) -> 
         std::fs::create_dir_all(out)?;
     }
     let r = f(cli);
-    if save && walk_files(out).iter().any(|p| p.is_file()) {
+    if save && crate::artifacts::walk(out).iter().any(|p| p.is_file()) {
         let abs = std::env::current_dir().unwrap_or_default().join(out);
         cli.console
             .step(&format!("Artifacts saved to: {}", abs.display()));
@@ -1430,28 +1429,7 @@ fn output_stage(cli: &mut Cli, project: &Fqn) -> Result<Option<String>> {
     if !cli.flag("save_output") {
         return Ok(None);
     }
-    let name = snow_api::identifiers::unquote_identifier(&project.name);
-    let safe: String = name
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '$')
-        .collect();
-    let safe = if safe
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-    {
-        safe
-    } else {
-        format!("_{safe}")
-    };
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let stage = Fqn::from_string(&format!("DCM_{safe}_{now}_OUTPUT_TMP_STAGE"))?
-        .set_database(project.database.as_deref())
-        .set_schema(project.schema.as_deref());
-    let stage = cli.using_connection(stage)?;
+    let stage = temp_stage(cli, project, "OUTPUT_TMP_STAGE")?;
     cli.execute_query(&crate::stage::create_query(&stage, true, None, false, None))?;
     Ok(Some(
         snow_api::stage_path::StagePath::from_stage_str(&stage.identifier())
@@ -1470,7 +1448,7 @@ fn upload_and(cli: &mut Cli, p: &mut Progress, ctx: &Context) -> Result<Option<S
     if cli.str("deployment").is_some() {
         return Ok(None);
     }
-    Ok(Some(p.run(cli, "UPLOAD", |cli, _| {
+    Ok(Some(p.run(cli, Step::Upload, |cli, _| {
         sync_local_files(cli, &ctx.project, &ctx.from)
     })?))
 }
@@ -1494,14 +1472,14 @@ fn plan_inner(cli: &mut Cli) -> Result<Output> {
     let env = resolve_env(cli)?.filter(|_| cli.str("deployment").is_none());
     let deployment = cli.str("deployment");
     let delta = cli.flag("delta");
-    let mut steps: Vec<(&'static str, &'static str)> = vec![];
+    let mut steps: Vec<(Step, &str)> = vec![];
     if deployment.is_none() {
-        steps.push(("UPLOAD", "UPLOAD"));
+        steps.push((Step::Upload, "UPLOAD"));
     }
     steps.extend([
-        ("RENDER", "RENDER"),
-        ("COMPILE", "COMPILE"),
-        ("PLAN", "PLAN"),
+        (Step::Render, "RENDER"),
+        (Step::Compile, "COMPILE"),
+        (Step::Plan, "PLAN"),
     ]);
     let mut p = Progress::new(&steps);
     let c = session(cli, &mut p, |cli, p| {
@@ -1519,16 +1497,11 @@ fn plan_inner(cli: &mut Cli) -> Result<Output> {
             q.push_str(&format!(" OUTPUT_PATH {o}"));
         }
         let r = submit_async(cli, &q, &env)
-            .and_then(|qid| server_poll(cli, p, &["RENDER", "COMPILE", "PLAN"], &qid));
+            .and_then(|qid| server_poll(cli, p, &[Step::Render, Step::Compile, Step::Plan], &qid));
         download_outputs(cli, &out);
         r
     })?;
-    let Some((v, raw)) = first_json(cli, &c)? else {
-        return Ok(Output::Empty);
-    };
-    save_response(cli, "plan", &v)?;
-    report_plan(cli, &v, "plan")?;
-    Ok(format_aware(cli, &c, raw))
+    finish_json(cli, &c, "plan", |cli, v| report_plan(cli, v, "plan"))
 }
 
 pub fn deploy(cli: &mut Cli) -> Result<Output> {
@@ -1541,22 +1514,27 @@ fn deploy_inner(cli: &mut Cli) -> Result<Output> {
     let deployment = cli.str("deployment");
     let alias = cli.str("alias");
     let skip_plan = cli.flag("skip_plan");
-    let mut server: Vec<&'static str> = vec!["RENDER", "COMPILE", "PLAN", "DEPLOY"];
+    let mut server = vec![Step::Render, Step::Compile, Step::Plan, Step::Deploy];
     if crate::dcm::run_post_hooks(cli) {
-        server.push("POST_HOOK");
+        server.push(Step::PostHook);
     }
     if skip_plan {
-        server.retain(|s| *s != "PLAN");
+        server.retain(|s| *s != Step::Plan);
     }
-    let mut steps: Vec<(&'static str, &'static str)> = vec![];
+    let mut steps: Vec<(Step, &str)> = vec![];
     if deployment.is_none() {
-        steps.push(("UPLOAD", "UPLOAD"));
+        steps.push((Step::Upload, "UPLOAD"));
     }
-    steps.extend(
-        server
-            .iter()
-            .map(|s| (*s, if *s == "POST_HOOK" { "POST HOOK" } else { *s })),
-    );
+    steps.extend(server.iter().map(|&s| {
+        (
+            s,
+            if s == Step::PostHook {
+                "POST HOOK"
+            } else {
+                s.key()
+            },
+        )
+    }));
     let mut p = Progress::new(&steps);
     let c = session(cli, &mut p, |cli, p| {
         if skip_plan {
@@ -1580,12 +1558,7 @@ fn deploy_inner(cli: &mut Cli) -> Result<Output> {
         let qid = submit_async(cli, &q, &env)?;
         server_poll(cli, p, &server, &qid)
     })?;
-    let Some((v, raw)) = first_json(cli, &c)? else {
-        return Ok(Output::Empty);
-    };
-    save_response(cli, "deploy", &v)?;
-    report_plan(cli, &v, "deploy")?;
-    Ok(format_aware(cli, &c, raw))
+    finish_json(cli, &c, "deploy", |cli, v| report_plan(cli, v, "deploy"))
 }
 
 pub fn purge(cli: &mut Cli) -> Result<Output> {
@@ -1634,14 +1607,14 @@ fn purge_inner(cli: &mut Cli) -> Result<Output> {
     }
     let alias = cli.str("alias");
     let skip_plan = cli.flag("skip_plan");
-    let server: Vec<&'static str> = if skip_plan {
-        vec!["DEPLOY"]
+    let server = if skip_plan {
+        vec![Step::Deploy]
     } else {
-        vec!["PLAN", "DEPLOY"]
+        vec![Step::Plan, Step::Deploy]
     };
-    let steps: Vec<(&'static str, &'static str)> = server
+    let steps: Vec<(Step, &str)> = server
         .iter()
-        .map(|s| (*s, if *s == "DEPLOY" { "PURGE" } else { "PLAN" }))
+        .map(|&s| (s, if s == Step::Deploy { "PURGE" } else { "PLAN" }))
         .collect();
     let mut p = Progress::new(&steps);
     let c = session(cli, &mut p, |cli, p| {
@@ -1658,12 +1631,7 @@ fn purge_inner(cli: &mut Cli) -> Result<Output> {
         let qid = submit_async(cli, &q, &None)?;
         server_poll(cli, p, &server, &qid)
     })?;
-    let Some((v, raw)) = first_json(cli, &c)? else {
-        return Ok(Output::Empty);
-    };
-    save_response(cli, "purge", &v)?;
-    report_plan(cli, &v, "purge")?;
-    Ok(format_aware(cli, &c, raw))
+    finish_json(cli, &c, "purge", |cli, v| report_plan(cli, v, "purge"))
 }
 
 pub fn raw_analyze(cli: &mut Cli) -> Result<Output> {
@@ -1673,12 +1641,12 @@ pub fn raw_analyze(cli: &mut Cli) -> Result<Output> {
 fn raw_analyze_inner(cli: &mut Cli) -> Result<Output> {
     let ctx = context(cli, true)?;
     let env = resolve_env(cli)?.filter(|_| cli.str("deployment").is_none());
-    let mut p = Progress::new(&[("UPLOAD", "UPLOAD"), ("ANALYZE", "ANALYZE")]);
+    let mut p = Progress::new(&[(Step::Upload, "UPLOAD"), (Step::Analyze, "ANALYZE")]);
     let c = session(cli, &mut p, |cli, p| {
-        let stage = p.run(cli, "UPLOAD", |cli, _| {
+        let stage = p.run(cli, Step::Upload, |cli, _| {
             sync_local_files(cli, &ctx.project, &ctx.from)
         })?;
-        p.run(cli, "ANALYZE", |cli, _| {
+        p.run(cli, Step::Analyze, |cli, _| {
             let mut q = format!(
                 "EXECUTE DCM PROJECT {} ANALYZE",
                 ctx.project.sql_identifier()
@@ -1812,7 +1780,7 @@ fn resolve_env(cli: &mut Cli) -> Result<Option<String>> {
             Some(v) => {
                 result.insert(n.clone(), serde_json::Value::String(v));
             }
-            None => missing.push(snow_api::sql::sanitize_for_terminal(n)),
+            None => missing.push(snow_api::sanitize::for_terminal(n)),
         }
     }
     if !missing.is_empty() {
@@ -1833,32 +1801,6 @@ fn resolve_env(cli: &mut Cli) -> Result<Option<String>> {
         &serde_json::Value::Object(result),
         None,
     )))
-}
-
-/// `fnmatch` of one path segment with only `*` as a wildcard.
-fn seg_match(pat: &str, name: &str) -> bool {
-    let (p, n): (Vec<char>, Vec<char>) = (pat.chars().collect(), name.chars().collect());
-    let (mut pi, mut ni, mut star, mut mark) = (0, 0, None, 0);
-    while ni < n.len() {
-        if pi < p.len() && p[pi] == '*' {
-            star = Some(pi);
-            mark = ni;
-            pi += 1;
-        } else if pi < p.len() && p[pi] == n[ni] {
-            pi += 1;
-            ni += 1;
-        } else if let Some(s) = star {
-            pi = s + 1;
-            mark += 1;
-            ni = mark;
-        } else {
-            return false;
-        }
-    }
-    while pi < p.len() && p[pi] == '*' {
-        pi += 1;
-    }
-    pi == p.len()
 }
 
 fn sorted_children(dir: &Path) -> Vec<PathBuf> {
@@ -1888,7 +1830,7 @@ fn glob_segments(dir: &Path, segs: &[&str], out: &mut Vec<PathBuf>) {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            if seg_match(first, &name) && (rest.is_empty() || c.is_dir()) {
+            if crate::stage::fnmatchcase(&name, first) && (rest.is_empty() || c.is_dir()) {
                 glob_segments(&c, rest, out);
             }
         }
@@ -1932,7 +1874,7 @@ fn resolve_asset_paths(
                 if m.is_file() {
                     files.push(r);
                 } else if m.is_dir() && !is_glob {
-                    for f in walk_files(&m) {
+                    for f in crate::artifacts::walk(&m) {
                         let fr = rel_of(&f);
                         if f.is_file() && !is_hidden(&fr) && inside(&f) {
                             files.push(fr);

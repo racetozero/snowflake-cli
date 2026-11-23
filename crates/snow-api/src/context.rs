@@ -7,7 +7,7 @@ use crate::errors::{Result, SnowError};
 use crate::output::Format;
 use indexmap::IndexMap;
 use snow_click::{Invocation, Spec, Value};
-use snow_connector::{ConnectParams, Connection};
+use snow_connector::Connection;
 
 /// `ConnectionContext`: command-line connection overrides.
 #[derive(Debug, Clone, Default)]
@@ -38,6 +38,43 @@ impl ConnectionContext {
     }
 }
 
+/// `snow sql` output settings; reset when the command ends.
+pub struct SqlSession {
+    /// SnowSQL `quiet`: query results are not written to the terminal.
+    pub quiet: bool,
+    /// The open `!spool` / `output_file` (results are appended to it).
+    pub spool: Option<std::fs::File>,
+    /// REPL `!set timing` (default on), `timing_in_output_file` and `echo`.
+    pub timing: bool,
+    pub timing_in_output_file: bool,
+    pub echo: bool,
+}
+
+impl Default for SqlSession {
+    fn default() -> SqlSession {
+        SqlSession {
+            quiet: false,
+            spool: None,
+            timing: true,
+            timing_in_output_file: false,
+            echo: false,
+        }
+    }
+}
+
+/// The connection lifecycle. A failed login is kept, so it is not retried;
+/// telemetry is queued only while a connection is open.
+enum Conn {
+    Unopened,
+    Open {
+        conn: Box<Connection>,
+        /// Events sent in one `/telemetry/send` before the session closes,
+        /// like the Python connector's telemetry batch.
+        telemetry: Vec<serde_json::Value>,
+    },
+    Failed(SnowError),
+}
+
 pub struct Cli {
     pub spec: &'static Spec,
     pub inv: Invocation,
@@ -54,22 +91,17 @@ pub struct Cli {
     pub console: Console,
     /// `--agent` / `SNOW_AGENT=1`.
     pub agent: bool,
+    /// Agent mode: the results printed so far (the envelope's `data`).
+    pub agent_data: Vec<serde_json::Value>,
     /// Python `warnings.warn` messages to print on stderr.
     pub warnings: Vec<String>,
-    connection: Option<Connection>,
-    connection_failure: Option<SnowError>,
+    connection: Conn,
     /// The time the command started (for telemetry and metrics).
     pub started: std::time::Instant,
     /// The connector logs at INFO or DEBUG (error messages then include the query id).
     pub connector_info: bool,
-    /// SnowSQL `quiet`: query results are not written to the terminal.
-    pub quiet: bool,
-    /// The open `!spool` / `output_file` (results are appended to it).
-    pub spool: Option<std::fs::File>,
-    /// REPL `!set timing` (default on), `timing_in_output_file` and `echo`.
-    pub timing: bool,
-    pub timing_in_output_file: bool,
-    pub echo: bool,
+    /// `snow sql` output settings.
+    pub sql: SqlSession,
     /// The loaded project definition (`cli_context.project_definition`), once read.
     project: Option<Option<crate::project::Project>>,
 }
@@ -108,7 +140,7 @@ impl crate::project::render::Host for ProjectHost {
 
 impl Cli {
     pub fn new(spec: &'static Spec, inv: Invocation, agent: bool) -> Cli {
-        Cli {
+        let mut cli = Cli {
             spec,
             inv,
             config: Config::empty(),
@@ -123,18 +155,17 @@ impl Cli {
             env_overrides: Vec::new(),
             console: Console::default(),
             agent,
+            agent_data: Vec::new(),
             warnings: Vec::new(),
-            connection: None,
-            connection_failure: None,
+            connection: Conn::Unopened,
             started: std::time::Instant::now(),
             connector_info: false,
-            quiet: false,
-            spool: None,
-            timing: true,
-            timing_in_output_file: false,
-            echo: false,
+            sql: SqlSession::default(),
             project: None,
-        }
+        };
+        // Agent mode collects the console messages for the envelope's `meta`.
+        cli.console.collected = agent.then(Vec::new);
+        cli
     }
 
     /// The project root (`--project` or the working directory), absolute.
@@ -148,14 +179,14 @@ impl Cli {
                 } else {
                     cwd.join(p)
                 };
-                crate::project::model::pure_path(&abs.to_string_lossy()).into()
+                crate::stage_path::pure_path(&abs.to_string_lossy()).into()
             }
             None => cwd,
         }
     }
 
     /// `--env key=value` overrides.
-    pub fn env_override_map(&self) -> IndexMap<String, String> {
+    pub(crate) fn env_override_map(&self) -> IndexMap<String, String> {
         self.env_overrides
             .iter()
             .filter_map(|p| {
@@ -170,26 +201,12 @@ impl Cli {
     pub fn project(&mut self, optional: bool) -> Result<Option<&crate::project::Project>> {
         if self.project.is_none() {
             let root = self.project_root();
-            let files = crate::project::definition::definition_files(&root);
-            if files.is_empty() && !optional {
-                return Err(SnowError::cli(
-                    "Cannot find project definition (snowflake.yml). Please provide a path to the project or run this command in a valid project directory.",
-                )
-                .named("MissingConfigurationError"));
-            }
-            let features: Vec<String> =
-                ["ENABLE_SNOWPARK_GLOB_SUPPORT", "ENABLE_NATIVE_APP_CHILDREN"]
-                    .iter()
-                    .filter(|f| self.config.feature(f, Some(false)) == Some(true))
-                    .map(|f| f.to_string())
-                    .collect();
+            let features = self.project_features();
             let host = ProjectHost { root: root.clone() };
             let overrides = self.env_override_map();
             let mut warns = Vec::new();
             let p =
-                crate::project::definition::load(&root, &overrides, &features, &host, &mut |w| {
-                    warns.push(w.to_string())
-                });
+                crate::project::definition::load(&root, &overrides, &features, &host, &mut warns);
             for w in warns {
                 self.console.warning(&w);
             }
@@ -197,12 +214,18 @@ impl Cli {
         }
         let p = self.project.as_ref().and_then(|p| p.as_ref());
         if p.is_none() && !optional {
-            return Err(SnowError::cli(
-                "Cannot find project definition (snowflake.yml). Please provide a path to the project or run this command in a valid project directory.",
-            )
-            .named("MissingConfigurationError"));
+            return Err(SnowError::missing_project_definition());
         }
         Ok(p)
+    }
+
+    /// The enabled `ENGINE_FEATURES`, by name.
+    fn project_features(&self) -> Vec<String> {
+        crate::project::model::ENGINE_FEATURES
+            .iter()
+            .filter(|f| self.config.feature(**f))
+            .map(|f| f.name().to_string())
+            .collect()
     }
 
     /// `convert_project_definition_to_v2(..., in_memory=True)` for a v1 project:
@@ -214,14 +237,8 @@ impl Cli {
             return Ok(p);
         }
         let mut warns = Vec::new();
-        let data = crate::project::conversion::to_v2_data(&p.definition, false, None, &mut |w| {
-            warns.push(w.to_string())
-        })?;
-        let features: Vec<String> = ["ENABLE_SNOWPARK_GLOB_SUPPORT", "ENABLE_NATIVE_APP_CHILDREN"]
-            .iter()
-            .filter(|f| self.config.feature(f, Some(false)) == Some(true))
-            .map(|f| f.to_string())
-            .collect();
+        let data = crate::project::conversion::to_v2_data(&p.definition, false, None, &mut warns)?;
+        let features = self.project_features();
         let host = ProjectHost {
             root: p.root.clone(),
         };
@@ -230,7 +247,7 @@ impl Cli {
             &IndexMap::new(),
             &features,
             &host,
-            &mut |w| warns.push(w.to_string()),
+            &mut warns,
         )?;
         for w in warns {
             self.console.warning(&w);
@@ -293,12 +310,14 @@ impl Cli {
             .unwrap_or_default()
     }
 
-    pub fn feature(&self, name: &str, default: Option<bool>) -> bool {
-        self.config.feature(name, default) == Some(true)
+    /// Set the output format; a structured format (JSON, CSV) silences the console.
+    pub fn set_format(&mut self, f: Format) {
+        self.format = f;
+        self.console.silent = self.silent || f.is_structured();
     }
 
     /// Resolved connection parameters (`resolve_connection_parameters`).
-    pub fn connection_parameters(&mut self) -> Result<IndexMap<String, Cv>> {
+    pub(crate) fn connection_parameters(&mut self) -> Result<IndexMap<String, Cv>> {
         if !self.conn.temporary_connection && self.conn.connection_name.is_none() {
             self.conn.connection_name = Some(self.config.default_connection_name());
         }
@@ -332,10 +351,6 @@ impl Cli {
         };
         let mut params: IndexMap<String, Cv> = IndexMap::new();
         if let Some(n) = &name {
-            if !self.config.connection_exists(n) {
-                return Err(SnowError::cli(format!("Connection {n} is not configured"))
-                    .named("MissingConfigurationError"));
-            }
             for (k, v) in self.config.connection_dict(n)? {
                 params.insert(alias(&k), v);
             }
@@ -396,30 +411,53 @@ impl Cli {
         r
     }
 
-    /// The open connection, created on first use.
     pub fn connection(&mut self) -> Result<&mut Connection> {
-        if self.connection.is_none() {
-            if let Some(f) = &self.connection_failure {
-                return Err(f.clone());
-            }
-            match self.open_connection() {
-                Ok(c) => self.connection = Some(c),
-                Err(e) => {
-                    self.connection_failure = Some(e.clone());
-                    return Err(e);
-                }
-            }
+        if matches!(self.connection, Conn::Unopened) {
+            self.connection = match self.open_connection() {
+                Ok(conn) => Conn::Open {
+                    conn: Box::new(conn),
+                    telemetry: Vec::new(),
+                },
+                Err(e) => Conn::Failed(e),
+            };
         }
-        Ok(self.connection.as_mut().expect("just set"))
+        match &mut self.connection {
+            Conn::Open { conn, .. } => Ok(conn),
+            Conn::Failed(e) => Err(e.clone()),
+            Conn::Unopened => unreachable!("the connection was opened above"),
+        }
     }
 
     pub fn connection_if_open(&mut self) -> Option<&mut Connection> {
-        self.connection.as_mut()
+        match &mut self.connection {
+            Conn::Open { conn, .. } => Some(conn),
+            _ => None,
+        }
     }
 
+    /// Queue a telemetry event for the open connection; without one it is dropped.
+    pub fn queue_telemetry(&mut self, event: serde_json::Value) {
+        if let Conn::Open { telemetry, .. } = &mut self.connection {
+            telemetry.push(event);
+        }
+    }
+
+    /// Send the queued telemetry events in one request.
+    pub fn flush_telemetry(&mut self) {
+        if let Conn::Open { conn, telemetry } = &mut self.connection
+            && !telemetry.is_empty()
+        {
+            conn.send_telemetry(serde_json::Value::Array(std::mem::take(telemetry)));
+        }
+    }
+
+    /// Flush the telemetry and close an open connection; the next use opens a
+    /// new one. A failed login stays failed.
     pub fn close_connection(&mut self) {
-        if let Some(mut c) = self.connection.take() {
-            c.close();
+        self.flush_telemetry();
+        if let Conn::Open { conn, .. } = &mut self.connection {
+            conn.close();
+            self.connection = Conn::Unopened;
         }
     }
 
@@ -427,19 +465,5 @@ impl Cli {
         let params = self.connection_parameters()?;
         let p = crate::connect::build_params(self, params)?;
         crate::connect::connect(self, p)
-    }
-
-    /// Replace the connection (e.g. after `snow sql` switches autocommit).
-    pub fn set_connection(&mut self, c: Connection) {
-        self.connection = Some(c);
-    }
-
-    pub fn take_connection(&mut self) -> Option<Connection> {
-        self.connection.take()
-    }
-
-    pub fn connect_params(&mut self) -> Result<ConnectParams> {
-        let params = self.connection_parameters()?;
-        crate::connect::build_params(self, params)
     }
 }

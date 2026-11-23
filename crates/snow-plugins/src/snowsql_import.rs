@@ -2,6 +2,7 @@
 
 use crate::common::{confirm, prompt};
 use indexmap::IndexMap;
+use snow_api::config::Cv;
 use snow_api::output::Output;
 use snow_api::{Cli, Result, SnowError};
 use std::path::{Path, PathBuf};
@@ -42,51 +43,8 @@ const OPTION_KEYS: [&str; 5] = [
     "insecure_mode",
     "client_store_temporary_credential",
 ];
-/// `ConnectionConfig` field order.
-const KNOWN: [&str; 32] = [
-    "account",
-    "user",
-    "password",
-    "host",
-    "region",
-    "port",
-    "protocol",
-    "database",
-    "schema",
-    "warehouse",
-    "role",
-    "authenticator",
-    "workload_identity_provider",
-    "private_key_file",
-    "private_key_raw",
-    "private_key_passphrase",
-    "token",
-    "session_token",
-    "master_token",
-    "token_file_path",
-    "oauth_client_id",
-    "oauth_client_secret",
-    "oauth_authorization_url",
-    "oauth_token_request_url",
-    "oauth_redirect_uri",
-    "oauth_scope",
-    "oauth_enable_pkce",
-    "oauth_enable_refresh_tokens",
-    "oauth_enable_single_use_refresh_tokens",
-    "client_store_temporary_credential",
-    "secondary_roles",
-    "server_session_keep_alive",
-];
-
-#[derive(Clone, Debug, PartialEq)]
-enum V {
-    S(String),
-    I(i64),
-    B(bool),
-}
-
 type Raw = IndexMap<String, String>;
-type Conn = IndexMap<String, V>;
+type Conn = IndexMap<String, Cv>;
 
 /// A ConfigObj file read with `list_values=False`: top-level sections of key/value pairs.
 struct Ini {
@@ -196,16 +154,8 @@ fn parse_ini(text: &str) -> std::result::Result<Ini, ()> {
     Ok(Ini { sections })
 }
 
-fn config_value(v: &str) -> String {
-    let b = v.as_bytes();
-    if b.len() >= 2 && b[0] == b[b.len() - 1] && (b[0] == b'"' || b[0] == b'\'') {
-        return v[1..v.len() - 1].to_string();
-    }
-    v.to_string()
-}
-
 fn name_for_prompt(s: &str) -> String {
-    snow_api::sql::sanitize_for_terminal(s)
+    snow_api::sanitize::for_terminal(s)
         .chars()
         .filter(|c| {
             !c.is_control()
@@ -218,23 +168,21 @@ fn blank(s: &str) -> bool {
     s.trim().is_empty()
 }
 
-fn coerce(key: &str, v: &str) -> V {
+fn coerce(key: &str, v: &str) -> Cv {
     if INT_KEYS.contains(&key) {
         return v
             .trim()
             .replace('_', "")
             .parse::<i64>()
-            .map(V::I)
-            .unwrap_or_else(|_| V::S(v.into()));
+            .map(Cv::Int)
+            .unwrap_or_else(|_| Cv::Str(v.into()));
     }
     if BOOL_KEYS.contains(&key) {
-        return match v.trim().to_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => V::B(true),
-            "0" | "false" | "no" | "off" => V::B(false),
-            _ => V::S(v.into()),
-        };
+        return snow_api::config::parse_on_off(v.trim())
+            .map(Cv::Bool)
+            .unwrap_or_else(|| Cv::Str(v.into()));
     }
-    V::S(v.into())
+    Cv::Str(v.into())
 }
 
 fn convert(raw: &Raw) -> Conn {
@@ -258,27 +206,26 @@ fn convert(raw: &Raw) -> Conn {
 }
 
 fn drop_blank(c: &mut Conn) {
-    c.retain(|_, v| !matches!(v, V::S(s) if blank(s)));
+    c.retain(|_, v| !matches!(v, Cv::Str(s) if blank(s)));
 }
 
 fn key_only_with_jwt(cli: &mut Cli, c: &mut Conn, name: &str) {
     if !c
         .get("private_key_file")
-        .is_some_and(|v| !matches!(v, V::S(s) if s.is_empty()))
+        .is_some_and(|v| !matches!(v, Cv::Str(s) if s.is_empty()))
     {
         return;
     }
     let auth = match c.get("authenticator") {
-        None | Some(V::S(_))
+        None | Some(Cv::Str(_))
             if c.get("authenticator")
-                .is_none_or(|v| matches!(v, V::S(s) if s.is_empty())) =>
+                .is_none_or(|v| matches!(v, Cv::Str(s) if s.is_empty())) =>
         {
-            c.insert("authenticator".into(), V::S("SNOWFLAKE_JWT".into()));
+            c.insert("authenticator".into(), Cv::Str("SNOWFLAKE_JWT".into()));
             return;
         }
-        Some(V::S(s)) => s.clone(),
-        Some(V::B(b)) => if *b { "True" } else { "False" }.into(),
-        Some(V::I(i)) => i.to_string(),
+        Some(Cv::Str(s)) => s.clone(),
+        Some(other) => other.py_str(),
         None => return,
     };
     if auth.to_uppercase() == "SNOWFLAKE_JWT" {
@@ -329,7 +276,12 @@ fn items(ini: &Ini, section: &str) -> Vec<(String, String)> {
     match ini.sections.get(section) {
         Some(Some(v)) => v
             .iter()
-            .map(|(k, v)| (k.to_lowercase(), config_value(v)))
+            .map(|(k, v)| {
+                (
+                    k.to_lowercase(),
+                    crate::sql::commands::strip_matching_quotes(v).to_string(),
+                )
+            })
             .collect(),
         _ => Vec::new(),
     }
@@ -337,7 +289,10 @@ fn items(ini: &Ini, section: &str) -> Vec<(String, String)> {
 
 fn merge(target: &mut Raw, items: Vec<(String, String)>) {
     for (k, v) in items {
-        target.insert(k, config_value(&v));
+        target.insert(
+            k,
+            crate::sql::commands::strip_matching_quotes(&v).to_string(),
+        );
     }
 }
 
@@ -502,30 +457,8 @@ pub fn import_snowsql_connections(cli: &mut Cli) -> Result<Output> {
             "Saving [{}] connection in Snowflake CLI's config.",
             name_for_prompt(n)
         ));
-        let mut known = toml_edit::Table::new();
-        let to_item = |v: &V| match v {
-            V::S(s) => toml_edit::value(s.as_str()),
-            V::I(i) => toml_edit::value(*i),
-            V::B(b) => toml_edit::value(*b),
-        };
-        let alias = |k: &str| {
-            if k == "private_key_file_pwd" {
-                "private_key_passphrase".to_string()
-            } else {
-                k.to_string()
-            }
-        };
-        for k in KNOWN {
-            if let Some((_, v)) = c.iter().find(|(ck, _)| alias(ck) == k) {
-                known.insert(k, to_item(v));
-            }
-        }
-        for (k, v) in c {
-            if !KNOWN.contains(&alias(k).as_str()) {
-                known.insert(k, to_item(v));
-            }
-        }
-        cli.config.add_connection(n, known)?;
+        cli.config
+            .add_connection(n, snow_api::config::connection_table(c.clone()))?;
     }
     if let Some(u) = unnamed
         && save.iter().any(|(n, _)| *n == u)

@@ -9,7 +9,7 @@ use super::value::PyV;
 use indexmap::IndexMap;
 
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub(crate) enum Expr {
     Const(PyV),
     /// `a.b.c`
     Var(Vec<String>),
@@ -18,7 +18,7 @@ pub enum Expr {
 }
 
 #[derive(Debug, Clone)]
-pub enum Piece {
+pub(crate) enum Piece {
     Text(String),
     Out(Expr),
 }
@@ -301,7 +301,7 @@ fn collect(e: &Expr, out: &mut Vec<Vec<String>>) {
 }
 
 /// The variable chains a template references (`get_referenced_vars`).
-pub fn referenced_vars(t: &str) -> Result<Vec<Vec<String>>, TemplateError> {
+pub(crate) fn referenced_vars(t: &str) -> Result<Vec<Vec<String>>, TemplateError> {
     let mut out = Vec::new();
     for p in parse(t)? {
         if let Piece::Out(e) = p {
@@ -439,7 +439,13 @@ fn eval(e: &Expr, ctx: &Ctx, host: &dyn Host) -> Result<PyV, String> {
 pub fn render(v: &PyV, ctx: &Ctx, host: &dyn Host) -> Result<PyV, String> {
     let s = v.py_str();
     let pieces = parse(&s).map_err(|_| "template".to_string())?;
-    if referenced_vars(&s).map(|r| r.is_empty()).unwrap_or(true) {
+    let mut vars = Vec::new();
+    for p in &pieces {
+        if let Piece::Out(e) = p {
+            collect(e, &mut vars);
+        }
+    }
+    if vars.is_empty() {
         return Ok(v.clone());
     }
     let mut out = String::new();

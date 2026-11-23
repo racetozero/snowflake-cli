@@ -1,11 +1,9 @@
 //! Callbacks defined by individual plugins.
 
-use snow_api::{Cli, Result};
+use snow_api::Result;
 use snow_click::Value;
-use snow_click::spec::Param;
 
-pub fn run(cli: &mut Cli, param: &'static Param, name: &str, value: Value) -> Result<Value> {
-    let _ = param;
+pub fn run(name: &str, value: Value) -> Result<Value> {
     match name {
         "_env_callback" => crate::dbt::reject_control_chars(value.as_str(), "--env")?,
         "_default_env_callback" => {
@@ -84,6 +82,5 @@ pub fn run(cli: &mut Cli, param: &'static Param, name: &str, value: Value) -> Re
         }
         _ => {}
     }
-    let _ = cli;
     Ok(value)
 }

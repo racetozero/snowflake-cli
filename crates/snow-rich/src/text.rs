@@ -8,14 +8,11 @@ pub enum Justify {
     Default,
     Left,
     Center,
-    Right,
-    Full,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Overflow {
     Fold,
-    Crop,
     Ellipsis,
     Ignore,
 }
@@ -35,7 +32,6 @@ pub struct Text {
     pub justify: Option<Justify>,
     pub overflow: Option<Overflow>,
     pub no_wrap: Option<bool>,
-    pub end: &'static str,
 }
 
 impl Default for Text {
@@ -47,7 +43,6 @@ impl Default for Text {
             justify: None,
             overflow: None,
             no_wrap: None,
-            end: "\n",
         }
     }
 }
@@ -141,13 +136,6 @@ impl Text {
         }
     }
 
-    /// Add a style over a range of characters (used by highlighters).
-    pub fn stylize(&mut self, start: usize, end: usize, style: Style) {
-        if start < end && !style.is_null() {
-            self.spans.push(Span { start, end, style });
-        }
-    }
-
     fn copy_meta(&self, plain: String) -> Text {
         Text {
             plain,
@@ -156,7 +144,6 @@ impl Text {
             justify: self.justify,
             overflow: self.overflow,
             no_wrap: self.no_wrap,
-            end: self.end,
         }
     }
 
@@ -309,24 +296,7 @@ impl Text {
             return;
         }
         // Spans are dropped across tab expansion; tabs only occur in unstyled text.
-        let mut out = String::new();
-        for line in self.plain.split_inclusive('\n') {
-            let mut col = 0;
-            for c in line.chars() {
-                if c == '\t' {
-                    let n = tab_size - (col % tab_size);
-                    out.extend(std::iter::repeat_n(' ', n));
-                    col += n;
-                } else if c == '\n' {
-                    out.push(c);
-                    col = 0;
-                } else {
-                    out.push(c);
-                    col += 1;
-                }
-            }
-        }
-        self.plain = out;
+        self.plain = expand_tabs(&self.plain, tab_size);
         self.spans.clear();
     }
 
@@ -362,7 +332,6 @@ impl Text {
         lines
     }
 
-    /// Render to segments, applying span styles over the base style.
     pub fn render(&self, end: &str) -> Vec<Segment> {
         let mut out = Vec::new();
         if self.spans.is_empty() {
@@ -426,6 +395,33 @@ impl Text {
     }
 }
 
+/// `str.expandtabs(tab_size)` without `\r` handling: the column restarts after `\n`.
+pub fn expand_tabs(s: &str, tab_size: usize) -> String {
+    if !s.contains('\t') {
+        return s.to_string();
+    }
+    let mut out = String::new();
+    let mut col = 0;
+    for c in s.chars() {
+        match c {
+            '\t' => {
+                let n = tab_size - col % tab_size;
+                out.extend(std::iter::repeat_n(' ', n));
+                col += n;
+            }
+            '\n' => {
+                out.push(c);
+                col = 0;
+            }
+            _ => {
+                out.push(c);
+                col += 1;
+            }
+        }
+    }
+    out
+}
+
 fn justify_lines(lines: &mut [Text], width: usize, justify: Justify, overflow: Overflow) {
     match justify {
         Justify::Left => {
@@ -441,44 +437,6 @@ fn justify_lines(lines: &mut [Text], width: usize, justify: Justify, overflow: O
                 l.pad_left(left);
                 let right = width.saturating_sub(cell_len(&l.plain));
                 l.pad_right(right);
-            }
-        }
-        Justify::Right => {
-            for l in lines.iter_mut() {
-                l.rstrip();
-                l.truncate(width, overflow, false);
-                let left = width.saturating_sub(cell_len(&l.plain));
-                l.pad_left(left);
-            }
-        }
-        Justify::Full => {
-            let n = lines.len();
-            for (i, l) in lines.iter_mut().enumerate() {
-                if i + 1 == n {
-                    break;
-                }
-                let words: Vec<&str> = l.plain.split(' ').collect();
-                let words_size: usize = words.iter().map(|w| cell_len(w)).sum();
-                let mut num_spaces = words.len().saturating_sub(1);
-                let mut spaces = vec![1usize; num_spaces];
-                let mut index = 0;
-                if !spaces.is_empty() {
-                    while words_size + num_spaces < width {
-                        let k = spaces.len() - index - 1;
-                        spaces[k] += 1;
-                        num_spaces += 1;
-                        index = (index + 1) % spaces.len();
-                    }
-                }
-                let mut s = String::new();
-                for (wi, w) in words.iter().enumerate() {
-                    s.push_str(w);
-                    if wi < spaces.len() {
-                        s.extend(std::iter::repeat_n(' ', spaces[wi]));
-                    }
-                }
-                l.plain = s;
-                l.spans.clear();
             }
         }
         Justify::Default => {}

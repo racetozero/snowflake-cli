@@ -29,13 +29,6 @@ enum ManifestError {
     Invalid(String),
 }
 
-fn s(v: Option<&PyV>) -> String {
-    match v {
-        None | Some(PyV::None) => String::new(),
-        Some(x) => x.py_str(),
-    }
-}
-
 fn load_manifest(dir: &std::path::Path) -> std::result::Result<Manifest, ManifestError> {
     let f = dir.join("manifest.yml");
     crate::logs::info(
@@ -61,13 +54,13 @@ fn load_manifest(dir: &std::path::Path) -> std::result::Result<Manifest, Manifes
     let mut targets = indexmap::IndexMap::new();
     if let Some(PyV::Dict(t)) = data.get("targets") {
         for (name, td) in t {
-            let po = s(td.get("project_owner"));
+            let po = td.str_of("project_owner").unwrap_or_default();
             targets.insert(
                 name.to_uppercase(),
                 Target {
                     name: name.to_uppercase(),
-                    project_name: s(td.get("project_name")),
-                    account_identifier: s(td.get("account_identifier")),
+                    project_name: td.str_of("project_name").unwrap_or_default(),
+                    account_identifier: td.str_of("account_identifier").unwrap_or_default(),
                     project_owner: if po.is_empty() {
                         po
                     } else {
@@ -190,7 +183,7 @@ fn load_manifest(dir: &std::path::Path) -> std::result::Result<Manifest, Manifes
     for (_, n) in per {
         env_names.extend(n);
     }
-    let ptype = s(data.get("type")).to_lowercase();
+    let ptype = data.str_of("type").unwrap_or_default().to_lowercase();
     if ptype.is_empty() {
         return Err(ManifestError::Invalid(
             "Manifest file type is undefined. Expected dcm_project.".into(),
@@ -319,7 +312,7 @@ fn check_account(cli: &mut Cli, t: &Target) -> Result<()> {
             if cur != account_of(&t.account_identifier) {
                 cli.console.warning(&format!(
                     "⚠️  Account mismatch: manifest target specifies account_identifier '{}', but the current session account is '{}-{}'.",
-                    snow_api::sql::sanitize_for_terminal(&t.account_identifier),
+                    snow_api::sanitize::for_terminal(&t.account_identifier),
                     cur.0,
                     cur.1
                 ));
@@ -349,12 +342,7 @@ fn check_owner(cli: &mut Cli, t: &Target) -> Result<()> {
             ),
             ROLE_GUIDANCE,
         ),
-        Ok(c) => match c
-            .rows
-            .first()
-            .and_then(|r| r.first().cloned().flatten())
-            .filter(|r| !r.is_empty())
-        {
+        Ok(c) => match Cli::first_cell_opt(&c).filter(|r| !r.is_empty()) {
             None => warn_cannot_validate(
                 cli,
                 "project owner",
@@ -365,8 +353,8 @@ fn check_owner(cli: &mut Cli, t: &Target) -> Result<()> {
                 if !same_identifiers(&role, &t.project_owner) {
                     cli.console.warning(&format!(
                         "⚠️  Role mismatch: manifest target specifies project_owner '{}', but the current session role is '{}'.",
-                        snow_api::sql::sanitize_for_terminal(&t.project_owner),
-                        snow_api::sql::sanitize_for_terminal(&role)
+                        snow_api::sanitize::for_terminal(&t.project_owner),
+                        snow_api::sanitize::for_terminal(&role)
                     ));
                 }
             }
@@ -376,11 +364,10 @@ fn check_owner(cli: &mut Cli, t: &Target) -> Result<()> {
 }
 
 /// `_resolve_context_with_optional_manifest` → the project identifier.
-fn project_id(cli: &mut Cli, required_manifest: bool, validate_owner: bool) -> Result<Fqn> {
-    Ok(resolve_with(cli, required_manifest, validate_owner)?.0)
+fn project_id(cli: &mut Cli, validate_owner: bool) -> Result<Fqn> {
+    Ok(resolve_with(cli, false, validate_owner)?.0)
 }
 
-/// The project identifier and the effective target's templating configuration.
 pub fn resolve(cli: &mut Cli, required_manifest: bool) -> Result<(Fqn, Option<String>)> {
     resolve_with(cli, required_manifest, false)
 }
@@ -510,23 +497,25 @@ pub fn declared_assets(dir: &std::path::Path) -> Vec<(String, Vec<String>)> {
 
 /// `context.run_post_hooks`: ENABLE_DCM_POST_HOOKS and `run_post_hooks: true` in the manifest.
 pub fn run_post_hooks(cli: &Cli) -> bool {
-    if cli.config.feature("ENABLE_DCM_POST_HOOKS", Some(false)) != Some(true) {
+    if !cli
+        .config
+        .feature(snow_api::config::FeatureFlag::EnableDcmPostHooks)
+    {
         return false;
     }
-    let from = cli
-        .str("from_location")
+    load_manifest(&from_dir(cli)).is_ok_and(|m| m.run_post_hooks)
+}
+
+/// `--from`, or the current directory.
+pub fn from_dir(cli: &Cli) -> std::path::PathBuf {
+    cli.str("from_location")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    load_manifest(&from).is_ok_and(|m| m.run_post_hooks)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
 }
 
 /// The declared env var / secret names of the manifest in `--from` (empty without one).
 pub fn declared_env_names(cli: &Cli) -> Vec<String> {
-    let from = cli
-        .str("from_location")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    load_manifest(&from)
+    load_manifest(&from_dir(cli))
         .map(|m| m.env_names)
         .unwrap_or_default()
 }
@@ -541,27 +530,16 @@ fn resolve_with(
         None => None,
     };
     let target = cli.str("target");
-    let from = cli
-        .str("from_location")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    match load_manifest(&from) {
+    match load_manifest(&from_dir(cli)) {
         Ok(m) => {
             let t = m.effective(target.as_deref()).map_err(SnowError::cli)?;
             let id = match identifier {
                 Some(i) => i,
                 None => Fqn::from_string(&t.project_name)?,
             };
-            let t = Target {
-                name: t.name.clone(),
-                project_name: t.project_name.clone(),
-                account_identifier: t.account_identifier.clone(),
-                project_owner: t.project_owner.clone(),
-                templating_config: t.templating_config.clone(),
-            };
-            check_account(cli, &t)?;
+            check_account(cli, t)?;
             if validate_owner {
-                check_owner(cli, &t)?;
+                check_owner(cli, t)?;
             }
             Ok((id, t.templating_config.clone()))
         }
@@ -586,11 +564,8 @@ fn resolve_with(
 }
 
 pub fn create(cli: &mut Cli) -> Result<Output> {
-    let id = project_id(cli, false, true)?;
-    let id = id_with_conn(cli, id)?;
-    let exists = cli
-        .try_query(&format!("describe DCM Project {}", id.sql_identifier()))?
-        .is_ok();
+    let id = project_id(cli, true)?;
+    let exists = crate::object::object_exists(cli, "DCM Project", &id)?;
     let shown = id.identifier();
     if exists {
         let m = format!("DCM Project '{shown}' already exists.");
@@ -609,12 +584,8 @@ pub fn create(cli: &mut Cli) -> Result<Output> {
     )))
 }
 
-fn id_with_conn(_cli: &mut Cli, id: Fqn) -> Result<Fqn> {
-    Ok(id)
-}
-
 pub fn drop(cli: &mut Cli) -> Result<Output> {
-    let id = project_id(cli, false, false)?;
+    let id = project_id(cli, false)?;
     let ie = if cli.flag("if_exists") {
         "if exists "
     } else {
@@ -625,13 +596,13 @@ pub fn drop(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn describe(cli: &mut Cli) -> Result<Output> {
-    let id = project_id(cli, false, false)?;
+    let id = project_id(cli, false)?;
     let c = cli.execute_query(&format!("describe DCM Project {}", id.sql_identifier()))?;
     Ok(cli.query_result(&c))
 }
 
 pub fn list_deployments(cli: &mut Cli) -> Result<Output> {
-    let id = project_id(cli, false, false)?;
+    let id = project_id(cli, false)?;
     let c = cli.execute_query(&format!(
         "SHOW DEPLOYMENTS IN DCM PROJECT {}",
         id.sql_identifier()
@@ -647,7 +618,7 @@ pub fn drop_deployment(cli: &mut Cli) -> Result<Output> {
             "BadParameter",
         )));
     }
-    let id = project_id(cli, false, false)?;
+    let id = project_id(cli, false)?;
     if dep.to_uppercase() == "DEPLOYMENT" {
         cli.console.warning(&format!(
             "Deployment name '{dep}' might be truncated due to shell expansion. If you meant to use a deployment like 'DEPLOYMENT$1', try using single quotes: 'DEPLOYMENT$1'."

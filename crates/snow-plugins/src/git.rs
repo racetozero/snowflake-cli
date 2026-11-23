@@ -71,12 +71,6 @@ pub fn copy(cli: &mut Cli) -> snow_api::Result<snow_api::output::Output> {
     Ok(snow_api::output::Output::Collection(rows))
 }
 
-fn object_exists(cli: &mut Cli, sf_name: &str, fqn: &snow_api::identifiers::Fqn) -> Result<bool> {
-    Ok(cli
-        .try_query(&format!("describe {sf_name} {}", fqn.sql_identifier()))?
-        .is_ok())
-}
-
 fn unique_name(cli: &mut Cli, plural: &str, proposed: &str) -> Result<String> {
     let c = cli.execute_query(&format!(
         "show {plural} like {}",
@@ -106,7 +100,7 @@ fn unique_name(cli: &mut Cli, plural: &str, proposed: &str) -> Result<String> {
 pub fn setup(cli: &mut Cli) -> Result<Output> {
     use snow_api::identifiers::Fqn;
     let repo = crate::object::fqn_arg(cli, "repository_name")?;
-    if object_exists(cli, "git repository", &repo)? {
+    if crate::object::object_exists(cli, "git repository", &repo)? {
         return Err(SnowError::click(format!(
             "Repository '{}' already exists",
             repo.identifier()
@@ -140,7 +134,7 @@ pub fn setup(cli: &mut Cli) -> Result<Output> {
         if s.schema.is_none() {
             s = s.set_schema(repo.schema.as_deref());
         }
-        if object_exists(cli, "secret", &s)? {
+        if crate::object::object_exists(cli, "secret", &s)? {
             cli.console
                 .step(&format!("Using existing secret '{}'", s.identifier()));
         } else {
@@ -179,7 +173,7 @@ pub fn setup(cli: &mut Cli) -> Result<Output> {
             s.identifier()
         ));
     }
-    if !object_exists(cli, "integration", &api)? {
+    if !crate::object::object_exists(cli, "integration", &api)? {
         cli.execute_query(&format!(
             "\ncreate api integration {}\napi_provider = git_https_api\napi_allowed_prefixes = ({})\nallowed_authentication_secrets = ({})\nenabled = true\n",
             api.sql_identifier(),

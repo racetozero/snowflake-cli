@@ -15,7 +15,7 @@ fn f(m: &PyV, k: &str) -> PyV {
     m.get(k).cloned().unwrap_or(PyV::None)
 }
 
-pub fn is_templated_name(n: &str) -> bool {
+pub(crate) fn is_templated_name(n: &str) -> bool {
     (n.contains("<%") && n.contains("%>")) || (n.contains("<!") && n.contains("!>"))
 }
 
@@ -274,22 +274,16 @@ pub fn to_v2_data(
     v1: &PyV,
     accept_templates: bool,
     ctx: Option<&PyV>,
-    warn: &mut dyn FnMut(&str),
+    warns: &mut Vec<String>,
 ) -> Result<PyV> {
-    let version = v1.str_of("definition_version").unwrap_or_default();
-    if super::definition::version_ge(&version, "2") {
-        return Err(SnowError::click(
-            "Project definition is already at version 2.",
-        ));
-    }
     if v1.py_repr().contains("<%") {
         if !accept_templates {
             return Err(SnowError::click(
                 "Project definition contains templates. They may not be migrated correctly, and require manual migration.You can try again with --accept-templates  option, to attempt automatic migration.",
             ));
         }
-        warn(
-            "Your V1 definition contains templates. We cannot guarantee the correctness of the migration.",
+        warns.push(
+            "Your V1 definition contains templates. We cannot guarantee the correctness of the migration.".into(),
         );
     }
     let (sp_ents, mixins) = match v1.get_some("snowpark") {

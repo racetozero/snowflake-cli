@@ -212,6 +212,7 @@ only when you want the change.
 | `confirmation_required`, `input_required` |    3 | The command would have prompted                        |
 | `unknown`                                 |    4 | No such command                                        |
 | `internal`                                |    5 | Unexpected failure                                     |
+| `exit`                                    |  any | The command ended with a non-zero exit code; `data` holds its output |
 
 These codes are separate from `--enhanced-exit-codes`, which keeps the Python
 CLI's scheme.

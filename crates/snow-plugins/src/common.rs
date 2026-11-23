@@ -8,7 +8,17 @@ pub struct Variable {
     pub value: String,
 }
 
-/// `parse_key_value_variables`.
+/// Python's `FileNotFoundError` for a missing `path` (relative to the current directory).
+pub fn file_not_found(path: &std::path::Path) -> SnowError {
+    let abs = std::env::current_dir().unwrap_or_default().join(path);
+    let abs = snow_api::stage_path::pure_path(&abs.to_string_lossy());
+    SnowError::unexpected(format!(
+        "[Errno 2] No such file or directory: PosixPath({})",
+        snow_click::py_repr(&abs)
+    ))
+    .named("FileNotFoundError")
+}
+
 pub fn parse_key_value_variables(vars: &[String]) -> Result<Vec<Variable>> {
     let mut out = Vec::new();
     for p in vars {

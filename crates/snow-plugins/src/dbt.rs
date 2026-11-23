@@ -193,7 +193,7 @@ fn parse_env_vars(raw: &str) -> Result<Vec<(String, String)>> {
 
 fn yaml_repr(v: &serde_yaml::Value) -> String {
     match v {
-        serde_yaml::Value::Bool(b) => if *b { "True" } else { "False" }.into(),
+        serde_yaml::Value::Bool(b) => crate::spcs::py_bool(*b).into(),
         serde_yaml::Value::Number(n) => n.to_string(),
         serde_yaml::Value::Null => "None".into(),
         other => format!("{other:?}"),
@@ -262,7 +262,7 @@ pub fn execute(cli: &mut Cli) -> Result<Output> {
         q.push_str(&format!(" ENVIRONMENT={}", to_string_literal(&e)));
     }
     if let Some(w) = cli.opt_bool("writeback") {
-        q.push_str(&format!(" WRITEBACK={}", if w { "TRUE" } else { "FALSE" }));
+        q.push_str(&format!(" WRITEBACK={}", sql_bool(w)));
     }
     // The Python command runs the rest inside `cli_console.spinner()`.
     let r = execute_rest(cli, q, command, run_async);
@@ -546,10 +546,7 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
         let c = cli.try_query("SELECT SYSTEM$SUPPORTED_DBT_VERSIONS()")?.map_err(|_| {
             SnowError::cli("Could not fetch supported dbt versions from server. Ensure your Snowflake account supports SYSTEM$SUPPORTED_DBT_VERSIONS().")
         })?;
-        let raw = c
-            .rows
-            .first()
-            .and_then(|r| r.first().cloned().flatten())
+        let raw = Cli::first_cell_opt(&c)
             .ok_or_else(|| SnowError::cli("Could not fetch supported dbt versions from server."))?;
         let entries: serde_json::Value = serde_json::from_str(&raw)
             .map_err(|_| SnowError::cli("Could not parse supported dbt versions from server."))?;
@@ -604,10 +601,7 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
         &snow_api::identifiers::unquote_identifier(&fqn.name),
     );
     let stage_fqn =
-        snow_api::identifiers::Fqn::from_string(&format!("DBT_PROJECT_{safe}_{ts}_STAGE"))?
-            .set_database(fqn.database.as_deref())
-            .set_schema(fqn.schema.as_deref());
-    let stage_fqn = cli.using_connection(stage_fqn)?;
+        crate::stage::temp_stage_name(cli, &fqn, format!("DBT_PROJECT_{safe}_{ts}_STAGE"))?;
     cli.execute_query(&crate::stage::create_query(
         &stage_fqn, true, None, false, None,
     ))?;
@@ -716,25 +710,11 @@ fn deploy_query(
             None
         }
         Err(e) => return Err(snow_api::connect::db_error_to_cli(&e, cli.connector_info)),
-        Ok(c) => match c.rows.first().cloned() {
-            None => None,
-            Some(r) => {
-                let tz = cli.timezone();
-                let rows = snow_api::values::rows(
-                    &snow_connector::Cursor {
-                        rows: vec![r],
-                        ..c.clone()
-                    },
-                    &tz,
-                    false,
-                );
-                rows.into_iter().next().map(|m| {
-                    m.into_iter()
-                        .map(|(k, v)| (k.to_lowercase(), v))
-                        .collect::<indexmap::IndexMap<_, _>>()
-                })
-            }
-        },
+        Ok(c) => cli.rows(&c).into_iter().next().map(|m| {
+            m.into_iter()
+                .map(|(k, v)| (k.to_lowercase(), v))
+                .collect::<indexmap::IndexMap<_, _>>()
+        }),
     };
     let Some(attrs) = attrs else {
         let mut q = format!("CREATE DBT PROJECT {id}\nFROM {stage}");

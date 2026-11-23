@@ -8,6 +8,7 @@ members = [
   "crates/snow-api",
   "crates/snow-plugins",
   "crates/snow",
+  "crates/iana-time-zone",
 ]
 
 [workspace.package]
@@ -69,6 +70,10 @@ webpki-roots = "0.26"
 ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
 uuid = { version = "1", features = ["v4"] }
 yaml-rust2 = { version = "0.13", default-features = false }
+
+# chrono's `Local` fallback without CoreFoundation; see crates/iana-time-zone.
+[patch.crates-io]
+iana-time-zone = { path = "crates/iana-time-zone" }
 
 [profile.release]
 lto = "fat"

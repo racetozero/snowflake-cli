@@ -1,26 +1,23 @@
 //! snow CLI core: configuration, global context, output, console and errors.
 #![forbid(unsafe_code)]
 
-pub mod ascii_table;
+pub(crate) mod ascii_table;
 pub mod config;
 pub mod connect;
 pub mod console;
 pub mod context;
 pub mod errors;
 pub mod identifiers;
-pub mod markup;
+pub(crate) mod markup;
 pub mod output;
-pub mod pep440;
 pub mod project;
 pub mod pyfmt;
-pub mod rendering;
 pub mod sanitize;
 pub mod secure;
 pub mod splitter;
-pub mod sql;
+pub(crate) mod sql;
 pub mod stage_path;
-pub mod tomlfmt;
-pub mod values;
+pub(crate) mod values;
 
 pub use context::Cli;
 pub use errors::{Result, SnowError};

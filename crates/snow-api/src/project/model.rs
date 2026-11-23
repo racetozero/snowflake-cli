@@ -7,30 +7,37 @@
 //! locations follow pydantic-core so `SchemaValidationError` text matches.
 
 use super::value::{Model, PyV};
+use crate::config::FeatureFlag;
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::sync::LazyLock;
 
 #[derive(Deserialize, Debug)]
-pub struct ModelsFile {
+pub(crate) struct ModelsFile {
     pub versions: IndexMap<String, String>,
     pub models: IndexMap<String, ModelDesc>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ModelDesc {
-    pub module: String,
     pub title: String,
     pub extra: Option<String>,
     pub fields: Vec<FieldDesc>,
     pub model_validators: Vec<ValDesc>,
 }
 
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Before,
+    After,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct ValDesc {
     #[serde(rename = "fn")]
     pub func: String,
-    pub mode: String,
+    pub mode: Mode,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -105,7 +112,7 @@ pub enum TypeDesc {
     },
 }
 
-pub static MODELS: LazyLock<ModelsFile> = LazyLock::new(|| {
+pub(crate) static MODELS: LazyLock<ModelsFile> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../data/project_models.json"))
         .expect("project_models.json")
 });
@@ -134,7 +141,7 @@ pub struct Ctx {
     pub duplicated_run: bool,
 }
 
-pub type VResult = Result<PyV, Vec<VErr>>;
+pub(crate) type VResult = Result<PyV, Vec<VErr>>;
 
 fn err(kind: &'static str, loc: &[Loc], msg: impl Into<String>, input: &PyV) -> Vec<VErr> {
     vec![VErr {
@@ -146,7 +153,7 @@ fn err(kind: &'static str, loc: &[Loc], msg: impl Into<String>, input: &PyV) -> 
 }
 
 /// A `ValueError` raised in a validator.
-pub fn value_error(loc: &[Loc], msg: &str, input: &PyV) -> Vec<VErr> {
+pub(crate) fn value_error(loc: &[Loc], msg: &str, input: &PyV) -> Vec<VErr> {
     err("value_error", loc, format!("Value error, {msg}"), input)
 }
 
@@ -237,23 +244,11 @@ fn parse_bool(s: &str) -> Option<bool> {
     }
 }
 
-/// `pathlib.PurePath(s)` string form.
-pub fn pure_path(s: &str) -> String {
-    if s.is_empty() {
-        return ".".into();
-    }
-    let abs = s.starts_with('/');
-    let parts: Vec<&str> = s
-        .split('/')
-        .filter(|p| !p.is_empty() && *p != ".")
-        .collect();
-    let body = parts.join("/");
-    match (abs, body.is_empty()) {
-        (true, _) => format!("/{body}"),
-        (false, true) => ".".into(),
-        (false, false) => body,
-    }
-}
+/// The feature flags the project models read (`Engine::feature`).
+pub(crate) const ENGINE_FEATURES: [FeatureFlag; 2] = [
+    FeatureFlag::EnableSnowparkGlobSupport,
+    FeatureFlag::EnableNativeAppChildren,
+];
 
 pub struct Engine {
     pub ctx: Ctx,
@@ -282,7 +277,7 @@ impl Engine {
                 _ => Err(err("string_type", loc, "Input should be a valid string", v)),
             },
             TypeDesc::Path => match v {
-                PyV::Str(s) => Ok(PyV::Str(pure_path(s))),
+                PyV::Str(s) => Ok(PyV::Str(crate::stage_path::pure_path(s))),
                 _ => Err(err("path_type", loc, "Input is not a valid path", v)),
             },
             TypeDesc::Int => match v {
@@ -342,24 +337,15 @@ impl Engine {
                 }),
                 _ => Err(err("float_type", loc, "Input should be a valid number", v)),
             },
-            TypeDesc::Literal { values } => {
-                let hit = values.iter().find(|x| json_to_py(x) == *v);
-                match hit {
+            TypeDesc::Literal { values } | TypeDesc::Enum { values, .. } => {
+                match values.iter().find(|x| json_to_py(x) == *v) {
                     Some(x) => Ok(json_to_py(x)),
                     None => Err(err(
-                        "literal_error",
-                        loc,
-                        format!("Input should be {}", expected_list(values)),
-                        v,
-                    )),
-                }
-            }
-            TypeDesc::Enum { values, .. } => {
-                let hit = values.iter().find(|x| json_to_py(x) == *v);
-                match hit {
-                    Some(x) => Ok(json_to_py(x)),
-                    None => Err(err(
-                        "enum",
+                        if matches!(t, TypeDesc::Enum { .. }) {
+                            "enum"
+                        } else {
+                            "literal_error"
+                        },
                         loc,
                         format!("Input should be {}", expected_list(values)),
                         v,
@@ -600,10 +586,10 @@ impl Engine {
         for mv in desc
             .model_validators
             .iter()
-            .filter(|m| m.mode == "before")
+            .filter(|m| m.mode == Mode::Before)
             .rev()
         {
-            data = super::validators::model_before(self, &mv.func, name, data, loc)?;
+            data = super::validators::model_before(self, &mv.func, data, loc)?;
         }
         let mut m = Model {
             name: name.to_string(),
@@ -660,8 +646,12 @@ impl Engine {
         } else {
             original
         };
-        for mv in desc.model_validators.iter().filter(|m| m.mode == "after") {
-            out = super::validators::model_after(self, &mv.func, out, &raw, loc)?;
+        for mv in desc
+            .model_validators
+            .iter()
+            .filter(|m| m.mode == Mode::After)
+        {
+            out = super::validators::model_after(&mv.func, out, &raw, loc)?;
         }
         Ok(out)
     }
@@ -674,12 +664,12 @@ impl Engine {
             return Ok(v.clone());
         }
         let mut v = v.clone();
-        for val in f.validators.iter().filter(|x| x.mode == "before") {
-            v = super::validators::field_before(self, &val.func, model, &f.name, v, loc)?;
+        for val in f.validators.iter().filter(|x| x.mode == Mode::Before) {
+            v = super::validators::field_before(self, &val.func, v, loc)?;
         }
         let mut out = self.validate(&f.ty, &v, loc, false)?;
         self.constraints(&f.constraints, &out, loc)?;
-        for val in f.validators.iter().filter(|x| x.mode == "after") {
+        for val in f.validators.iter().filter(|x| x.mode == Mode::After) {
             out = super::validators::field_after(self, &val.func, model, &f.name, out, &v, loc)?;
         }
         Ok(out)
@@ -780,7 +770,7 @@ impl Engine {
     }
 
     /// Build a model from Python values (`Model(**data)` inside a validator).
-    pub fn construct(
+    pub(crate) fn construct(
         &self,
         name: &str,
         data: IndexMap<String, PyV>,
@@ -795,7 +785,7 @@ fn fancy_pattern(p: &str) -> regex::Regex {
 }
 
 /// The v2 entity model whose `type` literal is `ty`.
-pub fn entity_model_for_type(ty: &str) -> Option<&'static str> {
+pub(crate) fn entity_model_for_type(ty: &str) -> Option<&'static str> {
     let v2 = model(&MODELS.versions["2"]);
     let ents = v2.fields.iter().find(|f| f.name == "entities")?;
     let TypeDesc::Dict { of, .. } = &ents.ty else {
@@ -811,7 +801,7 @@ pub fn entity_model_for_type(ty: &str) -> Option<&'static str> {
 }
 
 /// The `Literal` value of a model's discriminator field.
-pub fn discriminator_value(model_name: &str, field: &str) -> String {
+pub(crate) fn discriminator_value(model_name: &str, field: &str) -> String {
     model(model_name)
         .fields
         .iter()
@@ -827,65 +817,47 @@ pub fn discriminator_value(model_name: &str, field: &str) -> String {
 
 /// `model_dump(exclude_unset=True, exclude_none=True, by_alias=True)`.
 pub fn dump_set(v: &PyV) -> PyV {
-    match v {
-        PyV::Model(m) => {
-            let desc = MODELS.models.get(&m.name);
-            let mut out = IndexMap::new();
-            for (k, x) in &m.fields {
-                if x.is_none() || !m.set.contains(k) {
-                    continue;
-                }
-                let key = desc
-                    .and_then(|d| d.fields.iter().find(|f| f.name == *k))
-                    .map(|f| f.key().to_string())
-                    .unwrap_or_else(|| k.clone());
-                out.insert(key, dump_set(x));
-            }
-            PyV::Dict(out)
-        }
-        PyV::Dict(d) => PyV::Dict(
-            d.iter()
-                .filter(|(_, x)| !x.is_none())
-                .map(|(k, x)| (k.clone(), dump_set(x)))
-                .collect(),
-        ),
-        PyV::List(l) => PyV::List(l.iter().map(dump_set).collect()),
-        PyV::Override(x) => dump_set(x),
-        other => other.clone(),
-    }
+    dump_walk(v, true, true)
 }
 
 /// `model_dump(by_alias=True, mode=…, exclude_none=…)`.
 pub fn dump(v: &PyV, exclude_none: bool) -> PyV {
+    dump_walk(v, exclude_none, false)
+}
+
+fn dump_walk(v: &PyV, exclude_none: bool, only_set: bool) -> PyV {
     match v {
         PyV::Model(m) => {
             let desc = MODELS.models.get(&m.name);
             let mut out = IndexMap::new();
             for (k, x) in &m.fields {
-                if exclude_none && x.is_none() {
+                if (exclude_none && x.is_none()) || (only_set && !m.set.contains(k)) {
                     continue;
                 }
                 let key = desc
                     .and_then(|d| d.fields.iter().find(|f| f.name == *k))
                     .map(|f| f.key().to_string())
                     .unwrap_or_else(|| k.clone());
-                out.insert(key, dump(x, exclude_none));
+                out.insert(key, dump_walk(x, exclude_none, only_set));
             }
             PyV::Dict(out)
         }
         PyV::Dict(d) => PyV::Dict(
             d.iter()
                 .filter(|(_, x)| !(exclude_none && x.is_none()))
-                .map(|(k, x)| (k.clone(), dump(x, exclude_none)))
+                .map(|(k, x)| (k.clone(), dump_walk(x, exclude_none, only_set)))
                 .collect(),
         ),
-        PyV::List(l) => PyV::List(l.iter().map(|x| dump(x, exclude_none)).collect()),
-        PyV::Override(x) => dump(x, exclude_none),
+        PyV::List(l) => PyV::List(
+            l.iter()
+                .map(|x| dump_walk(x, exclude_none, only_set))
+                .collect(),
+        ),
+        PyV::Override(x) => dump_walk(x, exclude_none, only_set),
         other => other.clone(),
     }
 }
 
-/// `SchemaValidationError` text for a failed `title` model.
 /// `str(pydantic.ValidationError)` for `title`.
 pub fn validation_error_str(title: &str, errs: &[VErr]) -> String {
     let n = errs.len();
@@ -935,7 +907,8 @@ pub fn validation_error_str(title: &str, errs: &[VErr]) -> String {
     out
 }
 
-pub fn schema_error_message(title: &str, errs: &[VErr]) -> String {
+/// `SchemaValidationError` text for a failed `title` model.
+pub(crate) fn schema_error_message(title: &str, errs: &[VErr]) -> String {
     let mut lines = vec![format!(
         "During evaluation of {title} in project definition following errors were encountered:"
     )];
@@ -962,5 +935,5 @@ pub fn schema_error_message(title: &str, errs: &[VErr]) -> String {
             _ => format!("For field {loc} you provided '{input}'. This caused: {}", e.msg),
         });
     }
-    crate::sql::dedent(&lines.join("\n"))
+    snow_rich::render::dedent(&lines.join("\n"))
 }

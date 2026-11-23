@@ -8,6 +8,7 @@
 use crate::pyfmt::{float_repr, json_str};
 use crate::sanitize;
 use indexmap::IndexMap;
+use snow_connector::hex;
 use snow_rich::{Column, Overflow, R, Table, Text};
 use std::io::Write;
 
@@ -177,10 +178,6 @@ impl Pv {
     }
 }
 
-pub fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
 fn bytes_repr(b: &[u8]) -> String {
     let quote = if b.contains(&b'\'') && !b.contains(&b'"') {
         '"'
@@ -252,7 +249,7 @@ fn row_json(r: &Row) -> serde_json::Value {
     serde_json::Value::Object(r.iter().map(|(k, v)| (k.clone(), pv_json(v))).collect())
 }
 
-pub fn pv_json(v: &Pv) -> serde_json::Value {
+pub(crate) fn pv_json(v: &Pv) -> serde_json::Value {
     use serde_json::Value as J;
     match v {
         Pv::None => J::Null,
@@ -269,10 +266,6 @@ pub fn pv_json(v: &Pv) -> serde_json::Value {
         Pv::Dict(d) => J::Object(d.iter().map(|(k, v)| (k.clone(), pv_json(v))).collect()),
     }
 }
-
-// ----------------------------------------------------------------------------
-// JSON in Python's iterencode chunks
-// ----------------------------------------------------------------------------
 
 /// An error while encoding (`TypeError: Object of type bytes is not JSON serializable`).
 #[derive(Debug)]
@@ -326,7 +319,7 @@ fn leaf(v: &Pv) -> Result<Option<String>, JsonTypeError> {
 }
 
 /// `json.encoder._make_iterencode` with `indent` and default separators.
-pub fn json_chunks(
+pub(crate) fn json_chunks(
     v: &Pv,
     indent: Option<usize>,
     level: usize,
@@ -405,7 +398,8 @@ pub fn json_chunks(
     Ok(())
 }
 
-fn uniquify(keys: Vec<String>) -> Vec<String> {
+/// De-duplicate names like `QueryResult` columns (`a`, `a_2`, `a_3`, ...).
+pub(crate) fn uniquify(keys: Vec<String>) -> Vec<String> {
     let mut used: std::collections::HashSet<String> = keys.iter().cloned().collect();
     let mut counters: std::collections::HashMap<String, usize> = Default::default();
     let mut out = Vec::with_capacity(keys.len());
@@ -431,7 +425,7 @@ fn uniquify(keys: Vec<String>) -> Vec<String> {
     out
 }
 
-pub fn json_string(v: &Pv, indent: Option<usize>) -> Result<String, JsonTypeError> {
+pub(crate) fn json_string(v: &Pv, indent: Option<usize>) -> Result<String, JsonTypeError> {
     let mut chunks = Vec::new();
     json_chunks(v, indent, 0, &mut chunks)?;
     Ok(chunks.concat())
@@ -451,15 +445,6 @@ fn py_indent(text: &str, prefix: &str) -> String {
     out
 }
 
-/// QueryResult column name de-duplication.
-pub fn uniquify_columns(names: Vec<String>) -> Vec<String> {
-    uniquify(names)
-}
-
-// ----------------------------------------------------------------------------
-// Printing
-// ----------------------------------------------------------------------------
-
 /// Where printed results go (stdout, a tee with a spool file, or nowhere).
 pub struct Sink<'a> {
     pub out: &'a mut dyn Write,
@@ -469,7 +454,7 @@ pub struct Sink<'a> {
 }
 
 impl Sink<'_> {
-    fn w(&mut self, s: &str) {
+    pub fn write_str(&mut self, s: &str) {
         let _ = self.out.write_all(s.as_bytes());
     }
 }
@@ -488,26 +473,35 @@ fn result_value(o: &Output) -> Pv {
     }
 }
 
-pub type PrintResult = Result<(), JsonTypeError>;
+pub(crate) type PrintResult = Result<(), JsonTypeError>;
 
-/// One element of a streamed `MultipleResults` JSON array (`_stream_json`).
-pub fn json_multiple_item(o: &Output, sink: &mut Sink) -> PrintResult {
-    let mut chunks = Vec::new();
-    json_chunks(&result_value(o), Some(2), 0, &mut chunks)?;
-    for c in chunks {
-        sink.w(&py_indent(&c, "  "));
+/// `_stream_json`: a `MultipleResults` JSON array written item by item, each
+/// item dumped with indent=2 through a writer that indents every chunk.
+pub struct JsonStream {
+    first: bool,
+}
+
+impl JsonStream {
+    pub fn open(sink: &mut Sink) -> JsonStream {
+        sink.write_str("[\n");
+        JsonStream { first: true }
     }
-    Ok(())
-}
 
-/// `_print_csv_result_streaming`.
-pub fn csv_result(o: &Output, sink: &mut Sink) {
-    print_csv(o, sink);
-}
+    pub fn item(&mut self, o: &Output, sink: &mut Sink) -> PrintResult {
+        if !self.first {
+            sink.write_str(",\n");
+        }
+        self.first = false;
+        let mut chunks = Vec::new();
+        json_chunks(&result_value(o), Some(2), 0, &mut chunks)?;
+        for c in chunks {
+            sink.write_str(&py_indent(&c, "  "));
+        }
+        Ok(())
+    }
 
-impl Sink<'_> {
-    pub fn write_str(&mut self, s: &str) {
-        self.w(s);
+    pub fn close(sink: &mut Sink) {
+        sink.write_str("\n]\n");
     }
 }
 
@@ -536,28 +530,15 @@ fn print_structured(o: &Output, format: Format, sink: &mut Sink) -> PrintResult 
             if format == Format::Csv {
                 for r in v {
                     print_csv(r, sink);
-                    sink.w("\n");
+                    sink.write_str("\n");
                 }
                 printed_end_line = true;
             } else {
-                // _stream_json: each result dumped with indent=2 through a
-                // writer that indents every chunk.
-                sink.w("[\n");
-                let n = v.len();
-                for (i, r) in v.iter().enumerate() {
-                    if i > 0 && i < n {
-                        // printed after the previous result
-                    }
-                    let mut chunks = Vec::new();
-                    json_chunks(&result_value(r), Some(2), 0, &mut chunks)?;
-                    for c in chunks {
-                        sink.w(&py_indent(&c, "  "));
-                    }
-                    if i + 1 < n {
-                        sink.w(",\n");
-                    }
+                let mut stream = JsonStream::open(sink);
+                for r in v {
+                    stream.item(r, sink)?;
                 }
-                sink.w("\n]\n");
+                JsonStream::close(sink);
             }
         }
         Output::Stream(v) => {
@@ -570,9 +551,9 @@ fn print_structured(o: &Output, format: Format, sink: &mut Sink) -> PrintResult 
                             "CollectionResult should be handled by streaming functions, not encoder".into(),
                         ));
                     }
-                    sink.w(&json_string(&result_value(r), None)?);
+                    sink.write_str(&json_string(&result_value(r), None)?);
                 }
-                sink.w("\n");
+                sink.write_str("\n");
                 printed_end_line = true;
             }
         }
@@ -582,17 +563,17 @@ fn print_structured(o: &Output, format: Format, sink: &mut Sink) -> PrintResult 
                 printed_end_line = true;
             } else {
                 match o {
-                    Output::Collection(rows) if rows.is_empty() => sink.w("[]"),
+                    Output::Collection(rows) if rows.is_empty() => sink.write_str("[]"),
                     _ => {
                         let s = json_string(&result_value(o), Some(4))?;
-                        sink.w(&s);
+                        sink.write_str(&s);
                     }
                 }
             }
         }
     }
     if !printed_end_line {
-        sink.w("\n");
+        sink.write_str("\n");
     }
     Ok(())
 }
@@ -619,56 +600,50 @@ fn csv_value(v: &Pv) -> String {
     }
 }
 
-fn write_csv_row(fields: &[String], values: &[String], sink: &mut Sink) {
-    let _ = fields;
+fn write_csv_row(values: &[String], sink: &mut Sink) {
     let line: Vec<String> = values.iter().map(|v| csv_field(v)).collect();
-    sink.w(&(line.join(",") + "\n"));
+    sink.write_str(&(line.join(",") + "\n"));
 }
 
-fn print_csv(o: &Output, sink: &mut Sink) {
-    match o {
-        Output::Collection(rows) => {
-            let Some(first) = rows.first() else { return };
-            let fields: Vec<String> = first.keys().cloned().collect();
-            let header: Vec<String> = fields.iter().map(|f| sanitize::for_csv(f)).collect();
-            write_csv_row(&fields, &header, sink);
-            for r in rows {
-                let vals: Vec<String> = fields
-                    .iter()
-                    .map(|f| r.get(f).map(csv_value).unwrap_or_default())
-                    .collect();
-                write_csv_row(&fields, &vals, sink);
-            }
-        }
-        Output::Object(Some(r)) => {
-            let fields: Vec<String> = r.keys().cloned().collect();
-            let header: Vec<String> = fields.iter().map(|f| sanitize::for_csv(f)).collect();
-            write_csv_row(&fields, &header, sink);
-            let vals: Vec<String> = r.values().map(csv_value).collect();
-            write_csv_row(&fields, &vals, sink);
-        }
+/// `_print_csv_result_streaming`.
+pub fn print_csv(o: &Output, sink: &mut Sink) {
+    let rows: Vec<&Row> = match o {
+        Output::Collection(rows) => rows.iter().collect(),
+        Output::Object(Some(r)) => vec![r],
         Output::Message(m) => {
-            write_csv_row(&["message".into()], &["message".into()], sink);
-            write_csv_row(&["message".into()], &[sanitize::for_csv(m)], sink);
+            write_csv_row(&["message".into()], sink);
+            write_csv_row(&[sanitize::for_csv(m)], sink);
+            return;
         }
-        _ => {}
+        _ => return,
+    };
+    let Some(first) = rows.first() else { return };
+    let fields: Vec<&String> = first.keys().collect();
+    let header: Vec<String> = fields.iter().map(|f| sanitize::for_csv(f)).collect();
+    write_csv_row(&header, sink);
+    for r in rows {
+        let vals: Vec<String> = fields
+            .iter()
+            .map(|f| r.get(*f).map(csv_value).unwrap_or_default())
+            .collect();
+        write_csv_row(&vals, sink);
     }
 }
 
 fn render(sink: &mut Sink, r: &R, width: usize) {
     let s = snow_rich::to_string(r, width, sink.color);
-    sink.w(&s);
+    sink.write_str(&s);
 }
 
 const NON_TERMINAL_WIDTH: usize = 1_000_000;
 
 fn print_unstructured(o: &Output, format: Format, sink: &mut Sink) {
     match o {
-        Output::Object(None) => sink.w("No data\n"),
-        Output::Object(Some(r)) if r.is_empty() => sink.w("No data\n"),
+        Output::Object(None) => sink.write_str("No data\n"),
+        Output::Object(Some(r)) if r.is_empty() => sink.write_str("No data\n"),
         Output::Message(m) => {
-            sink.w(&sanitize::for_terminal(m));
-            sink.w("\n");
+            sink.write_str(&sanitize::for_terminal(m));
+            sink.write_str("\n");
         }
         Output::Object(Some(r)) => {
             let mut t = if format == Format::Plain {
@@ -709,7 +684,7 @@ fn cell_text(s: &str) -> R {
 }
 
 /// `ascii_table.normalize_cell`.
-pub fn normalize_cell(v: &Pv) -> String {
+pub(crate) fn normalize_cell(v: &Pv) -> String {
     let text = v.cell();
     if text.is_ascii() && text.chars().all(|c| !c.is_control()) {
         return text;
@@ -719,9 +694,7 @@ pub fn normalize_cell(v: &Pv) -> String {
         .chars()
         .filter(|c| !matches!(*c as u32, 7 | 8 | 11 | 12 | 13))
         .collect();
-    let mut t = Text::new(stripped);
-    t.expand_tabs(8);
-    t.plain
+    snow_rich::text::expand_tabs(&stripped, 8)
 }
 
 const PROBE_MAX_CELLS: usize = 20_000;
@@ -729,7 +702,7 @@ const PROBE_MAX_CHARS: usize = 2 * 1024 * 1024;
 
 fn print_table(rows: &[Row], format: Format, sink: &mut Sink) {
     let Some(first) = rows.first() else {
-        sink.w("No data\n\n");
+        sink.write_str("No data\n\n");
         return;
     };
     let columns: Vec<String> = first.keys().cloned().collect();
@@ -756,8 +729,8 @@ fn print_table(rows: &[Row], format: Format, sink: &mut Sink) {
         };
         let s = snow_rich::to_string(&R::Table(t), w, sink.color);
         // Live leaves the cursor after the last line; the trailing print() ends it.
-        sink.w(s.strip_suffix('\n').unwrap_or(&s));
-        sink.w("\n");
+        sink.write_str(s.strip_suffix('\n').unwrap_or(&s));
+        sink.write_str("\n");
         return;
     }
     crate::ascii_table::stream(&columns, &normalized, format == Format::Plain, sink);

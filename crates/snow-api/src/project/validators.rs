@@ -76,15 +76,7 @@ fn path_mappings(e: &Engine, v: PyV, loc: &mut Vec<Loc>) -> VResult {
     Ok(PyV::List(out))
 }
 
-pub fn field_before(
-    e: &Engine,
-    func: &str,
-    model: &str,
-    field: &str,
-    v: PyV,
-    loc: &mut [Loc],
-) -> VResult {
-    let _ = (e, field);
+pub(crate) fn field_before(e: &Engine, func: &str, v: PyV, loc: &mut [Loc]) -> VResult {
     let s = v.as_str().map(str::to_string);
     Ok(match func {
         "ensure_use_mixins_is_a_list" => match v {
@@ -323,14 +315,11 @@ pub fn field_before(
             ),
             other => other,
         },
-        _ => {
-            let _ = model;
-            v
-        }
+        other => unreachable!("field validator {other} is not ported"),
     })
 }
 
-pub fn field_after(
+pub(crate) fn field_after(
     e: &Engine,
     func: &str,
     model: &str,
@@ -644,7 +633,7 @@ pub fn field_after(
             }
             v
         }
-        _ => v,
+        other => unreachable!("field validator {other} is not ported"),
     })
 }
 
@@ -711,14 +700,12 @@ fn validate_single_entity(
     Ok(())
 }
 
-pub fn model_before(
+pub(crate) fn model_before(
     e: &Engine,
     func: &str,
-    model: &str,
     data: Data,
     loc: &mut [Loc],
 ) -> Result<Data, Vec<VErr>> {
-    let _ = model;
     match func {
         "apply_mixins" => apply_mixins(e, data, loc),
         "check_artifact_repository" => {
@@ -794,7 +781,7 @@ pub fn model_before(
     }
 }
 
-pub fn model_after(e: &Engine, func: &str, v: PyV, raw: &PyV, loc: &mut [Loc]) -> VResult {
+pub(crate) fn model_after(func: &str, v: PyV, raw: &PyV, loc: &mut [Loc]) -> VResult {
     let m: &Model = v.as_model().expect("model");
     let f = |k: &str| m.fields.get(k).cloned().unwrap_or(PyV::None);
     match func {
@@ -929,7 +916,6 @@ pub fn model_after(e: &Engine, func: &str, v: PyV, raw: &PyV, loc: &mut [Loc]) -
         }
         "validate_notebook_file" => {
             let nb = f("notebook_file").py_str();
-            let _ = e;
             if !std::path::Path::new(&nb).exists() {
                 return Err(value_error(
                     loc,

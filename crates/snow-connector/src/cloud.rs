@@ -8,7 +8,7 @@
 //! These paths cannot be exercised by the parity harness (it serves LOCAL_FS
 //! stages only); the request layout follows the Python connector line by line.
 
-use crate::{Connection, DbError, ErrorKind};
+use crate::{Connection, DbError, ErrorKind, hex};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use serde_json::{Value, json};
@@ -84,8 +84,7 @@ fn gcs_auth(r: &Remote, base: &[(String, String)]) -> Headers {
     h
 }
 
-/// The text of the first `<tag>` element.
-fn xml_text(xml: &str, tag: &str) -> Option<String> {
+pub(crate) fn xml_text(xml: &str, tag: &str) -> Option<String> {
     let open = format!("<{tag}>");
     let start = xml.find(&open)? + open.len();
     let end = xml[start..].find(&format!("</{tag}>"))? + start;
@@ -241,17 +240,6 @@ fn decrypt(m: &Material, key_b64: &str, iv_b64: &str, data: &[u8]) -> Result<Vec
     Ok(unpad(&aes_cbc(&file_key, &iv, data, false)?))
 }
 
-fn hmac(key: &[u8], msg: &str) -> Vec<u8> {
-    use hmac::{Hmac, Mac};
-    let mut m = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("hmac key");
-    m.update(msg.as_bytes());
-    m.finalize().into_bytes().to_vec()
-}
-
-fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
 fn encryption_data(key: &str, iv: &str, algo: &str) -> String {
     serde_json::to_string(&json!({
         "EncryptionMode": "FullBlob",
@@ -285,7 +273,6 @@ fn sigv4(
         .as_ref()
         .and_then(|u| u.host_str().map(str::to_string))
         .unwrap_or_default();
-    let short = &amzdate[..8];
     let mut amz: Vec<(String, String)> = headers
         .iter()
         .filter(|(k, _)| k.starts_with("x-amz"))
@@ -322,25 +309,9 @@ fn sigv4(
         .join("&");
     let canonical =
         format!("{verb}\n{path}\n{canon_query}\n{canon_headers}\n{signed}\n{payload_hash}");
-    let scope = format!("{short}/{region}/s3/aws4_request");
-    let to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{}",
-        hex(&Sha256::digest(canonical.as_bytes()))
-    );
-    let k = hmac(
-        &hmac(
-            &hmac(&hmac(format!("AWS4{secret}").as_bytes(), short), region),
-            "s3",
-        ),
-        "aws4_request",
-    );
-    let sig = hex(&hmac(&k, &to_sign));
-    (
-        amz,
-        format!(
-            "AWS4-HMAC-SHA256 Credential={key_id}/{scope}, SignedHeaders={signed}, Signature={sig}"
-        ),
-    )
+    let auth =
+        crate::sigv4::authorization(&canonical, &signed, amzdate, region, "s3", key_id, secret);
+    (amz, auth)
 }
 
 impl Remote {
@@ -1181,14 +1152,6 @@ mod tests {
             "5dbbb38d6c209dfff02928c9b3690b1f77fd5bf57d921f563fb144a61fc04127"
         );
         let body = r#"<CompleteMultipartUpload><Part><ETag>"e1"</ETag><PartNumber>1</PartNumber></Part></CompleteMultipartUpload>"#;
-        let parts = format!(
-            "<Part><ETag>{}</ETag><PartNumber>1</PartNumber></Part>",
-            xml_escape("\"e1\"")
-        );
-        assert_eq!(
-            format!("<CompleteMultipartUpload>{parts}</CompleteMultipartUpload>"),
-            body
-        );
         let hash = hex(&Sha256::digest(body.as_bytes()));
         assert_eq!(
             sig("POST", &[("uploadId", "U1")], &hash, &[]),
@@ -1203,6 +1166,10 @@ mod tests {
             10_737_419
         );
         assert_eq!(chunk_size(70 * 1024 * 1024, 8 * 1024 * 1024), 8_388_608);
+    }
+
+    #[test]
+    fn xml_text_decodes_entities() {
         assert_eq!(
             xml_text(
                 "<R><Bucket>b</Bucket><Key>k</Key><UploadId>U&amp;1</UploadId></R>",

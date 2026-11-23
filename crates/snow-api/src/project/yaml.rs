@@ -131,15 +131,7 @@ impl Loader<'_> {
                         e => items.push(self.node(e)?),
                     }
                 }
-                let v = PyV::List(items);
-                (
-                    if is_override(&tag) {
-                        PyV::Override(Box::new(v))
-                    } else {
-                        v
-                    },
-                    anchor,
-                )
+                (with_override_tag(PyV::List(items), &tag), anchor)
             }
             Event::MappingStart(anchor, tag) => {
                 let mut map = IndexMap::new();
@@ -156,15 +148,7 @@ impl Loader<'_> {
                     }
                     map.insert(key, v);
                 }
-                let v = PyV::Dict(map);
-                (
-                    if is_override(&tag) {
-                        PyV::Override(Box::new(v))
-                    } else {
-                        v
-                    },
-                    anchor,
-                )
+                (with_override_tag(PyV::Dict(map), &tag), anchor)
             }
             other => return Err(LoadError::Syntax(format!("unexpected event {other:?}"))),
         };
@@ -175,9 +159,16 @@ impl Loader<'_> {
     }
 }
 
-fn is_override(tag: &Option<yaml_rust2::parser::Tag>) -> bool {
-    tag.as_ref()
+/// Wrap a collection tagged `!override`.
+fn with_override_tag(v: PyV, tag: &Option<yaml_rust2::parser::Tag>) -> PyV {
+    if tag
+        .as_ref()
         .is_some_and(|t| t.handle == "!" && t.suffix == "override")
+    {
+        PyV::Override(Box::new(v))
+    } else {
+        v
+    }
 }
 
 /// `yaml.load(text, Loader=BaseLoader)`; `None` for an empty document.
@@ -204,8 +195,6 @@ fn load_with(text: &str, safe: bool) -> Result<Option<PyV>, LoadError> {
         }
     }
 }
-
-// ---------------------------------------------------------------- dumping
 
 static NON_STR: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     let bool_ = r"yes|Yes|YES|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF";

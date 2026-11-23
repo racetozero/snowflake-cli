@@ -70,16 +70,17 @@ fn wheel_metadata(path: &Path) -> Option<(String, Vec<String>)> {
     Some((name, deps))
 }
 
+/// What `pip wheel` builds.
+pub enum Wheel<'a> {
+    /// `-r <file>` with its dependencies; a failure is an error.
+    Requirements(&'a Path),
+    /// One package with `--no-deps`; the caller reads the exit code.
+    Package(&'a str),
+}
+
 /// `pip_wheel(...)`: run `python -m pip wheel -w <dir> ...` and return its exit code.
-pub fn pip_wheel(
-    cli: &mut Cli,
-    requirements_file: Option<&Path>,
-    package: Option<&str>,
-    dir: &Path,
-    index_url: Option<&str>,
-    deps: bool,
-    raise: bool,
-) -> Result<i32> {
+pub fn pip_wheel(cli: &mut Cli, wheel: Wheel, dir: &Path, index_url: Option<&str>) -> Result<i32> {
+    let deps_and_raise = matches!(wheel, Wheel::Requirements(_));
     let resolved = index_url.map(str::to_string).or_else(|| {
         std::env::var("PIP_INDEX_URL")
             .ok()
@@ -105,12 +106,12 @@ pub fn pip_wheel(
         "-w".into(),
         dir.to_string_lossy().into_owned(),
     ];
-    if let Some(p) = package {
-        args.push(p.to_string());
-    }
-    if let Some(r) = requirements_file {
-        args.push("-r".into());
-        args.push(r.to_string_lossy().into_owned());
+    match wheel {
+        Wheel::Package(p) => args.push(p.to_string()),
+        Wheel::Requirements(r) => {
+            args.push("-r".into());
+            args.push(r.to_string_lossy().into_owned());
+        }
     }
     if air {
         args.push("--isolated".into());
@@ -129,7 +130,7 @@ pub fn pip_wheel(
         args.push("-i".into());
         args.push(u.to_string());
     }
-    if !deps {
+    if !deps_and_raise {
         args.push("--no-deps".into());
     }
     crate::logs::info(
@@ -153,7 +154,7 @@ pub fn pip_wheel(
                 String::from_utf8_lossy(&out.stderr)
             ),
         );
-        if raise {
+        if deps_and_raise {
             return Err(SnowError::cli(format!(
                 "pip wheel finished with error code {code}. Please re-run with --verbose or --debug for more details."
             )));
@@ -173,10 +174,6 @@ pub struct Download {
     pub anaconda: Vec<Requirement>,
     /// Downloaded packages and the files inside each wheel.
     pub downloaded: Vec<(String, Vec<String>)>,
-}
-
-fn line_of(r: &Requirement) -> String {
-    r.line.clone()
 }
 
 /// `download_unavailable_packages(requirements, target_dir, anaconda, skip_version_check, index_url)`.
@@ -227,17 +224,14 @@ pub fn download_unavailable(
         &req_file,
         missing
             .iter()
-            .map(|r| format!("{}\n", line_of(r)))
+            .map(|r| format!("{}\n", r.line))
             .collect::<String>(),
     )?;
     pip_wheel(
         cli,
-        Some(&req_file),
-        None,
+        Wheel::Requirements(&req_file),
         downloads.path(),
         index_url,
-        true,
-        true,
     )?;
     // `split_downloaded_dependencies`.
     let mut wheels: Vec<PathBuf> = std::fs::read_dir(downloads.path())?
@@ -268,11 +262,7 @@ pub fn download_unavailable(
             sf.insert(r.name.clone(), r);
             return;
         }
-        let key = regex::Regex::new(r"[^\w\d.]+")
-            .expect("re")
-            .replace_all(&r.name, "_")
-            .into_owned();
-        let meta = metas.get(&key);
+        let meta = metas.get(&r.name);
         un.insert(r.name.clone(), meta.map(|m| m.0.clone()));
         for d in meta.map(|m| m.1.clone()).unwrap_or_default() {
             if let Ok(req) = Requirement::parse(&d) {
@@ -368,6 +358,21 @@ pub fn shared_libraries(downloaded: &[(String, Vec<String>)]) -> bool {
     true
 }
 
+/// The "Checking to see if packages have shared (.so/.dll) libraries..." step;
+/// `logger` is the module of the calling command.
+pub fn check_shared_libraries(d: &Download, allow_shared: bool, logger: &str) -> Result<()> {
+    crate::logs::info(
+        logger,
+        "Checking to see if packages have shared (.so/.dll) libraries...",
+    );
+    if shared_libraries(&d.downloaded) && !allow_shared {
+        return Err(SnowError::click(
+            "Some packages contain shared (.so/.dll) libraries. Try again with --allow-shared-libraries.",
+        ));
+    }
+    Ok(())
+}
+
 /// `get_package_name_from_pip_wheel(package, index_url)`.
 pub fn package_name_from_wheel(
     cli: &mut Cli,
@@ -375,15 +380,7 @@ pub fn package_name_from_wheel(
     index_url: Option<&str>,
 ) -> Result<String> {
     let tmp = tempfile::tempdir()?;
-    let code = pip_wheel(
-        cli,
-        None,
-        Some(package),
-        tmp.path(),
-        index_url,
-        false,
-        false,
-    )?;
+    let code = pip_wheel(cli, Wheel::Package(package), tmp.path(), index_url)?;
     let files: Vec<PathBuf> = std::fs::read_dir(tmp.path())?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
@@ -413,9 +410,7 @@ pub fn create(cli: &mut Cli) -> Result<snow_api::output::Output> {
     let tmp = tempfile::tempdir()?;
     let package = Requirement::parse(&name)?;
     let anaconda = if ignore {
-        Anaconda {
-            packages: Default::default(),
-        }
+        Anaconda::default()
     } else {
         Anaconda::load(cli)?
     };
@@ -433,15 +428,11 @@ pub fn create(cli: &mut Cli) -> Result<snow_api::output::Output> {
             "Package {name} is already available in Snowflake Anaconda Channel."
         )));
     }
-    crate::logs::info(
+    check_shared_libraries(
+        &d,
+        allow_shared,
         "snowflake.cli._plugins.snowpark.package.commands",
-        "Checking to see if packages have shared (.so/.dll) libraries...",
-    );
-    if shared_libraries(&d.downloaded) && !allow_shared {
-        return Err(SnowError::click(
-            "Some packages contain shared (.so/.dll) libraries. Try again with --allow-shared-libraries.",
-        ));
-    }
+    )?;
     let zip = format!(
         "{}.zip",
         package_name_from_wheel(cli, &name, index_url.as_deref())?

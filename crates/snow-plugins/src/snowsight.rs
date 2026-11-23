@@ -64,7 +64,7 @@ fn is_regionless_redirect(cli: &mut Cli) -> bool {
     }
 }
 
-fn host_region(host: &str) -> Option<String> {
+pub fn host_region(host: &str) -> Option<String> {
     let h = host.split(':').next().unwrap_or(host);
     if h.parse::<std::net::IpAddr>().is_ok() {
         return None;
@@ -137,9 +137,4 @@ pub fn make_url(cli: &mut Cli, path: &str) -> Result<String> {
         format!("/{path}")
     };
     Ok(format!("{host}/{deployment}/{account}{p}"))
-}
-
-/// `get_host_region(host)` for callers outside this module.
-pub fn host_region_pub(host: &str) -> Option<String> {
-    host_region(host)
 }

@@ -56,7 +56,7 @@ pub fn wrap(
     initial_indent: &str,
     subsequent_indent: &str,
 ) -> Vec<String> {
-    let text = expand_tabs(text);
+    let text = snow_rich::text::expand_tabs(text, 8);
     let mut ch = chunks(&text);
     ch.reverse();
     let mut lines: Vec<String> = Vec::new();
@@ -100,32 +100,6 @@ pub fn wrap(
         }
     }
     lines
-}
-
-fn expand_tabs(s: &str) -> String {
-    if !s.contains('\t') {
-        return s.to_string();
-    }
-    let mut out = String::new();
-    let mut col = 0;
-    for c in s.chars() {
-        match c {
-            '\t' => {
-                let n = 8 - col % 8;
-                out.extend(std::iter::repeat_n(' ', n));
-                col += n;
-            }
-            '\n' => {
-                out.push(c);
-                col = 0;
-            }
-            _ => {
-                out.push(c);
-                col += 1;
-            }
-        }
-    }
-    out
 }
 
 /// `HelpFormatter.write_usage` at indent 0; returns the text without the final newline.

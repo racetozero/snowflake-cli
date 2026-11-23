@@ -2,18 +2,18 @@
 
 use crate::common::{cv_to_pv, mask, prompt};
 use indexmap::IndexMap;
-use snow_api::config::{Cv, normalize_connection};
+use snow_api::config::{CONNECTION_FIELDS, Cv, connection_table, normalize_connection};
 use snow_api::output::{Output, Pv, Row};
 use snow_api::{Cli, Result, SnowError};
-use toml_edit::{Table, value};
+use toml_edit::value;
 
 pub fn list(cli: &mut Cli) -> Result<Output> {
     let default = cli.config.default_connection_name();
     let mut rows = Vec::new();
     for (name, raw) in cli.config.connections() {
-        let known = known_only(normalize_connection(raw));
-        let params: IndexMap<String, Pv> = known
+        let params: IndexMap<String, Pv> = normalize_connection(raw)
             .iter()
+            .filter(|(k, _)| CONNECTION_FIELDS.contains(&k.as_str()))
             .map(|(k, v)| (k.clone(), mask(k, cv_to_pv(v))))
             .collect();
         let mut r = Row::new();
@@ -30,46 +30,6 @@ pub fn list(cli: &mut Cli) -> Result<Output> {
         cli.console.warning(&msg);
     }
     Ok(Output::Collection(rows))
-}
-
-fn known_only(m: IndexMap<String, Cv>) -> IndexMap<String, Cv> {
-    const KNOWN: &[&str] = &[
-        "account",
-        "user",
-        "password",
-        "host",
-        "region",
-        "port",
-        "protocol",
-        "database",
-        "schema",
-        "warehouse",
-        "role",
-        "authenticator",
-        "workload_identity_provider",
-        "private_key_file",
-        "private_key_raw",
-        "private_key_passphrase",
-        "token",
-        "session_token",
-        "master_token",
-        "token_file_path",
-        "oauth_client_id",
-        "oauth_client_secret",
-        "oauth_authorization_url",
-        "oauth_token_request_url",
-        "oauth_redirect_uri",
-        "oauth_scope",
-        "oauth_enable_pkce",
-        "oauth_enable_refresh_tokens",
-        "oauth_enable_single_use_refresh_tokens",
-        "client_store_temporary_credential",
-        "secondary_roles",
-        "server_session_keep_alive",
-    ];
-    m.into_iter()
-        .filter(|(k, _)| KNOWN.contains(&k.as_str()))
-        .collect()
 }
 
 pub fn add(cli: &mut Cli) -> Result<Output> {
@@ -161,40 +121,11 @@ pub fn add(cli: &mut Cli) -> Result<Output> {
             "Connection {name} already exists"
         )));
     }
-    // ConnectionConfig field order.
-    let order = [
-        "account",
-        "user",
-        "password",
-        "host",
-        "region",
-        "port",
-        "protocol",
-        "database",
-        "schema",
-        "warehouse",
-        "role",
-        "authenticator",
-        "workload_identity_provider",
-        "private_key_file",
-        "token_file_path",
-        "secondary_roles",
-        "server_session_keep_alive",
-        "client_store_temporary_credential",
-    ];
-    let mut t = Table::new();
-    for k in order {
-        if let Some(Some(v)) = opts.get(k) {
-            let item = match v {
-                Cv::Str(s) => value(s.as_str()),
-                Cv::Int(i) => value(*i),
-                Cv::Bool(b) => value(*b),
-                other => value(other.py_str()),
-            };
-            t.insert(k, item);
-        }
-    }
-    let file = cli.config.add_connection(&name, t)?;
+    let known = opts
+        .into_iter()
+        .filter_map(|(k, v)| Some((k.to_string(), v?)))
+        .collect();
+    let file = cli.config.add_connection(&name, connection_table(known))?;
     if cli.flag("set_as_default") {
         cli.config
             .set_value(&["default_connection_name"], value(name.as_str()))?;
@@ -357,21 +288,7 @@ pub fn generate_jwt(cli: &mut Cli) -> Result<Output> {
         }
         Err(e) => return Err(SnowError::click(e)),
     };
-    let token = snow_connector::auth::keypair_jwt(&account, &user, &der)
-        // Errors that are not ProgrammingErrors (botocore's) show their own text.
-        .map_err(|e| match e.errno {
-            -1 => SnowError::click(e.raw_msg),
-            -2 => match e.raw_msg.split_once('\u{1}') {
-                Some((class, msg)) => SnowError::unexpected(msg.to_string()).named(match class {
-                    "InvalidConfigError" => "InvalidConfigError",
-                    "SSOTokenLoadError" => "SSOTokenLoadError",
-                    "UnauthorizedSSOTokenError" => "UnauthorizedSSOTokenError",
-                    _ => "CredentialRetrievalError",
-                }),
-                None => SnowError::unexpected(e.raw_msg).named("CredentialRetrievalError"),
-            },
-            n => SnowError::click(format!("{n}: {n}: {}", e.raw_msg)),
-        })?;
+    let token = snow_connector::auth::keypair_jwt(&account, &user, &der).map_err(token_error)?;
     Ok(Output::message(token))
 }
 
@@ -399,19 +316,25 @@ pub fn generate_workload_identity_token(cli: &mut Cli) -> Result<Output> {
         validate_jwt(&token)?;
         return Ok(Output::message(token));
     }
-    if !["AWS", "AZURE", "GCP"].contains(&provider.as_str()) {
-        return Err(SnowError::click(format!(
-            "Unknown workload_identity_provider: '{provider}'. Expected one of: AWS, AZURE, GCP, OIDC"
-        )));
-    }
     let token = match provider.as_str() {
         // `create_attestation(provider=provider, token=token)`: no connection options.
         "AWS" => snow_connector::wif::aws_attestation(&Default::default()),
         "AZURE" => snow_connector::wif::azure_attestation(&Default::default()),
-        _ => snow_connector::wif::gcp_attestation(&Default::default()),
+        "GCP" => snow_connector::wif::gcp_attestation(&Default::default()),
+        _ => {
+            return Err(SnowError::click(format!(
+                "Unknown workload_identity_provider: '{provider}'. Expected one of: AWS, AZURE, GCP, OIDC"
+            )));
+        }
     }
-    // Errors that are not ProgrammingErrors (botocore's) show their own text.
-    .map_err(|e| match e.errno {
+    .map_err(token_error)?;
+    Ok(Output::message(token))
+}
+
+/// A token generation error as a CLI error. Errors that are not
+/// ProgrammingErrors (botocore's) show their own text.
+fn token_error(e: snow_connector::DbError) -> SnowError {
+    match e.errno {
         -1 => SnowError::click(e.raw_msg),
         -2 => match e.raw_msg.split_once('\u{1}') {
             Some((class, msg)) => SnowError::unexpected(msg.to_string()).named(match class {
@@ -423,8 +346,7 @@ pub fn generate_workload_identity_token(cli: &mut Cli) -> Result<Output> {
             None => SnowError::unexpected(e.raw_msg).named("CredentialRetrievalError"),
         },
         n => SnowError::click(format!("{n}: {n}: {}", e.raw_msg)),
-    })?;
-    Ok(Output::message(token))
+    }
 }
 
 /// PyJWT `decode(verify_signature=False)` plus the iss/sub check of `wif_util`.

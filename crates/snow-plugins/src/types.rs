@@ -1,20 +1,10 @@
 //! Snowflake CLI parameter types (`IdentifierType`, `LocalDirectoryType`, ...).
 
 use snow_api::identifiers::Fqn;
-use snow_api::{Cli, Result, SnowError};
+use snow_api::{Result, SnowError};
 use snow_click::Value;
-use snow_click::spec::Param;
 
-pub fn is_stage_path(p: &str) -> bool {
-    p.starts_with('@') || p.starts_with("snow://")
-}
-
-pub fn convert(
-    _cli: &mut Cli,
-    _param: &'static Param,
-    ty: &'static str,
-    raw: &str,
-) -> Result<Value> {
+pub fn convert(ty: &'static str, raw: &str) -> Result<Value> {
     match ty {
         "IdentifierType" => {
             Fqn::from_string(raw)?;
@@ -25,7 +15,7 @@ pub fn convert(
             Ok(Value::Str(raw.to_string()))
         }
         "LocalDirectoryType" | "LocalFileType" => {
-            if is_stage_path(raw) {
+            if crate::stage::is_stage_path(raw) {
                 let noun = if ty == "LocalDirectoryType" {
                     "directory"
                 } else {

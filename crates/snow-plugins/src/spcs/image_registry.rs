@@ -112,10 +112,7 @@ pub fn login_to_registry(cli: &mut Cli, repo_url: &str) -> Result<String> {
     let t = token(cli)?;
     let tok = snow_api::pyfmt::json_dumps(&t, None);
     let u = url::Url::parse(repo_url).map_err(|e| SnowError::unexpected(e.to_string()))?;
-    let host = match u.port() {
-        Some(p) => format!("{}:{p}", u.host_str().unwrap_or_default()),
-        None => u.host_str().unwrap_or_default().to_string(),
-    };
+    let host = &u[url::Position::BeforeHost..url::Position::AfterPort];
     let login = format!("{}://{host}/login", u.scheme());
     let creds = base64::engine::general_purpose::STANDARD.encode(format!("0sessiontoken:{tok}"));
     let agent = snow_connector::http_agent(std::time::Duration::from_secs(60));

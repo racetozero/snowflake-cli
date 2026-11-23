@@ -1,7 +1,23 @@
 //! PEP 440 version ordering (`packaging.version.Version`), enough for `>`/`<=`
 //! comparisons between release, pre-, post- and dev-releases.
 
+use regex::Regex;
 use std::cmp::Ordering;
+use std::sync::LazyLock;
+
+static VERSION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?ix)^\s*v?
+        (?:(\d+)!)?
+        (\d+(?:\.\d+)*)
+        (?:[-_.]?(a|b|c|rc|alpha|beta|pre|preview)[-_.]?(\d+)?)?
+        (?:(?:-(\d+))|(?:[-_.]?(post|rev|r)[-_.]?(\d+)?))?
+        (?:[-_.]?dev[-_.]?(\d+)?)?
+        (?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?
+        \s*$",
+    )
+    .expect("re")
+});
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version {
@@ -15,18 +31,7 @@ pub struct Version {
 
 impl Version {
     pub fn parse(s: &str) -> Option<Version> {
-        let re = regex::Regex::new(
-            r"(?ix)^\s*v?
-            (?:(\d+)!)?
-            (\d+(?:\.\d+)*)
-            (?:[-_.]?(a|b|c|rc|alpha|beta|pre|preview)[-_.]?(\d+)?)?
-            (?:(?:-(\d+))|(?:[-_.]?(post|rev|r)[-_.]?(\d+)?))?
-            (?:[-_.]?dev[-_.]?(\d+)?)?
-            (?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?
-            \s*$",
-        )
-        .expect("re");
-        let c = re.captures(s)?;
+        let c = VERSION.captures(s)?;
         let num = |i: usize| c.get(i).map(|m| m.as_str().parse::<u64>().unwrap_or(0));
         let pre = c.get(3).map(|m| {
             let phase = match m.as_str().to_lowercase().as_str() {

@@ -12,11 +12,7 @@ const DEFAULT_GATEWAY: &str = "SNOWFLAKE";
 const OPENCODE_PROVIDER: &str = "snowflake-cortex";
 const OPENCODE_MODEL: &str = "openai-gpt-5.4";
 
-fn err(m: impl Into<String>) -> SnowError {
-    SnowError::cli(m.into())
-}
-
-fn which(name: &str) -> Option<PathBuf> {
+pub(crate) fn which(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .map(|d| d.join(name))
@@ -37,7 +33,7 @@ fn is_executable(p: &Path) -> bool {
 
 fn find_agent(name: &str, fallback: Option<PathBuf>) -> Result<PathBuf> {
     which(name).or_else(|| fallback.filter(|f| is_executable(f))).ok_or_else(|| {
-        err(format!("{name} command not found, make sure it is installed on your system and in your PATH"))
+        SnowError::cli(format!("{name} command not found, make sure it is installed on your system and in your PATH"))
     })
 }
 
@@ -51,7 +47,7 @@ fn refuse_conflicting_env(names: &[&str]) -> Result<()> {
         return Ok(());
     }
     let listed = found.join(", ");
-    Err(err(format!(
+    Err(SnowError::cli(format!(
         "Refusing to launch: {listed} is set in the environment.\nThe agent reads these in preference to the settings this command passes, so it would authenticate with a credential that was never validated, or send traffic somewhere other than the AI Gateway.\nUnset {listed} and try again."
     )))
 }
@@ -70,7 +66,7 @@ fn resolve_gateway(cli: &mut Cli) -> Result<Gateway> {
         .expect("re")
         .is_match(&name)
     {
-        return Err(err(format!(
+        return Err(SnowError::cli(format!(
             "Invalid gateway name {}.\nA gateway name may contain only letters, digits, underscores and dollar signs (default: {DEFAULT_GATEWAY}). The gateway address is always built from the account host of the active connection.",
             snow_click::parse::py_repr(&name)
         )));
@@ -84,13 +80,13 @@ fn resolve_gateway(cli: &mut Cli) -> Result<Gateway> {
                 .unwrap_or(false),
         ),
         Err(_) => {
-            return Err(err(
+            return Err(SnowError::cli(
                 "Could not connect: Check authentication and network settings with snow connection test.\nThe gateway credential is derived from the connection, so fix the connection first (see `snow connection test`).",
             ));
         }
     };
     if host.is_empty() {
-        return Err(err(
+        return Err(SnowError::cli(
             "Could not derive the gateway URL: connection did not expose a host.",
         ));
     }
@@ -117,7 +113,7 @@ fn bearer_token(cli: &mut Cli) -> Result<String> {
     let params = match cli.connection_parameters_preview() {
         Ok(p) => p,
         Err(_) => {
-            return Err(err(
+            return Err(SnowError::cli(
                 "Could not read the connection configuration: Check the selected connection's TOML and environment settings.\nThe gateway credential comes from the connection, so fix the connection first (see `snow connection test`).",
             ));
         }
@@ -140,7 +136,7 @@ fn bearer_token(cli: &mut Cli) -> Result<String> {
             }
         };
         let token = token.map_err(|e| {
-            err(format!(
+            SnowError::cli(format!(
                 "Connection is configured for {authenticator} but {e}.\nSet token (or token_file_path) for the connection and try again."
             ))
         })?;
@@ -154,7 +150,7 @@ fn bearer_token(cli: &mut Cli) -> Result<String> {
     if authenticator == "oauth_authorization_code" {
         // Upstream's renewal helper re-executes the Python interpreter; frozen
         // (standalone) builds refuse, and so does this binary.
-        return Err(err(
+        return Err(SnowError::cli(
             "Renewable OAuth is not yet supported by standalone Snow CLI executables.",
         ));
     }
@@ -163,7 +159,7 @@ fn bearer_token(cli: &mut Cli) -> Result<String> {
     } else {
         authenticator
     };
-    Err(err(format!(
+    Err(SnowError::cli(format!(
         "Could not derive a credential for the AI Gateway from this connection (authenticator: {shown}).\nConfigure a programmatic access token: authenticator = PROGRAMMATIC_ACCESS_TOKEN with token or token_file_path.\nOAuth is also supported: oauth with token or token_file_path, or oauth_authorization_code with credential caching enabled.\nKeypair (SNOWFLAKE_JWT), OAuth client credentials and workload identity are not supported yet."
     )))
 }
@@ -186,10 +182,6 @@ fn launch(bin: &Path, args: &[String], env: BTreeMap<String, String>) -> Result<
         return Err(SnowError::Click(snow_click::ClickError::Exit(code)));
     }
     Ok(Output::Empty)
-}
-
-fn agent_args(cli: &Cli) -> Vec<String> {
-    cli.inv.leaf().args.clone()
 }
 
 pub fn claude(cli: &mut Cli) -> Result<Output> {
@@ -234,7 +226,7 @@ pub fn claude(cli: &mut Cli) -> Result<Output> {
         }
     }
     env.insert("ANTHROPIC_CUSTOM_HEADERS".into(), lines.join("\n"));
-    launch(&bin, &agent_args(cli), env)
+    launch(&bin, &cli.inv.leaf().args, env)
 }
 
 pub fn opencode(cli: &mut Cli) -> Result<Output> {
@@ -273,5 +265,5 @@ pub fn opencode(cli: &mut Cli) -> Result<Output> {
     if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         std::thread::sleep(std::time::Duration::from_secs(4));
     }
-    launch(&bin, &agent_args(cli), env)
+    launch(&bin, &cli.inv.leaf().args, env)
 }

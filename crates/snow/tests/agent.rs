@@ -106,4 +106,16 @@ fn agent_mode_envelopes() {
     let (v, code) = run(h.path(), &["connection", "add", "--agent"]);
     assert_eq!(code, 3);
     assert_eq!(v["error"]["code"], "input_required");
+
+    // A command that prints a result and then exits with a code (no `--yes`).
+    let (v, code) = run(h.path(), &["feedback", "-m", "hi", "-r", "3", "--agent"]);
+    assert_eq!(code, 2);
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["command"], "feedback");
+    assert_eq!(v["error"]["code"], "exit");
+    assert!(
+        v["data"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("--yes"))
+    );
 }

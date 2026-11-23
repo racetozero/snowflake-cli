@@ -11,8 +11,6 @@ pub enum ErrorClass {
     Argument,
     /// `CliConnectionError` (3).
     Connection,
-    /// `CliCommunicationError` (4).
-    Communication,
     /// `CliSqlError` (5).
     Sql,
     /// A `ClickException` that is not a `BaseCliError` (always 1).
@@ -36,7 +34,6 @@ pub enum SnowError {
         /// The Python exception class name (recorded in last_cli_error.json).
         name: &'static str,
     },
-    /// Any other exception: "An unexpected exception occurred..."
     /// Any other exception: message and Python class name.
     Unexpected(String, &'static str),
 }
@@ -44,46 +41,36 @@ pub enum SnowError {
 pub type Result<T, E = SnowError> = std::result::Result<T, E>;
 
 impl SnowError {
-    pub fn cli(message: impl Into<String>) -> SnowError {
+    fn with(message: impl Into<String>, class: ErrorClass, name: &'static str) -> SnowError {
         SnowError::Cli {
             message: message.into(),
-            class: ErrorClass::Generic,
+            class,
             after: Vec::new(),
-            name: "CliError",
+            name,
         }
+    }
+    pub fn cli(message: impl Into<String>) -> SnowError {
+        SnowError::with(message, ErrorClass::Generic, "CliError")
     }
     /// `click.ClickException(message)`.
     pub fn click(message: impl Into<String>) -> SnowError {
-        SnowError::Cli {
-            message: message.into(),
-            class: ErrorClass::Click,
-            after: Vec::new(),
-            name: "ClickException",
-        }
+        SnowError::with(message, ErrorClass::Click, "ClickException")
     }
     pub fn argument(message: impl Into<String>) -> SnowError {
-        SnowError::Cli {
-            message: message.into(),
-            class: ErrorClass::Argument,
-            after: Vec::new(),
-            name: "CliArgumentError",
-        }
+        SnowError::with(message, ErrorClass::Argument, "CliArgumentError")
     }
     pub fn connection(message: impl Into<String>) -> SnowError {
-        SnowError::Cli {
-            message: message.into(),
-            class: ErrorClass::Connection,
-            after: Vec::new(),
-            name: "CliConnectionError",
-        }
+        SnowError::with(message, ErrorClass::Connection, "CliConnectionError")
     }
     pub fn sql(message: impl Into<String>) -> SnowError {
-        SnowError::Cli {
-            message: message.into(),
-            class: ErrorClass::Sql,
-            after: Vec::new(),
-            name: "CliSqlError",
-        }
+        SnowError::with(message, ErrorClass::Sql, "CliSqlError")
+    }
+    /// `MissingConfigurationError` for a directory without `snowflake.yml`.
+    pub fn missing_project_definition() -> SnowError {
+        SnowError::cli(
+            "Cannot find project definition (snowflake.yml). Please provide a path to the project or run this command in a valid project directory.",
+        )
+        .named("MissingConfigurationError")
     }
     /// `click.UsageError(message)` raised by command code (exit 2, usage line).
     pub fn usage(message: impl Into<String>) -> SnowError {
@@ -91,25 +78,18 @@ impl SnowError {
     }
     /// `IncompatibleParametersError(options)`.
     pub fn incompatible(options: &[&str]) -> SnowError {
-        let quoted: Vec<String> = options.iter().map(|o| format!("'{o}'")).collect();
-        let (last, rest) = quoted.split_last().expect("at least one option");
         SnowError::Click(ClickError::usage_class(
-            format!(
-                "Parameters {} and {last} are incompatible and cannot be used simultaneously.",
-                rest.join(", ")
+            parameters_message(
+                options,
+                "are incompatible and cannot be used simultaneously.",
             ),
             "IncompatibleParametersError",
         ))
     }
     /// `UnmetParametersError(options)`.
     pub fn unmet(options: &[&str]) -> SnowError {
-        let quoted: Vec<String> = options.iter().map(|o| format!("'{o}'")).collect();
-        let (last, rest) = quoted.split_last().expect("at least one option");
         SnowError::Click(ClickError::usage_class(
-            format!(
-                "Parameters {} and {last} must be used simultaneously.",
-                rest.join(", ")
-            ),
+            parameters_message(options, "must be used simultaneously."),
             "UnmetParametersError",
         ))
     }
@@ -175,27 +155,24 @@ impl SnowError {
     pub fn exit_code(&self, enhanced: bool) -> i32 {
         match self {
             SnowError::Click(c) => c.exit_code(),
-            SnowError::Cli { class, .. } => {
-                if matches!(class, ErrorClass::ExitZero | ErrorClass::ExitZeroClick) {
-                    return 0;
-                }
-                if !enhanced {
-                    return 1;
-                }
-                match class {
-                    ErrorClass::Generic
-                    | ErrorClass::Click
-                    | ErrorClass::ExitZero
-                    | ErrorClass::ExitZeroClick => 1,
-                    ErrorClass::Argument => 2,
-                    ErrorClass::Connection => 3,
-                    ErrorClass::Communication => 4,
-                    ErrorClass::Sql => 5,
-                }
-            }
+            SnowError::Cli { class, .. } => match class {
+                ErrorClass::ExitZero | ErrorClass::ExitZeroClick => 0,
+                _ if !enhanced => 1,
+                ErrorClass::Generic | ErrorClass::Click => 1,
+                ErrorClass::Argument => 2,
+                ErrorClass::Connection => 3,
+                ErrorClass::Sql => 5,
+            },
             SnowError::Unexpected(..) => 1,
         }
     }
+}
+
+/// `Parameters 'a', 'b' and 'c' <tail>`.
+fn parameters_message(options: &[&str], tail: &str) -> String {
+    let quoted: Vec<String> = options.iter().map(|o| format!("'{o}'")).collect();
+    let (last, rest) = quoted.split_last().expect("at least one option");
+    format!("Parameters {} and {last} {tail}", rest.join(", "))
 }
 
 impl From<ClickError> for SnowError {

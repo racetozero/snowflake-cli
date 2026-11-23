@@ -45,7 +45,7 @@ impl PyV {
             _ => None,
         }
     }
-    pub fn as_dict_mut(&mut self) -> Option<&mut IndexMap<String, PyV>> {
+    pub(crate) fn as_dict_mut(&mut self) -> Option<&mut IndexMap<String, PyV>> {
         match self {
             PyV::Dict(d) => Some(d),
             _ => None,
@@ -77,6 +77,13 @@ impl PyV {
     /// `get` that treats `None` as absent.
     pub fn get_some(&self, key: &str) -> Option<&PyV> {
         self.get(key).filter(|v| !v.is_none())
+    }
+    /// The `str()` of each item of the list at `key` (empty when it is not a list).
+    pub fn str_list(&self, key: &str) -> Vec<String> {
+        self.get(key)
+            .and_then(PyV::as_list)
+            .map(|l| l.iter().map(PyV::py_str).collect())
+            .unwrap_or_default()
     }
     pub fn str_of(&self, key: &str) -> Option<String> {
         match self.get(key)? {
@@ -161,7 +168,7 @@ impl PyV {
 }
 
 /// `deep_merge_dicts(original, overrides)`.
-pub fn deep_merge(original: &mut IndexMap<String, PyV>, overrides: &IndexMap<String, PyV>) {
+pub(crate) fn deep_merge(original: &mut IndexMap<String, PyV>, overrides: &IndexMap<String, PyV>) {
     for (k, v) in overrides {
         match (original.get_mut(k), v) {
             (Some(PyV::Dict(o)), PyV::Dict(n)) => deep_merge(o, n),

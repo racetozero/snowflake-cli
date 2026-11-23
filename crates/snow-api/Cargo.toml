@@ -23,4 +23,3 @@ dirs.workspace = true
 indexmap.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
-minijinja = { workspace = true, features = ["custom_syntax"] }

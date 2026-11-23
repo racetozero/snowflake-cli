@@ -9,6 +9,20 @@ pub fn is_stage_path(p: &str) -> bool {
     p.starts_with('@') || p.starts_with("snow://")
 }
 
+/// A temporary stage `name` in the project's database and schema, completed
+/// from the connection.
+pub fn temp_stage_name(cli: &mut Cli, project: &Fqn, name: String) -> Result<Fqn> {
+    let stage = Fqn::from_string(&name)?
+        .set_database(project.database.as_deref())
+        .set_schema(project.schema.as_deref());
+    cli.using_connection(stage)
+}
+
+/// Sort key for result rows: the parent directory, then the file name.
+pub fn dir_then_name(s: &str) -> (&str, &str) {
+    s.rsplit_once('/').unwrap_or(("", s))
+}
+
 pub fn list_files_query(path: &StagePath, pattern: Option<&str>) -> String {
     let mut q = format!("ls {}", path.path_for_sql());
     if let Some(p) = pattern {
@@ -219,7 +233,7 @@ pub fn put(
         to_uri(&local),
         stage.path_for_sql(),
         auto_compress,
-        if overwrite { "True" } else { "False" }
+        crate::spcs::py_bool(overwrite)
     ))
 }
 
@@ -339,7 +353,8 @@ fn local_target(p: &StagePath, target: &std::path::Path, root: &StagePath) -> st
     out
 }
 
-fn upload_workers(cli: &Cli) -> Result<(i64, i64)> {
+/// The PUT/GET `parallel`, capped by `cli.stage_upload_workers` (default 32).
+fn split_budget(cli: &Cli, parallel: i64) -> Result<i64> {
     let raw = cli
         .config
         .value(&["cli"], "stage_upload_workers")
@@ -361,11 +376,6 @@ fn upload_workers(cli: &Cli) -> Result<(i64, i64)> {
             }
         },
     };
-    Ok((budget, 1))
-}
-
-fn split_budget(cli: &Cli, parallel: i64) -> Result<i64> {
-    let (budget, _) = upload_workers(cli)?;
     Ok(budget.min(parallel.max(1)))
 }
 
@@ -493,29 +503,18 @@ pub fn get_recursive(
         rows.extend(cli.rows(&c));
     }
     let file = |r: &snow_api::output::Row| r.get("file").map(|v| v.py_str()).unwrap_or_default();
-    rows.sort_by(|a, b| {
-        let (fa, fb) = (file(a), file(b));
-        let split = |s: &str| match s.rfind('/') {
-            Some(i) => (s[..i].to_string(), s[i + 1..].to_string()),
-            None => (String::new(), s.to_string()),
-        };
-        split(&fa).cmp(&split(&fb))
-    });
+    rows.sort_by(|a, b| dir_then_name(&file(a)).cmp(&dir_then_name(&file(b))));
     Ok(rows)
 }
 
-/// `re.escape` (Python 3.7+: escapes everything but ASCII letters, digits and `_`).
+/// `re.escape` (Python 3.7+: escapes only the regex special characters).
 fn py_re_escape(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
-        if c.is_ascii_alphanumeric() || c == '_' || !c.is_ascii() {
-            out.push(c);
-        } else if "()[]{}?*+-|^$\\.&~# \t\n\r\x0b\x0c".contains(c) {
+        if "()[]{}?*+-|^$\\.&~# \t\n\r\x0b\x0c".contains(c) {
             out.push('\\');
-            out.push(c);
-        } else {
-            out.push(c);
         }
+        out.push(c);
     }
     out
 }
@@ -598,19 +597,10 @@ pub fn put_tree(
     auto_compress: bool,
 ) -> Result<Vec<snow_api::output::Row>> {
     let parallel = split_budget(cli, parallel)?;
-    struct Tmp<'a> {
-        p: &'a std::path::Path,
-    }
-    impl Tmp<'_> {
-        fn path(&self) -> &std::path::Path {
-            self.p
-        }
-    }
-    let tmp = Tmp { p: dir };
     let base = StagePath::from_stage_str(stage);
     let iso = tempfile::tempdir()?;
     let mut units = Vec::new();
-    let mut dirs = vec![tmp.path().to_path_buf()];
+    let mut dirs = vec![dir.to_path_buf()];
     let mut idx = 0;
     while let Some(d) = dirs.first().cloned() {
         dirs.remove(0);
@@ -634,7 +624,7 @@ pub fn put_tree(
         if files.is_empty() {
             continue;
         }
-        let rel = d.strip_prefix(tmp.path()).unwrap_or(&d).to_path_buf();
+        let rel = d.strip_prefix(dir).unwrap_or(&d).to_path_buf();
         let iso_dir = iso.path().join(this.to_string());
         std::fs::create_dir_all(&iso_dir)?;
         for f in &files {
@@ -693,9 +683,10 @@ fn link_or_copy(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// `fnmatch.fnmatchcase`.
+/// `fnmatch.fnmatchcase` without `[...]` classes (a `[` is literal). Like
+/// `fnmatch.translate`, `*` and `?` also match a newline.
 pub fn fnmatchcase(name: &str, pat: &str) -> bool {
-    let mut re = String::from("^");
+    let mut re = String::from("(?s)^");
     for c in pat.chars() {
         match c {
             '*' => re.push_str(".*"),

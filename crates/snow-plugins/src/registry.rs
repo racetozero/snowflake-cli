@@ -22,7 +22,6 @@ pub fn dispatch(path: &str, cli: &mut Cli) -> Result<Output> {
         "snow dbt describe" => dbt::describe(cli),
         "snow dbt drop" => dbt::drop(cli),
         p if p.starts_with("snow dbt execute ") => dbt::execute(cli),
-        // list/describe/drop aliases of `snow object`
         "snow stage list" => object::list_for(cli, "stage"),
         "snow stage describe" => object::describe_for(cli, "stage", "name"),
         "snow stage drop" => object::drop_for(cli, "stage", "name"),

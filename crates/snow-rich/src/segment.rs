@@ -131,33 +131,10 @@ pub fn split_and_crop_lines(
     style: Style,
     pad: bool,
 ) -> Vec<Line> {
-    let mut lines = Vec::new();
-    let mut line: Line = Vec::new();
-    for seg in segments {
-        if seg.text.contains('\n') {
-            let mut rest: &str = &seg.text;
-            while !rest.is_empty() {
-                let (part, newline, after) = match rest.find('\n') {
-                    Some(i) => (&rest[..i], true, &rest[i + 1..]),
-                    None => (rest, false, ""),
-                };
-                if !part.is_empty() {
-                    line.push(Segment::new(part, seg.style));
-                }
-                if newline {
-                    lines.push(adjust_line_length(&line, length, style, pad));
-                    line.clear();
-                }
-                rest = after;
-            }
-        } else {
-            line.push(seg);
-        }
-    }
-    if !line.is_empty() {
-        lines.push(adjust_line_length(&line, length, style, pad));
-    }
-    lines
+    split_lines(segments)
+        .iter()
+        .map(|l| adjust_line_length(l, length, style, pad))
+        .collect()
 }
 
 /// `Segment.split_lines`: split into lines, keeping an unterminated last line.
@@ -205,18 +182,9 @@ pub fn set_shape(lines: &[Line], width: usize, height: Option<usize>, style: Sty
 }
 
 /// `Segment.align_top`.
-pub fn align_top(lines: Vec<Line>, width: usize, height: usize, style: Style) -> Vec<Line> {
-    if lines.len() >= height {
-        let mut l = lines;
-        if l.len() > height {
-            l.truncate(height);
-        }
-        return l;
-    }
-    let mut l = lines;
-    let blank = vec![Segment::new(" ".repeat(width), style)];
-    l.resize(height, blank);
-    l
+pub fn align_top(mut lines: Vec<Line>, width: usize, height: usize, style: Style) -> Vec<Line> {
+    lines.resize(height, vec![Segment::new(" ".repeat(width), style)]);
+    lines
 }
 
 /// Apply `style` underneath every segment (`Segment.apply_style(style=...)`).

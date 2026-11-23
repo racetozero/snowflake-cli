@@ -1,0 +1,16 @@
+[package]
+name = "iana-time-zone"
+# Replaces crates.io iana-time-zone through [patch.crates-io] in the workspace
+# manifest. The version must stay compatible with what chrono requires.
+version = "0.1.65"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# chrono enables this; the crates.io version uses it for unknown platforms.
+fallback = []
+
+[lints]
+workspace = true

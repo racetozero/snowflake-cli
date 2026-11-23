@@ -225,7 +225,7 @@ fn docs_panels(spec: &Spec, cmd: u16) -> Vec<R> {
             if let Some(o) = e.output.filter(|o| !o.is_empty()) {
                 if o.contains('\n') {
                     lines.push(R::Text(Text::styled("Output:", dim())));
-                    for l in py_splitlines(o) {
+                    for l in o.lines() {
                         lines.push(R::Text(Text::styled(l, dim()).with_no_wrap(true)));
                     }
                 } else {
@@ -249,17 +249,6 @@ fn docs_panels(spec: &Spec, cmd: u16) -> Vec<R> {
     out
 }
 
-fn py_splitlines(s: &str) -> Vec<&str> {
-    let mut v: Vec<&str> = s
-        .split('\n')
-        .map(|l| l.strip_suffix('\r').unwrap_or(l))
-        .collect();
-    if s.ends_with('\n') {
-        v.pop();
-    }
-    v
-}
-
 fn injected(spec: &Spec, idx: u16) -> bool {
     matches!(
         spec.param(idx).panel,
@@ -267,13 +256,29 @@ fn injected(spec: &Spec, idx: u16) -> bool {
     )
 }
 
-/// Visible children of a group in help order.
+/// Group `items` into panels named by `panel_of` (else `default`), in first-appearance
+/// order; the `default` panel always comes first.
+fn group_by_panel(
+    default: &'static str,
+    items: &[u16],
+    panel_of: impl Fn(u16) -> Option<&'static str>,
+) -> Vec<(&'static str, Vec<u16>)> {
+    let mut panels = vec![(default, Vec::new())];
+    for &i in items {
+        let name = panel_of(i).unwrap_or(default);
+        match panels.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, v)) => v.push(i),
+            None => panels.push((name, vec![i])),
+        }
+    }
+    panels
+}
+
 pub fn visible_children(spec: &Spec, hooks: &dyn Hooks, cmd: u16) -> Vec<u16> {
-    let children = hooks
-        .list_commands(spec, cmd)
-        .unwrap_or_else(|| spec.cmd(cmd).children.to_vec());
-    children
-        .into_iter()
+    spec.cmd(cmd)
+        .children
+        .iter()
+        .copied()
         .filter(|c| !command_hidden(spec, hooks, *c))
         .collect()
 }
@@ -291,18 +296,20 @@ pub fn render_help(
     let cmd_idx = level.cmd;
     let cmd = spec.cmd(cmd_idx);
     let params = spec.cmd_params(cmd_idx);
-    let has_injected = params.iter().any(|p| injected(spec, *p));
+    let has_panel = |name| params.iter().any(|p| spec.param(*p).panel == Some(name));
+    let has_conn = has_panel(CONNECTION_PANEL);
+    let has_glob = has_panel(GLOBAL_PANEL);
+    let has_injected = has_conn || has_glob;
     let condensed = env.condensed && !level.show_all_help && has_injected && !cmd.agent_args;
     let mut out: Vec<R> = Vec::new();
 
     let mut usage_text = usage(spec, inv, depth);
     if condensed {
-        let panels: Vec<Option<&str>> = params.iter().map(|p| spec.param(*p).panel).collect();
         let mut parts = Vec::new();
-        if panels.contains(&Some(GLOBAL_PANEL)) {
+        if has_glob {
             parts.push("[global options]");
         }
-        if panels.contains(&Some(CONNECTION_PANEL)) {
+        if has_conn {
             parts.push("[connection options]");
         }
         if !parts.is_empty() {
@@ -340,25 +347,13 @@ pub fn render_help(
         });
     }
 
-    // Group parameters into panels, preserving first-appearance order.
-    let mut arg_panels: Vec<(&str, Vec<u16>)> = vec![("Arguments", Vec::new())];
-    let mut opt_panels: Vec<(&str, Vec<u16>)> = vec![("Options", Vec::new())];
-    for p in &params {
-        if param_is_hidden(spec, hooks, *p) || (condensed && injected(spec, *p)) {
-            continue;
-        }
-        let par = spec.param(*p);
-        let (list, default) = if par.is_argument {
-            (&mut arg_panels, "Arguments")
-        } else {
-            (&mut opt_panels, "Options")
-        };
-        let name = par.panel.unwrap_or(default);
-        match list.iter_mut().find(|(n, _)| *n == name) {
-            Some((_, v)) => v.push(*p),
-            None => list.push((name, vec![*p])),
-        }
-    }
+    let (args, opts): (Vec<u16>, Vec<u16>) = params
+        .iter()
+        .filter(|p| !param_is_hidden(spec, hooks, **p) && !(condensed && injected(spec, **p)))
+        .partition(|p| spec.param(**p).is_argument);
+    let param_panel = |p: u16| spec.param(p).panel;
+    let arg_panels = group_by_panel("Arguments", &args, param_panel);
+    let opt_panels = group_by_panel("Options", &opts, param_panel);
     for (name, ps) in arg_panels.iter().chain(opt_panels.iter()) {
         if let Some(r) = options_panel(spec, name, ps) {
             out.push(r);
@@ -367,14 +362,7 @@ pub fn render_help(
 
     if cmd.is_group {
         let children = visible_children(spec, hooks, cmd_idx);
-        let mut panels: Vec<(&str, Vec<u16>)> = vec![("Commands", Vec::new())];
-        for c in &children {
-            let name = spec.cmd(*c).panel.unwrap_or("Commands");
-            match panels.iter_mut().find(|(n, _)| *n == name) {
-                Some((_, v)) => v.push(*c),
-                None => panels.push((name, vec![*c])),
-            }
-        }
+        let panels = group_by_panel("Commands", &children, |c| spec.cmd(c).panel);
         let max_len = children
             .iter()
             .map(|c| spec.cmd(*c).name.chars().count())
@@ -400,13 +388,6 @@ pub fn render_help(
     }
 
     if condensed {
-        let panels: Vec<Option<&str>> = params
-            .iter()
-            .filter(|p| injected(spec, **p))
-            .map(|p| spec.param(*p).panel)
-            .collect();
-        let has_conn = panels.contains(&Some(CONNECTION_PANEL));
-        let has_glob = panels.contains(&Some(GLOBAL_PANEL));
         let names = |list: &[u16]| {
             list.iter()
                 .filter_map(|p| spec.param(*p).opts.iter().find(|o| o.starts_with("--")))

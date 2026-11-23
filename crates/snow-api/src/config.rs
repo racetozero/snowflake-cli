@@ -11,8 +11,98 @@ use indexmap::IndexMap;
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, Item, Table, Value as TomlValue};
 
-pub const CONNECTIONS_SECTION: &str = "connections";
-pub const CLI_SECTION: &str = "cli";
+pub(crate) const CONNECTIONS_SECTION: &str = "connections";
+
+/// `FeatureFlag` (`api/feature_flags.py`): the flag names and their defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FeatureFlag {
+    EnableSeparateAuthenticationPolicyId,
+    EnableSnowparkGlobSupport,
+    EnableSnowparkSkipDependencies,
+    EnableSnowparkArtifactRepositoryRequirements,
+    EnableNativeAppPythonSetup,
+    EnableNativeAppChildren,
+    EnableReleaseChannels,
+    EnableStreamlitSpcsRuntimeV2,
+    EnableStreamlitUbacSharing,
+    EnforceStrictConfigPermissions,
+    EnableSpcsBuildImage,
+    EnableDbtGitMetadata,
+    EnableDcmProjectEnvVars,
+    EnableDcmPreviewFeatures,
+    EnableDcmUnitTestFeatures,
+    EnableDcmPostHooks,
+    EnableCommandDocsInHelp,
+    EnableCondensedCommandHelp,
+    EnableAuthCommands,
+}
+
+impl FeatureFlag {
+    pub const ALL: [FeatureFlag; 19] = [
+        FeatureFlag::EnableSeparateAuthenticationPolicyId,
+        FeatureFlag::EnableSnowparkGlobSupport,
+        FeatureFlag::EnableSnowparkSkipDependencies,
+        FeatureFlag::EnableSnowparkArtifactRepositoryRequirements,
+        FeatureFlag::EnableNativeAppPythonSetup,
+        FeatureFlag::EnableNativeAppChildren,
+        FeatureFlag::EnableReleaseChannels,
+        FeatureFlag::EnableStreamlitSpcsRuntimeV2,
+        FeatureFlag::EnableStreamlitUbacSharing,
+        FeatureFlag::EnforceStrictConfigPermissions,
+        FeatureFlag::EnableSpcsBuildImage,
+        FeatureFlag::EnableDbtGitMetadata,
+        FeatureFlag::EnableDcmProjectEnvVars,
+        FeatureFlag::EnableDcmPreviewFeatures,
+        FeatureFlag::EnableDcmUnitTestFeatures,
+        FeatureFlag::EnableDcmPostHooks,
+        FeatureFlag::EnableCommandDocsInHelp,
+        FeatureFlag::EnableCondensedCommandHelp,
+        FeatureFlag::EnableAuthCommands,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            FeatureFlag::EnableSeparateAuthenticationPolicyId => {
+                "ENABLE_SEPARATE_AUTHENTICATION_POLICY_ID"
+            }
+            FeatureFlag::EnableSnowparkGlobSupport => "ENABLE_SNOWPARK_GLOB_SUPPORT",
+            FeatureFlag::EnableSnowparkSkipDependencies => "ENABLE_SNOWPARK_SKIP_DEPENDENCIES",
+            FeatureFlag::EnableSnowparkArtifactRepositoryRequirements => {
+                "ENABLE_SNOWPARK_ARTIFACT_REPOSITORY_REQUIREMENTS"
+            }
+            FeatureFlag::EnableNativeAppPythonSetup => "ENABLE_NATIVE_APP_PYTHON_SETUP",
+            FeatureFlag::EnableNativeAppChildren => "ENABLE_NATIVE_APP_CHILDREN",
+            FeatureFlag::EnableReleaseChannels => "ENABLE_RELEASE_CHANNELS",
+            FeatureFlag::EnableStreamlitSpcsRuntimeV2 => "ENABLE_STREAMLIT_SPCS_RUNTIME_V2",
+            FeatureFlag::EnableStreamlitUbacSharing => "ENABLE_STREAMLIT_UBAC_SHARING",
+            FeatureFlag::EnforceStrictConfigPermissions => "ENFORCE_STRICT_CONFIG_PERMISSIONS",
+            FeatureFlag::EnableSpcsBuildImage => "ENABLE_SPCS_BUILD_IMAGE",
+            FeatureFlag::EnableDbtGitMetadata => "ENABLE_DBT_GIT_METADATA",
+            FeatureFlag::EnableDcmProjectEnvVars => "ENABLE_DCM_PROJECT_ENV_VARS",
+            FeatureFlag::EnableDcmPreviewFeatures => "ENABLE_DCM_PREVIEW_FEATURES",
+            FeatureFlag::EnableDcmUnitTestFeatures => "ENABLE_DCM_UNIT_TEST_FEATURES",
+            FeatureFlag::EnableDcmPostHooks => "ENABLE_DCM_POST_HOOKS",
+            FeatureFlag::EnableCommandDocsInHelp => "ENABLE_COMMAND_DOCS_IN_HELP",
+            FeatureFlag::EnableCondensedCommandHelp => "ENABLE_CONDENSED_COMMAND_HELP",
+            FeatureFlag::EnableAuthCommands => "ENABLE_AUTH_COMMANDS",
+        }
+    }
+
+    /// The `BooleanFlag` default (`None` for `ENABLE_RELEASE_CHANNELS`).
+    pub fn default(self) -> Option<bool> {
+        match self {
+            FeatureFlag::EnableDbtGitMetadata
+            | FeatureFlag::EnableCommandDocsInHelp
+            | FeatureFlag::EnableCondensedCommandHelp => Some(true),
+            FeatureFlag::EnableReleaseChannels => None,
+            _ => Some(false),
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<FeatureFlag> {
+        FeatureFlag::ALL.into_iter().find(|f| f.name() == name)
+    }
+}
 
 /// A configuration value as the Python code sees it after `unwrap()`.
 #[derive(Debug, Clone, PartialEq)]
@@ -29,12 +119,6 @@ impl Cv {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Cv::Str(s) => Some(s),
-            _ => None,
-        }
-    }
-    pub fn as_table(&self) -> Option<&IndexMap<String, Cv>> {
-        match self {
-            Cv::Table(t) => Some(t),
             _ => None,
         }
     }
@@ -64,18 +148,6 @@ impl Cv {
             other => other.py_str(),
         }
     }
-    pub fn to_json(&self) -> serde_json::Value {
-        match self {
-            Cv::Str(s) => serde_json::Value::String(s.clone()),
-            Cv::Int(i) => serde_json::json!(i),
-            Cv::Float(f) => serde_json::json!(f),
-            Cv::Bool(b) => serde_json::Value::Bool(*b),
-            Cv::List(l) => serde_json::Value::Array(l.iter().map(Cv::to_json).collect()),
-            Cv::Table(t) => {
-                serde_json::Value::Object(t.iter().map(|(k, v)| (k.clone(), v.to_json())).collect())
-            }
-        }
-    }
 }
 
 fn value_to_cv(v: &TomlValue) -> Cv {
@@ -94,26 +166,19 @@ fn value_to_cv(v: &TomlValue) -> Cv {
     }
 }
 
-pub fn item_to_cv(i: &Item) -> Option<Cv> {
-    match i {
-        Item::None => None,
-        Item::Value(v) => Some(value_to_cv(v)),
-        Item::Table(t) => Some(Cv::Table(
+pub(crate) fn item_to_cv(i: &Item) -> Option<Cv> {
+    let table = |t: &Table| {
+        Cv::Table(
             t.iter()
                 .filter_map(|(k, v)| item_to_cv(v).map(|c| (k.to_string(), c)))
                 .collect(),
-        )),
-        Item::ArrayOfTables(a) => Some(Cv::List(
-            a.iter()
-                .map(|t| {
-                    Cv::Table(
-                        t.iter()
-                            .filter_map(|(k, v)| item_to_cv(v).map(|c| (k.to_string(), c)))
-                            .collect(),
-                    )
-                })
-                .collect(),
-        )),
+        )
+    };
+    match i {
+        Item::None => None,
+        Item::Value(v) => Some(value_to_cv(v)),
+        Item::Table(t) => Some(table(t)),
+        Item::ArrayOfTables(a) => Some(Cv::List(a.iter().map(table).collect())),
     }
 }
 
@@ -155,14 +220,14 @@ fn platform_config_dir() -> PathBuf {
     }
 }
 
-pub fn env_var_name(path: &[&str], key: &str) -> String {
+pub(crate) fn env_var_name(path: &[&str], key: &str) -> String {
     let mut parts = vec!["snowflake"];
     parts.extend_from_slice(path);
     parts.push(key);
     parts.join("_").to_uppercase()
 }
 
-pub fn env_value(path: &[&str], key: &str) -> Option<String> {
+pub(crate) fn env_value(path: &[&str], key: &str) -> Option<String> {
     std::env::var(env_var_name(path, key)).ok()
 }
 
@@ -176,6 +241,16 @@ pub fn try_cast_to_bool(v: &Cv) -> Option<bool> {
             "false" | "0" | "no" | "n" | "off" | "f" => Some(false),
             _ => None,
         },
+        _ => None,
+    }
+}
+
+/// `1/true/yes/on` or `0/false/no/off`, any case (the switch values of the
+/// SnowSQL options and the agent environment variables; no `y/t/n/f`).
+pub fn parse_on_off(s: &str) -> Option<bool> {
+    match s.to_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
         _ => None,
     }
 }
@@ -239,7 +314,7 @@ pub fn connector_import_warnings() -> Vec<String> {
     out
 }
 
-pub fn permissions_are_strict(p: &Path) -> bool {
+pub(crate) fn permissions_are_strict(p: &Path) -> bool {
     mode_of(p).is_none_or(|m| m & 0o077 == 0)
 }
 
@@ -285,7 +360,7 @@ fn apply_permission_policy(path: &Path, warnings: &mut Vec<String>) -> Result<()
     Ok(())
 }
 
-pub fn unix_permission_warning(path: &Path) -> String {
+pub(crate) fn unix_permission_warning(path: &Path) -> String {
     format!(
         "Bad owner or permissions on {p}.\n * To change owner, run `chown $USER \"{p}\"`.\n * To restrict permissions, run `chmod 0600 \"{p}\"`.\n * In future versions of Snowflake CLI strict configuration file permissions will be mandatory. To test if your files have correct permissions set SNOWFLAKE_CLI_FEATURES_ENFORCE_STRICT_CONFIG_PERMISSIONS=1 and try again.",
         p = path.display()
@@ -386,7 +461,7 @@ impl Config {
         if !file_path.exists() {
             cfg.initialise()?;
         }
-        cfg.read(warnings)?;
+        cfg.read()?;
         Ok(cfg)
     }
 
@@ -424,25 +499,23 @@ impl Config {
         logs.insert("level", toml_edit::value("info"));
         cli.insert("logs", Item::Table(logs));
         doc.insert("cli", Item::Table(cli));
-        std::fs::write(&self.file_path, crate::tomlfmt::dumps(&doc))?;
+        std::fs::write(&self.file_path, doc.to_string())?;
         Ok(())
     }
 
-    fn read(&mut self, warnings: &mut Vec<String>) -> Result<()> {
+    fn read(&mut self) -> Result<()> {
         let check = !self.is_override && enforce_strict();
         for f in [&self.file_path, &self.connections_file] {
             if check
                 && f.exists()
                 && let Some(m) = mode_of(f)
+                && m & 0o022 != 0
             {
-                if m & 0o022 != 0 {
-                    return Err(SnowError::click(format!(
-                        "Configuration file seems to be corrupted. file '{}' is writable by group or others — this poses a security risk because it allows unauthorized users to modify sensitive settings. Your Permission: {:o}",
-                        f.display(),
-                        m & 0o777
-                    )));
-                }
-                let _ = warnings;
+                return Err(SnowError::click(format!(
+                    "Configuration file seems to be corrupted. file '{}' is writable by group or others — this poses a security risk because it allows unauthorized users to modify sensitive settings. Your Permission: {:o}",
+                    f.display(),
+                    m & 0o777
+                )));
             }
         }
         self.doc = if self.file_path.exists() {
@@ -481,7 +554,7 @@ impl Config {
         Some(cur)
     }
 
-    pub fn section_exists(&self, path: &[&str]) -> bool {
+    pub(crate) fn section_exists(&self, path: &[&str]) -> bool {
         self.find(path).is_some()
     }
 
@@ -545,10 +618,13 @@ impl Config {
         }
     }
 
-    /// Feature flag value: `[cli.features] <name>` or `SNOWFLAKE_CLI_FEATURES_<NAME>`.
-    pub fn feature(&self, name: &str, default: Option<bool>) -> Option<bool> {
-        self.bool_value(&["cli", "features"], &name.to_lowercase(), default)
+    /// Whether a feature flag is on: `[cli.features] <name>` or
+    /// `SNOWFLAKE_CLI_FEATURES_<NAME>`, else the flag's default.
+    pub fn feature(&self, flag: FeatureFlag) -> bool {
+        let default = flag.default();
+        self.bool_value(&["cli", "features"], &flag.name().to_lowercase(), default)
             .unwrap_or(default)
+            == Some(true)
     }
 
     pub fn default_connection_name(&self) -> String {
@@ -566,24 +642,15 @@ impl Config {
 
     /// Connection names and tables, in file order.
     pub fn connections(&self) -> IndexMap<String, IndexMap<String, Cv>> {
-        let mut out = IndexMap::new();
-        if let Some(Cv::Table(t)) = self.root_get(CONNECTIONS_SECTION) {
-            for (name, v) in t {
-                if let Cv::Table(mut tab) = v {
-                    let prefix = format!("SNOWFLAKE_CONNECTIONS_{}_", name.to_uppercase());
-                    let mut envs: Vec<(String, String)> = std::env::vars()
-                        .filter(|(k, _)| k.starts_with(&prefix))
-                        .map(|(k, v)| (k.replacen(&prefix, "", 1).to_lowercase(), v))
-                        .collect();
-                    envs.sort();
-                    for (k, v) in envs {
-                        tab.insert(k, Cv::Str(v));
-                    }
-                    out.insert(name, tab);
-                }
-            }
-        }
-        out
+        let Some(Cv::Table(t)) = self.root_get(CONNECTIONS_SECTION) else {
+            return IndexMap::new();
+        };
+        t.into_keys()
+            .filter_map(|name| {
+                let tab = self.section(&[CONNECTIONS_SECTION, &name])?;
+                Some((name, tab))
+            })
+            .collect()
     }
 
     pub fn connection_exists(&self, name: &str) -> bool {
@@ -604,17 +671,13 @@ impl Config {
         Ok(normalize_connection(raw))
     }
 
-    // ------------------------------------------------------------------
-    // Writing
-    // ------------------------------------------------------------------
-
     fn write_config(&self) -> Result<()> {
-        crate::secure::write_private(&self.file_path, &crate::tomlfmt::dumps(&self.doc))
+        crate::secure::write_private(&self.file_path, &self.doc.to_string())
     }
 
     fn write_connections(&self) -> Result<()> {
         if let Some(c) = &self.connections_doc {
-            std::fs::write(&self.connections_file, crate::tomlfmt::dumps(c))?;
+            std::fs::write(&self.connections_file, c.to_string())?;
         }
         Ok(())
     }
@@ -717,60 +780,43 @@ fn set_in(table: &mut Table, path: &[&str], value: Item) {
     }
     let inserting_root_value = parents.is_empty() && is_new && !value.is_table_like();
     cur.insert(last, value);
-    if inserting_root_value {
-        // tomlkit separates root values from the first table by a blank line.
-        let has_values_before = cur.iter().filter(|(_, v)| !v.is_table_like()).count() > 1;
-        if !has_values_before {
-            let mut pos: Vec<(usize, String)> = cur
-                .iter()
-                .filter_map(|(k, v)| {
-                    v.as_table()
-                        .and_then(|t| t.position())
-                        .map(|p| (p, k.to_string()))
-                })
-                .collect();
-            pos.sort();
-            if let Some((_, first)) = pos.first().cloned()
-                && let Some(t) = cur.get_mut(&first).and_then(Item::as_table_mut)
-            {
-                if t.is_implicit() {
-                    // The first visible child table carries the decor.
-                    let mut child: Vec<(usize, String)> = t
-                        .iter()
-                        .filter_map(|(k, v)| {
-                            v.as_table()
-                                .and_then(|t| t.position())
-                                .map(|p| (p, k.to_string()))
-                        })
-                        .collect();
-                    child.sort();
-                    if let Some((_, c)) = child.first().cloned()
-                        && let Some(ct) = t.get_mut(&c).and_then(Item::as_table_mut)
-                    {
-                        let prefix = ct
-                            .decor()
-                            .prefix()
-                            .and_then(|p| p.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if !prefix.starts_with('\n') {
-                            ct.decor_mut().set_prefix(format!("\n{prefix}"));
-                        }
-                    }
-                } else {
-                    let prefix = t
-                        .decor()
-                        .prefix()
-                        .and_then(|p| p.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    if !prefix.starts_with('\n') {
-                        t.decor_mut().set_prefix(format!("\n{prefix}"));
-                    }
-                }
+    // tomlkit separates root values from the first table by a blank line.
+    let has_values_before = cur.iter().filter(|(_, v)| !v.is_table_like()).count() > 1;
+    if inserting_root_value
+        && !has_values_before
+        && let Some(t) = first_table(cur)
+    {
+        // An implicit table's first visible child table carries the decor.
+        let t = if t.is_implicit() {
+            first_table(t)
+        } else {
+            Some(t)
+        };
+        if let Some(t) = t {
+            let prefix = t
+                .decor()
+                .prefix()
+                .and_then(|p| p.as_str())
+                .unwrap_or("")
+                .to_string();
+            if !prefix.starts_with('\n') {
+                t.decor_mut().set_prefix(format!("\n{prefix}"));
             }
         }
     }
+}
+
+/// The child table that comes first in the file.
+fn first_table(table: &mut Table) -> Option<&mut Table> {
+    let (_, key) = table
+        .iter()
+        .filter_map(|(k, v)| {
+            v.as_table()
+                .and_then(|t| t.position())
+                .map(|p| (p, k.to_string()))
+        })
+        .min()?;
+    table.get_mut(&key).and_then(Item::as_table_mut)
 }
 
 fn remove_in(table: &mut Table, path: &[&str]) {
@@ -787,42 +833,44 @@ fn remove_in(table: &mut Table, path: &[&str]) {
     cur.remove(last);
 }
 
+/// The `ConnectionConfig` fields, in declaration order.
+pub const CONNECTION_FIELDS: [&str; 32] = [
+    "account",
+    "user",
+    "password",
+    "host",
+    "region",
+    "port",
+    "protocol",
+    "database",
+    "schema",
+    "warehouse",
+    "role",
+    "authenticator",
+    "workload_identity_provider",
+    "private_key_file",
+    "private_key_raw",
+    "private_key_passphrase",
+    "token",
+    "session_token",
+    "master_token",
+    "token_file_path",
+    "oauth_client_id",
+    "oauth_client_secret",
+    "oauth_authorization_url",
+    "oauth_token_request_url",
+    "oauth_redirect_uri",
+    "oauth_scope",
+    "oauth_enable_pkce",
+    "oauth_enable_refresh_tokens",
+    "oauth_enable_single_use_refresh_tokens",
+    "client_store_temporary_credential",
+    "secondary_roles",
+    "server_session_keep_alive",
+];
+
 /// `ConnectionConfig.from_dict(...).to_dict_of_all_non_empty_values()`.
 pub fn normalize_connection(raw: IndexMap<String, Cv>) -> IndexMap<String, Cv> {
-    const KNOWN: &[&str] = &[
-        "account",
-        "user",
-        "password",
-        "host",
-        "region",
-        "port",
-        "protocol",
-        "database",
-        "schema",
-        "warehouse",
-        "role",
-        "authenticator",
-        "workload_identity_provider",
-        "private_key_file",
-        "private_key_raw",
-        "private_key_passphrase",
-        "token",
-        "session_token",
-        "master_token",
-        "token_file_path",
-        "oauth_client_id",
-        "oauth_client_secret",
-        "oauth_authorization_url",
-        "oauth_token_request_url",
-        "oauth_redirect_uri",
-        "oauth_scope",
-        "oauth_enable_pkce",
-        "oauth_enable_refresh_tokens",
-        "oauth_enable_single_use_refresh_tokens",
-        "client_store_temporary_credential",
-        "secondary_roles",
-        "server_session_keep_alive",
-    ];
     let mut known: IndexMap<String, Cv> = IndexMap::new();
     let mut other: IndexMap<String, Cv> = IndexMap::new();
     for (k, v) in raw {
@@ -831,7 +879,7 @@ pub fn normalize_connection(raw: IndexMap<String, Cv>) -> IndexMap<String, Cv> {
             "private_key_file_pwd" => "private_key_passphrase".to_string(),
             _ => k.clone(),
         };
-        if KNOWN.contains(&nk.as_str()) {
+        if CONNECTION_FIELDS.contains(&nk.as_str()) {
             known.insert(nk, v);
         } else {
             other.insert(k, v);
@@ -839,11 +887,43 @@ pub fn normalize_connection(raw: IndexMap<String, Cv>) -> IndexMap<String, Cv> {
     }
     // Known fields come out in dataclass declaration order.
     let mut out = IndexMap::new();
-    for k in KNOWN {
-        if let Some(v) = known.shift_remove(*k) {
-            out.insert((*k).to_string(), v);
+    for k in CONNECTION_FIELDS {
+        if let Some(v) = known.shift_remove(k) {
+            out.insert(k.to_string(), v);
         }
     }
     out.extend(other);
     out
+}
+
+/// The TOML table `add_connection_to_proper_file(name, ConnectionConfig.from_dict(fields))`
+/// writes: the normalized fields, known ones first in declaration order.
+pub fn connection_table(fields: IndexMap<String, Cv>) -> Table {
+    fn to_toml(v: &Cv) -> TomlValue {
+        match v {
+            Cv::Str(s) => s.as_str().into(),
+            Cv::Int(i) => (*i).into(),
+            Cv::Float(f) => (*f).into(),
+            Cv::Bool(b) => (*b).into(),
+            Cv::List(l) => {
+                let mut a = toml_edit::Array::new();
+                for x in l {
+                    a.push(to_toml(x));
+                }
+                TomlValue::Array(a)
+            }
+            Cv::Table(t) => {
+                let mut it = toml_edit::InlineTable::new();
+                for (k, x) in t {
+                    it.insert(k, to_toml(x));
+                }
+                TomlValue::InlineTable(it)
+            }
+        }
+    }
+    let mut table = Table::new();
+    for (k, v) in normalize_connection(fields) {
+        table.insert(&k, Item::Value(to_toml(&v)));
+    }
+    table
 }

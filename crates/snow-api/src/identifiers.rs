@@ -13,35 +13,70 @@ static VALID_ID: LazyLock<String> = LazyLock::new(|| format!("(?:{UNQUOTED}|{QUO
 pub fn valid_identifier_regex() -> &'static str {
     &VALID_ID
 }
-static RE_UNQUOTED: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(&format!("^(?:{UNQUOTED})$")).expect("re"));
-static RE_QUOTED: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(&format!("^(?:{QUOTED})$")).expect("re"));
-static RE_FQN: LazyLock<Regex> = LazyLock::new(|| {
+
+/// A stage path (`@db.schema.stage/dir/`) split into `prefix`, `f`, `s`,
+/// `name` and `directory`.
+pub static STAGE_PATH: LazyLock<Regex> = LazyLock::new(|| {
     let v = &*VALID_ID;
     Regex::new(&format!(
-        r"^(?:(?P<first>{v})\.)?(?:(?P<second>{v})\.)?(?P<name>{v})(?P<signature>\([A-Za-z0-9_$(),.\s]*\))?$"
+        r"^(?P<prefix>(@|snow://))?(?:(?P<f>{v})\.)?(?:(?P<s>{v})\.)?(?P<name>{v})/?(?P<directory>([^/]*/?)*)?$"
     ))
     .expect("re")
 });
 
+/// The byte length of the `UNQUOTED` (or, when `allow_quoted`, `QUOTED`)
+/// identifier that starts `s`, for checks anchored at both ends. Scanning
+/// replaces the regexes because their counted repetitions take about 1 ms each
+/// to compile, and every `snow` process paid that again.
+fn identifier_len(s: &str, allow_quoted: bool) -> Option<usize> {
+    let b = s.as_bytes();
+    if allow_quoted && b.first() == Some(&b'"') {
+        let mut i = 1;
+        let mut chars = 0;
+        loop {
+            match b.get(i)? {
+                b'"' if b.get(i + 1) == Some(&b'"') => i += 2,
+                b'"' => return (chars <= 255).then_some(i + 1),
+                _ => i += s[i..].chars().next()?.len_utf8(),
+            }
+            chars += 1;
+        }
+    }
+    if !b
+        .first()
+        .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
+    {
+        return None;
+    }
+    let n = 1 + b[1..]
+        .iter()
+        .take_while(|c| c.is_ascii_alphanumeric() || **c == b'_' || **c == b'$')
+        .count();
+    (n <= 255).then_some(n)
+}
+
 pub fn is_valid_unquoted_identifier(s: &str) -> bool {
-    RE_UNQUOTED.is_match(s)
+    identifier_len(s, false) == Some(s.len())
 }
 pub fn is_valid_quoted_identifier(s: &str) -> bool {
-    RE_QUOTED.is_match(s)
+    s.starts_with('"') && identifier_len(s, true) == Some(s.len())
 }
 pub fn is_valid_identifier(s: &str) -> bool {
-    is_valid_unquoted_identifier(s) || is_valid_quoted_identifier(s)
+    identifier_len(s, true) == Some(s.len())
 }
 
 pub fn is_valid_object_name(name: &str, max_depth: usize, allow_quoted: bool) -> bool {
-    let p = if allow_quoted {
-        VALID_ID.clone()
-    } else {
-        format!("(?:{UNQUOTED})")
-    };
-    Regex::new(&format!(r"^{p}(?:\.{p}){{0,{max_depth}}}$")).is_ok_and(|r| r.is_match(name))
+    let mut rest = name;
+    for _ in 0..=max_depth {
+        let Some(n) = identifier_len(rest, allow_quoted) else {
+            return false;
+        };
+        match rest[n..].strip_prefix('.') {
+            Some(next) => rest = next,
+            None => return n == rest.len(),
+        }
+    }
+    false
 }
 
 pub fn to_quoted_identifier(s: &str) -> String {
@@ -59,7 +94,7 @@ pub fn to_identifier(s: &str) -> String {
     }
 }
 
-pub fn identifier_to_str(s: &str) -> String {
+pub(crate) fn identifier_to_str(s: &str) -> String {
     if is_valid_quoted_identifier(s) {
         s[1..s.len() - 1].replace("\"\"", "\"")
     } else {
@@ -70,9 +105,27 @@ pub fn identifier_to_str(s: &str) -> String {
 pub fn unquote_identifier(s: &str) -> String {
     let id = to_identifier(s);
     if is_valid_quoted_identifier(&id) {
-        return id[1..id.len() - 1].replace("\"\"", "\"");
+        return identifier_to_str(&id);
     }
     id.to_uppercase()
+}
+
+static DOTTED_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(?:"(?:[^"]|"")*"|[^."]+)(?:\.(?:"(?:[^"]|"")*"|[^."]+))*$"#).expect("re")
+});
+static NAME_PART: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#""(?:[^"]|"")*"|[^."]+"#).expect("re"));
+
+/// `_sql_object_name`: quote each part of a (possibly dotted) name.
+pub fn sql_object_name(name: &str) -> String {
+    if !DOTTED_NAME.is_match(name) {
+        return to_identifier(name);
+    }
+    NAME_PART
+        .find_iter(name)
+        .map(|m| to_identifier(m.as_str()))
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 /// JavaScript `encodeURIComponent` (`quote(s, safe="!~*'()")`).
@@ -95,8 +148,8 @@ pub fn identifier_for_url(s: &str) -> String {
 
 /// `to_string_literal`.
 pub fn to_string_literal(raw: &str) -> String {
-    let re = Regex::new(r"(\\*)'").expect("re");
-    let mut escaped = re
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\\*)'").expect("re"));
+    let mut escaped = RE
         .replace_all(raw, |c: &regex::Captures| format!("{}''", c[1].repeat(2)))
         .into_owned();
     let trailing = escaped.len() - escaped.trim_end_matches('\\').len();
@@ -131,20 +184,17 @@ pub fn sanitize_identifier(input: &str) -> String {
 }
 
 pub fn same_identifiers(a: &str, b: &str) -> bool {
-    let ca = if is_valid_unquoted_identifier(a) {
-        a.to_uppercase()
-    } else {
-        a.to_string()
+    let canonical = |s: &str| {
+        to_quoted_identifier(&if is_valid_unquoted_identifier(s) {
+            s.to_uppercase()
+        } else {
+            s.to_string()
+        })
     };
-    let cb = if is_valid_unquoted_identifier(b) {
-        b.to_uppercase()
-    } else {
-        b.to_string()
-    };
-    to_quoted_identifier(&ca) == to_quoted_identifier(&cb)
+    canonical(a) == canonical(b)
 }
 
-pub fn concat_identifiers(ids: &[&str]) -> String {
+pub(crate) fn concat_identifiers(ids: &[&str]) -> String {
     let quotes = ids.iter().any(|i| is_valid_quoted_identifier(i));
     let s: String = ids.iter().map(|i| identifier_to_str(i)).collect();
     if quotes {
@@ -178,27 +228,44 @@ pub struct Fqn {
     pub signature: Option<String>,
 }
 
-pub fn fqn_name_error(name: &str) -> SnowError {
+pub(crate) fn fqn_name_error(name: &str) -> SnowError {
     SnowError::cli(format!("Specified name '{name}' is not valid name.")).named("FQNNameError")
 }
 
 impl Fqn {
     pub fn from_string(s: &str) -> Result<Fqn> {
-        let Some(c) = RE_FQN.captures(s) else {
-            return Err(fqn_name_error(s));
+        let mut parts: Vec<&str> = Vec::with_capacity(3);
+        let mut rest = s;
+        loop {
+            let n = identifier_len(rest, true).ok_or_else(|| fqn_name_error(s))?;
+            parts.push(&rest[..n]);
+            rest = &rest[n..];
+            match rest.strip_prefix('.') {
+                Some(next) if parts.len() < 3 => rest = next,
+                _ => break,
+            }
+        }
+        let signature_char =
+            |c: char| c.is_ascii_alphanumeric() || "_$(),.".contains(c) || c.is_whitespace();
+        let signature = match rest {
+            "" => None,
+            sig if sig.len() >= 2
+                && sig.starts_with('(')
+                && sig.ends_with(')')
+                && sig[1..sig.len() - 1].chars().all(signature_char) =>
+            {
+                Some(sig.to_string())
+            }
+            _ => return Err(fqn_name_error(s)),
         };
-        let name = c
-            .name("name")
-            .map(|m| m.as_str().to_string())
-            .unwrap_or_default();
-        let first = c.name("first").map(|m| m.as_str().to_string());
-        let second = c.name("second").map(|m| m.as_str().to_string());
+        let name = parts.pop().unwrap_or_default().to_string();
+        let mut qualifiers = parts.into_iter().map(str::to_string);
+        let (first, second) = (qualifiers.next(), qualifiers.next());
         let (database, schema) = if second.is_some() {
             (first, second)
         } else {
             (None, first)
         };
-        let signature = c.name("signature").map(|m| m.as_str().to_string());
         if let Some(sig) = &signature {
             let mut depth: i32 = 0;
             let n = sig.chars().count();
@@ -234,13 +301,10 @@ impl Fqn {
     }
 
     pub fn from_stage(stage: &str) -> Result<Fqn> {
-        let mut name = stage;
-        if let Some(n) = stage.strip_prefix('@') {
-            name = n;
-        }
-        if let Some(n) = stage.strip_prefix("snow://") {
-            name = n;
-        }
+        let name = stage
+            .strip_prefix('@')
+            .or_else(|| stage.strip_prefix("snow://"))
+            .unwrap_or(stage);
         if stage.starts_with('~') {
             return Ok(Fqn {
                 name: "~".into(),
@@ -274,10 +338,11 @@ impl Fqn {
     }
 
     pub fn sql_identifier(&self) -> String {
-        match &self.signature {
-            Some(s) => format!("IDENTIFIER({}){s}", to_string_literal(&self.identifier())),
-            None => format!("IDENTIFIER({})", to_string_literal(&self.identifier())),
-        }
+        format!(
+            "IDENTIFIER({}){}",
+            to_string_literal(&self.identifier()),
+            self.signature.as_deref().unwrap_or("")
+        )
     }
 
     pub fn url_identifier(&self) -> String {
@@ -334,4 +399,104 @@ static RE_STRING_LITERAL: LazyLock<Regex> =
 
 pub fn is_valid_string_literal(s: &str) -> bool {
     RE_STRING_LITERAL.is_match(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The scanner gives the same answers as the upstream regexes it replaced.
+    #[test]
+    fn scanner_matches_the_upstream_regexes() {
+        let v = &*VALID_ID;
+        let full = |p: &str| Regex::new(&format!("^(?:{p})$")).expect("re");
+        let (unquoted, quoted) = (full(UNQUOTED), full(QUOTED));
+        let fqn = Regex::new(&format!(
+            r"^(?:(?P<first>{v})\.)?(?:(?P<second>{v})\.)?(?P<name>{v})(?P<signature>\([A-Za-z0-9_$(),.\s]*\))?$"
+        ))
+        .expect("re");
+        let object_name: Vec<(usize, bool, Regex)> = (0..3)
+            .flat_map(|d| [(d, true), (d, false)])
+            .map(|(d, q)| {
+                let p = if q {
+                    v.clone()
+                } else {
+                    format!("(?:{UNQUOTED})")
+                };
+                (d, q, full(&format!(r"{p}(?:\.{p}){{0,{d}}}")))
+            })
+            .collect();
+
+        let alphabet = ['a', 'Z', '_', '$', '1', '"', '.', '(', ')', ' ', 'é', ','];
+        let mut cases = vec![String::new()];
+        let mut level = vec![String::new()];
+        for _ in 0..4 {
+            level = level
+                .iter()
+                .flat_map(|s| alphabet.iter().map(move |c| format!("{s}{c}")))
+                .collect();
+            cases.extend(level.iter().cloned());
+        }
+        for n in [254, 255, 256] {
+            cases.push(format!("a{}", "b".repeat(n - 1)));
+            cases.push(format!("\"{}\"", "é".repeat(n)));
+            cases.push(format!("\"{}\"", "\"\"".repeat(n)));
+            cases.push(format!("db.\"{}\".t(x)", "é".repeat(n)));
+        }
+
+        for s in &cases {
+            assert_eq!(is_valid_unquoted_identifier(s), unquoted.is_match(s), "{s}");
+            assert_eq!(is_valid_quoted_identifier(s), quoted.is_match(s), "{s}");
+            for (d, q, re) in &object_name {
+                assert_eq!(
+                    is_valid_object_name(s, *d, *q),
+                    re.is_match(s),
+                    "{s} {d} {q}"
+                );
+            }
+            let expected = fqn.captures(s).map(|c| {
+                let g = |n: &str| c.name(n).map(|m| m.as_str().to_string());
+                let (database, schema) = match g("second") {
+                    Some(second) => (g("first"), Some(second)),
+                    None => (None, g("first")),
+                };
+                (
+                    database,
+                    schema,
+                    g("name").unwrap_or_default(),
+                    g("signature"),
+                )
+            });
+            let actual = Fqn::from_string(s).ok();
+            match (&expected, &actual) {
+                (Some(e), Some(a)) => {
+                    assert_eq!(
+                        e,
+                        &(
+                            a.database.clone(),
+                            a.schema.clone(),
+                            a.name.clone(),
+                            a.signature.clone()
+                        ),
+                        "{s}"
+                    )
+                }
+                // The signature's bracket check rejects names whose brackets do
+                // not nest to one group that closes at the end.
+                (Some(e), None) => {
+                    let sig = e.3.as_deref().unwrap_or_else(|| panic!("{s}"));
+                    let depths: Vec<i32> = sig
+                        .chars()
+                        .scan(0, |d, c| {
+                            *d += i32::from(c == '(') - i32::from(c == ')');
+                            Some(*d)
+                        })
+                        .collect();
+                    let (last, inner) = depths.split_last().expect("non-empty signature");
+                    assert!(*last != 0 || inner.iter().any(|d| *d <= 0), "{s}");
+                }
+                (None, a) => assert!(a.is_none(), "{s}"),
+            }
+        }
+    }
 }

@@ -1,8 +1,10 @@
 //! `snow spcs service`.
 
 use super::{
-    already_exists, fqn, py_bool, strip_empty_lines, tags_clause, validate_and_set_instances,
+    LogTail, already_exists, py_bool, query, simple, strip_empty_lines, tags_clause,
+    validate_and_set_instances,
 };
+use crate::object::fqn_arg;
 use snow_api::identifiers::{Fqn, is_valid_object_name, to_identifier, to_string_literal};
 use snow_api::output::{Output, Pv};
 use snow_api::{Cli, Result, SnowError};
@@ -44,10 +46,10 @@ pub fn serialize_spec(j: &serde_json::Value) -> String {
 }
 
 fn name(cli: &Cli) -> Result<String> {
-    Ok(fqn(cli, "name")?.identifier())
+    Ok(fqn_arg(cli, "name")?.identifier())
 }
 
-fn eai_list(v: &[String]) -> String {
+pub(super) fn eai_list(v: &[String]) -> String {
     v.iter()
         .map(|e| to_identifier(e))
         .collect::<Vec<_>>()
@@ -144,18 +146,8 @@ pub fn execute_job(cli: &mut Cli) -> Result<Output> {
     Ok(cli.single_query_result(&c))
 }
 
-fn simple(cli: &mut Cli, sql: String) -> Result<Output> {
-    let c = cli.execute_query(&sql)?;
-    Ok(cli.single_query_result(&c))
-}
-
-fn query(cli: &mut Cli, sql: String) -> Result<Output> {
-    let c = cli.execute_query(&sql)?;
-    Ok(cli.query_result(&c))
-}
-
 pub fn drop(cli: &mut Cli) -> Result<Output> {
-    let f = fqn(cli, "name")?;
+    let f = fqn_arg(cli, "name")?;
     let ie = if cli.flag("if_exists") {
         " if exists"
     } else {
@@ -174,7 +166,7 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
         "CALL SYSTEM$GET_SERVICE_STATUS({})",
         to_string_literal(&n)
     ))?;
-    let first = c.rows.first().and_then(|r| r.first().cloned().flatten());
+    let first = Cli::first_cell_opt(&c);
     let Some(text) = first else {
         return Ok(Output::Collection(Vec::new()));
     };
@@ -331,11 +323,7 @@ const EVENT_COLUMNS: [&str; 13] = [
     "EXEMPLARS",
 ];
 
-fn service_fqn(cli: &Cli) -> Result<Fqn> {
-    fqn(cli, "name")
-}
-
-/// `ServiceManager.logs` (non-follow).
+/// `ServiceManager.logs`, and `ServiceManager.stream_logs` for `--follow`.
 pub fn logs(cli: &mut Cli) -> Result<Output> {
     let follow = cli.flag("follow");
     let num_lines = cli.int("num_lines").unwrap_or(500);
@@ -348,7 +336,7 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
             return Err(SnowError::incompatible(&["--follow", "--previous-logs"]));
         }
     }
-    let f = service_fqn(cli)?;
+    let f = fqn_arg(cli, "name")?;
     let (instance, container) = (
         cli.str("instance_id").unwrap_or_default(),
         cli.str("container_name").unwrap_or_default(),
@@ -368,46 +356,19 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
     if follow {
         // `ServiceManager.stream_logs`: poll, de-duplicate by timestamp, until interrupted.
         let interval = cli.int("follow_interval").unwrap_or(2).max(0) as u64;
-        let mut prev_ts = cli.str("since_timestamp").unwrap_or_default();
-        let mut prev: Vec<String> = Vec::new();
+        let mut tail = LogTail {
+            since: cli.str("since_timestamp").unwrap_or_default(),
+            ..Default::default()
+        };
         loop {
-            let c = cli.execute_query(&query(&prev_ts, false, true))?;
-            let mut records: Vec<String> = c
-                .rows
-                .iter()
-                .filter_map(|r| r.first().cloned().flatten())
-                .flat_map(|b| b.split('\n').map(str::to_string).collect::<Vec<_>>())
-                .filter(|l| !l.trim().is_empty())
-                .collect();
-            if !records.is_empty() {
-                records.sort();
-                let first = records[0].clone();
-                for p in prev.iter().rev() {
-                    if *p < first {
-                        break;
-                    }
-                    if let Some(pos) = records.iter().position(|r| r == p) {
-                        records.remove(pos);
-                    }
-                }
-                if !records.is_empty() {
-                    for l in &records {
-                        let shown = if include_ts {
-                            l.clone()
-                        } else {
-                            l.split_once(' ')
-                                .map(|x| x.1.to_string())
-                                .unwrap_or(l.clone())
-                        };
-                        crate::app::print_output(cli, &Output::message(shown), None);
-                    }
-                    prev_ts = records
-                        .last()
-                        .and_then(|l| l.split(' ').next())
-                        .unwrap_or_default()
-                        .to_string();
-                    prev = records;
-                }
+            let c = cli.execute_query(&query(&tail.since, false, true))?;
+            for l in tail.take_new(&c) {
+                let shown = if include_ts {
+                    l
+                } else {
+                    l.split_once(' ').map_or(l.clone(), |x| x.1.to_string())
+                };
+                crate::app::print_output(cli, &Output::message(shown), None);
             }
             std::thread::sleep(std::time::Duration::from_secs(interval));
         }
@@ -504,32 +465,6 @@ fn db_schema_clause(db: &str, schema: Option<&str>) -> String {
         "\n        and resource_attributes:\"snow.database.name\" = '{db}'\n        and resource_attributes:\"snow.schema.name\" = '{}'\n",
         schema.unwrap_or("PUBLIC")
     )
-}
-
-fn zip_row(
-    cli: &mut Cli,
-    c: &snow_connector::Cursor,
-    r: &[Option<String>],
-) -> indexmap::IndexMap<String, Pv> {
-    let tz = cli.timezone();
-    let rows = snow_api::values::rows(
-        &snow_connector::Cursor {
-            rows: vec![r.to_vec()],
-            ..c.clone()
-        },
-        &tz,
-        false,
-    );
-    let vals: Vec<Pv> = rows
-        .into_iter()
-        .next()
-        .map(|m| m.into_values().collect())
-        .unwrap_or_default();
-    EVENT_COLUMNS
-        .iter()
-        .zip(vals)
-        .map(|(k, v)| (k.to_string(), v))
-        .collect()
 }
 
 fn json_obj(v: Option<&Pv>) -> Option<serde_json::Map<String, serde_json::Value>> {
@@ -642,12 +577,17 @@ fn format_row(e: &indexmap::IndexMap<String, Pv>, metric: bool) -> Result<snow_a
 
 fn rows_of(cli: &mut Cli, q: &str, all: bool, metric: bool) -> Result<Vec<snow_api::output::Row>> {
     let c = cli.execute_query(q)?;
-    let mut out = Vec::new();
-    for r in c.rows.clone() {
-        let e = zip_row(cli, &c, &r);
-        out.push(if all { e } else { format_row(&e, metric)? });
-    }
-    Ok(out)
+    cli.rows(&c)
+        .into_iter()
+        .map(|r| {
+            let e: indexmap::IndexMap<String, Pv> = EVENT_COLUMNS
+                .iter()
+                .map(|k| k.to_string())
+                .zip(r.into_values())
+                .collect();
+            if all { Ok(e) } else { format_row(&e, metric) }
+        })
+        .collect()
 }
 
 pub fn events(cli: &mut Cli) -> Result<Output> {
@@ -661,7 +601,7 @@ pub fn events(cli: &mut Cli) -> Result<Output> {
             "--instance-id is required when --container-name is specified.",
         ));
     }
-    let f = service_fqn(cli)?;
+    let f = fqn_arg(cli, "name")?;
     let table = event_table(cli)?;
     let rc = resource_clause(&f.identifier(), instance.as_deref(), container.as_deref());
     let (sc, uc) = time_clauses(
@@ -681,7 +621,7 @@ pub fn events(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn metrics(cli: &mut Cli) -> Result<Output> {
-    let f = service_fqn(cli)?;
+    let f = fqn_arg(cli, "name")?;
     let (container, instance) = (cli.str("container_name"), cli.str("instance_id"));
     let (since, until) = (
         cli.str("since").unwrap_or_default(),
@@ -712,7 +652,7 @@ pub fn metrics(cli: &mut Cli) -> Result<Output> {
 }
 
 /// The connector error for a retryable HTTP status under `no_retry`
-/// (`get_http_retryable_error`): `str(err)` and whether it is `BadRequest`.
+/// (`get_http_retryable_error`) as `str(err)`.
 pub fn retryable_http_error(code: u16) -> Option<String> {
     let msg = match code {
         500 => "HTTP 500: Internal Server Error",
@@ -730,11 +670,7 @@ pub fn retryable_http_error(code: u16) -> Option<String> {
     Some(format!("{errno}: {errno}: {msg}"))
 }
 
-pub fn remote_build_error_pub(cli: &mut Cli, code: u16, op: &str, url: &str) -> SnowError {
-    remote_build_error(cli, code, op, url)
-}
-
-fn remote_build_error(cli: &mut Cli, code: u16, op: &str, url: &str) -> SnowError {
+pub(super) fn remote_build_error(code: u16, op: &str, url: &str) -> SnowError {
     if let Some(e) = retryable_http_error(code) {
         // The connector logs the cause (with a traceback) before raising it.
         crate::logs::log_plain(crate::logs::ERROR, &e);
@@ -744,7 +680,6 @@ fn remote_build_error(cli: &mut Cli, code: u16, op: &str, url: &str) -> SnowErro
             ))
             .named("RemoteBuildPermanentError");
         }
-        let _ = cli;
         return SnowError::cli(format!("Remote build API error while trying to {op}: {e}"))
             .named("CliConnectionError");
     }
@@ -762,31 +697,34 @@ fn remote_build_error(cli: &mut Cli, code: u16, op: &str, url: &str) -> SnowErro
     SnowError::cli(m).named("RemoteBuildPermanentError")
 }
 
-pub fn remote_build_status(cli: &mut Cli) -> Result<Output> {
-    let job = cli.str("job_name").unwrap_or_default();
+/// `RemoteBuildManager.get_remote_builder(job)`: the job, or `None` when there is no
+/// such job (a 404 or an empty body).
+pub(super) fn fetch_remote_job(cli: &mut Cli, job: &str) -> Result<Option<serde_json::Value>> {
     let path = format!(
         "/api/v2/remote-build/jobs/{}",
-        snow_api::identifiers::encode_uri_component(&job).replace("%24", "$")
+        snow_api::identifiers::encode_uri_component(job).replace("%24", "$")
     );
     let (code, v) = cli
         .connection()?
         .rest("GET", &path, None)
         .map_err(|e| SnowError::cli(e.msg()))?;
     if code == 404 || (code < 300 && (v.is_null() || v.as_object().is_some_and(|o| o.is_empty()))) {
-        // get_remote_builder: a 404 is "no such job"; an empty body too.
-        return Ok(Output::message(format!(
-            "No remote build job found with name '{job}'."
-        )));
+        return Ok(None);
     }
     if code >= 300 {
         let url = format!("{}{path}", cli.connection()?.base_url.clone());
-        return Err(remote_build_error(
-            cli,
-            code,
-            &format!("get job '{job}'"),
-            &url,
-        ));
+        return Err(remote_build_error(code, &format!("get job '{job}'"), &url));
     }
+    Ok(Some(v))
+}
+
+pub fn remote_build_status(cli: &mut Cli) -> Result<Output> {
+    let job = cli.str("job_name").unwrap_or_default();
+    let Some(v) = fetch_remote_job(cli, &job)? else {
+        return Ok(Output::message(format!(
+            "No remote build job found with name '{job}'."
+        )));
+    };
     let s = |k: &str, d: Pv| v.get(k).map(Pv::from_json).unwrap_or(d);
     Ok(Output::object(vec![
         ("job_name", s("job_name", Pv::s(""))),
@@ -818,7 +756,7 @@ pub fn remote_build_history(cli: &mut Cli) -> Result<Output> {
             .map_err(|e| SnowError::cli(e.msg()))?;
         if code >= 300 {
             let url = format!("{}{path}", cli.connection()?.base_url.clone());
-            return Err(remote_build_error(cli, code, "list jobs", &url));
+            return Err(remote_build_error(code, "list jobs", &url));
         }
         pages += 1;
         for j in v["jobs"].as_array().cloned().unwrap_or_default() {

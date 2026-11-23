@@ -61,7 +61,6 @@ enum Elem {
         ordered: bool,
         start: usize,
         items: Vec<Vec<R>>,
-        style: Style,
     },
     ListItem(Vec<R>),
     Hr,
@@ -88,7 +87,7 @@ impl Elem {
             _ => {}
         }
     }
-    /// Returns whether the child should be rendered by the main loop.
+    /// Absorb a closed child; returns it when the main loop must render it instead.
     fn on_child_close(&mut self, child: Elem) -> Option<Elem> {
         match self {
             Elem::List { items, .. } => {
@@ -126,12 +125,10 @@ impl Elem {
                 ordered,
                 start,
                 items,
-                style,
             } => Some(R::MdList {
                 items,
                 ordered,
                 start,
-                style,
             }),
             Elem::ListItem(els) => Some(R::Group(els)),
             Elem::Hr => Some(R::text("─".repeat(3))),
@@ -193,13 +190,11 @@ fn create(tok: &MdTok, ctx: &mut Ctx, entering_or_self: bool) -> Elem {
             ordered: false,
             start: 1,
             items: Vec::new(),
-            style: Style::NULL,
         },
         MdKind::OrderedListOpen | MdKind::OrderedListClose => Elem::List {
             ordered: true,
             start: tok.extra.parse().unwrap_or(1),
             items: Vec::new(),
-            style: Style::NULL,
         },
         MdKind::ListItemOpen | MdKind::ListItemClose => {
             enter(ctx, "markdown.item");
@@ -295,20 +290,19 @@ fn on_text(stack: &mut [Elem], ctx: &Ctx, s: &str) {
 }
 
 /// `ListElement.__rich_console__` with `ListItem.render_bullet/render_number`.
-pub fn render_list(
-    items: &[Vec<R>],
-    ordered: bool,
-    start: usize,
-    style: Style,
-    o: Opts,
-) -> Vec<Segment> {
+pub fn render_list(items: &[Vec<R>], ordered: bool, start: usize, o: Opts) -> Vec<Segment> {
     let mut out = Vec::new();
     let last_number = start + items.len();
     for (i, item) in items.iter().enumerate() {
         let group = R::Group(item.clone());
         if ordered {
             let nw = last_number.to_string().len() + 2;
-            let lines = render_lines(&group, o.width(o.max_width.saturating_sub(nw)), style, true);
+            let lines = render_lines(
+                &group,
+                o.width(o.max_width.saturating_sub(nw)),
+                Style::NULL,
+                true,
+            );
             let numeral = format!("{:>w$} ", start + i, w = nw - 1);
             for (li, line) in lines.into_iter().enumerate() {
                 out.push(Segment::new(
@@ -323,7 +317,12 @@ pub fn render_list(
                 out.push(Segment::line());
             }
         } else {
-            let lines = render_lines(&group, o.width(o.max_width.saturating_sub(3)), style, true);
+            let lines = render_lines(
+                &group,
+                o.width(o.max_width.saturating_sub(3)),
+                Style::NULL,
+                true,
+            );
             for (li, line) in lines.into_iter().enumerate() {
                 out.push(Segment::new(
                     if li == 0 { " • " } else { "   " },

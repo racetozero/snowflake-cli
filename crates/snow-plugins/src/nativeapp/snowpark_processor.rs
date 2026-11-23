@@ -61,13 +61,6 @@ fn determine_env(cli: &mut Cli, root: &Path, processor: &PyV) -> Env {
     }
 }
 
-fn which(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join(name))
-        .find(|p| p.is_file())
-}
-
 /// The interpreter command line, or the `SandboxExecutionError` text.
 fn interpreter(env: &Env) -> std::result::Result<Vec<String>, String> {
     let venv = |p: Option<PathBuf>| -> std::result::Result<Vec<String>, String> {
@@ -95,7 +88,7 @@ fn interpreter(env: &Env) -> std::result::Result<Vec<String>, String> {
         let Some(name) = n.or_else(|| std::env::var("CONDA_DEFAULT_ENV").ok()) else {
             return Err("No conda environment found".into());
         };
-        let Some(c) = which("conda") else {
+        let Some(c) = crate::ai::which("conda") else {
             return Err("conda command not found, make sure it is installed on your system and in your PATH".into());
         };
         Ok(vec![
@@ -108,8 +101,8 @@ fn interpreter(env: &Env) -> std::result::Result<Vec<String>, String> {
         ])
     };
     let system = || -> std::result::Result<Vec<String>, String> {
-        which("python3")
-            .or_else(|| which("python"))
+        crate::ai::which("python3")
+            .or_else(|| crate::ai::which("python"))
             .map(|p| vec![p.to_string_lossy().into_owned()])
             .ok_or_else(|| "No Python executable found".to_string())
     };
@@ -727,14 +720,11 @@ pub fn process(cli: &mut Cli, pkg: &Package, artifact: &PyV, processor: &PyV) ->
                 .write_all(text.as_bytes())?;
         }
         let code = std::fs::read_to_string(py)?;
-        if py.is_symlink() {
-            std::fs::remove_file(py)?;
-        }
         let handlers: Vec<String> = fns
             .iter()
             .map(|f| f.handler.rsplit('.').next().unwrap_or_default().to_string())
             .collect();
-        std::fs::write(py, deannotate(&code, &handlers))?;
+        crate::artifacts::write_in_bundle(py, deannotate(&code, &handlers))?;
     }
     if !sql_files.is_empty() {
         edit_setup_script(cli, &sql_files, &deploy_root, &generated)?;
@@ -824,11 +814,8 @@ fn edit_setup_script(
         .write_all(text.as_bytes())?;
     let setup = super::package::setup_script_file(deploy_root)?;
     let code = std::fs::read_to_string(&setup)?;
-    if setup.is_symlink() {
-        std::fs::remove_file(&setup)?;
-    }
     let rel = gen_file.strip_prefix(deploy_root).unwrap_or(&gen_file);
-    std::fs::write(
+    crate::artifacts::write_in_bundle(
         &setup,
         format!("{code}\nEXECUTE IMMEDIATE FROM '/{}';\n", stage_path(rel)),
     )?;

@@ -1,6 +1,7 @@
 //! `snow spcs image-repository`.
 
-use super::{already_exists, fqn};
+use super::already_exists;
+use crate::object::fqn_arg;
 use snow_api::identifiers::{Fqn, is_valid_object_name, to_string_literal};
 use snow_api::output::{Output, Pv};
 use snow_api::{Cli, Result, SnowError};
@@ -39,13 +40,13 @@ pub fn create_repo(
 }
 
 pub fn create(cli: &mut Cli) -> Result<Output> {
-    let n = fqn(cli, "name")?.identifier();
+    let n = fqn_arg(cli, "name")?.identifier();
     let (ine, rep) = (cli.flag("if_not_exists"), cli.flag("replace"));
     create_repo(cli, &n, ine, rep)
 }
 
 pub fn list_images(cli: &mut Cli) -> Result<Output> {
-    let n = fqn(cli, "name")?.identifier();
+    let n = fqn_arg(cli, "name")?.identifier();
     let q = match cli.str("like_option").filter(|l| !l.is_empty()) {
         Some(l) => format!(
             "show images like {} in image repository {n}",
@@ -81,18 +82,15 @@ fn repo_url(cli: &mut Cli, name: &str) -> Result<String> {
 }
 
 pub fn url(cli: &mut Cli) -> Result<Output> {
-    let n = fqn(cli, "name")?.identifier();
+    let n = fqn_arg(cli, "name")?.identifier();
     Ok(Output::message(repo_url(cli, &n)?))
 }
 
 pub fn list_tags(cli: &mut Cli) -> Result<Output> {
-    let n = fqn(cli, "name")?.identifier();
+    let n = fqn_arg(cli, "name")?.identifier();
     let url = format!("https://{}", repo_url(cli, &n)?);
     let u = url::Url::parse(&url).map_err(|e| SnowError::unexpected(e.to_string()))?;
-    let host = match u.port() {
-        Some(p) => format!("{}:{p}", u.host_str().unwrap_or_default()),
-        None => u.host_str().unwrap_or_default().to_string(),
-    };
+    let host = &u[url::Position::BeforeHost..url::Position::AfterPort];
     let api = format!("{}://{host}/v2{}", u.scheme(), u.path());
     let bearer = super::image_registry::login_to_registry(cli, &api)?;
     let image = cli.str("image_name").unwrap_or_default();

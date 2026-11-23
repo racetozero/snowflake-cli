@@ -1,15 +1,13 @@
-//! `snow streamlit` (execute, get-url, status, share; deploy/logs elsewhere).
+//! `snow streamlit` (execute, get-url, status, share, deploy; logs in `streamlit_logs`).
 
-use snow_api::identifiers::{Fqn, to_identifier, to_string_literal, unquote_identifier};
+use snow_api::identifiers::{
+    Fqn, sql_object_name, to_identifier, to_string_literal, unquote_identifier,
+};
 use snow_api::output::{Output, Pv, Row};
 use snow_api::{Cli, Result, SnowError};
 
-fn name(cli: &mut Cli) -> Result<Fqn> {
-    crate::object::fqn_arg(cli, "name")
-}
-
 pub fn execute(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
+    let f = crate::object::fqn_arg(cli, "name")?;
     cli.execute_query(&format!("EXECUTE STREAMLIT {}()", f.sql_identifier()))?;
     Ok(Output::message(format!(
         "Streamlit {} executed.",
@@ -23,7 +21,7 @@ pub fn url_for(cli: &mut Cli, f: Fqn) -> Result<String> {
 }
 
 pub fn get_url(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
+    let f = crate::object::fqn_arg(cli, "name")?;
     let url = url_for(cli, f)?;
     if cli.flag("open_") {
         snow_connector::auth::open_browser(&url);
@@ -31,20 +29,12 @@ pub fn get_url(cli: &mut Cli) -> Result<Output> {
     Ok(Output::message(url))
 }
 
-fn lower_row(c: &snow_connector::Cursor, row: &[Option<String>], cli: &mut Cli) -> Row {
-    let tz = cli.timezone();
-    let rows = snow_api::values::rows(
-        &snow_connector::Cursor {
-            rows: vec![row.to_vec()],
-            ..c.clone()
-        },
-        &tz,
-        false,
-    );
-    rows.into_iter()
-        .next()
+/// The rows of `c` keyed by lower-cased column names.
+fn lower_rows(cli: &mut Cli, c: &snow_connector::Cursor) -> Vec<Row> {
+    cli.rows(c)
+        .into_iter()
         .map(|r| r.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect())
-        .unwrap_or_default()
+        .collect()
 }
 
 fn split_qualified(name: &str) -> Vec<String> {
@@ -151,17 +141,19 @@ fn summarize(payload: &str) -> Option<String> {
     }
 }
 
-fn is_container_runtime(rt: &str) -> bool {
+const CONTAINER_RUNTIME: &str = "SYSTEM$ST_CONTAINER_RUNTIME";
+
+/// `SYSTEM$ST_CONTAINER_RUNTIME[A-Z0-9_]*` after trimming and upper-casing.
+pub(crate) fn is_container_runtime(rt: &str) -> bool {
     let n = rt.trim().to_uppercase();
-    n.strip_prefix("SYSTEM$ST_CONTAINER_RUNTIME")
-        .is_some_and(|r| {
-            r.chars()
-                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
-        })
+    n.strip_prefix(CONTAINER_RUNTIME).is_some_and(|r| {
+        r.chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+    })
 }
 
 pub fn status(cli: &mut Cli) -> Result<Output> {
-    let app = name(cli)?;
+    let app = crate::object::fqn_arg(cli, "name")?;
     let app = cli.using_connection(app)?;
     if app.database.is_none() || app.schema.is_none() {
         return Err(SnowError::cli(
@@ -169,13 +161,12 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
         ));
     }
     let c = cli.execute_query(&format!("describe streamlit {}", app.sql_identifier()))?;
-    let Some(first) = c.rows.first().cloned() else {
+    let Some(described) = lower_rows(cli, &c).into_iter().next() else {
         return Err(SnowError::cli(format!(
             "Could not describe Streamlit app {}. Verify the app exists and you have access.",
             app.identifier()
         )));
     };
-    let described = lower_row(&c, &first, cli);
     let runtime = described.get("runtime_name").cloned().unwrap_or(Pv::None);
     let mut row = Row::new();
     row.insert("name".into(), Pv::s(app.identifier()));
@@ -194,11 +185,7 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
     ] {
         row.insert(k.into(), Pv::None);
     }
-    let rt = match &runtime {
-        Pv::None => String::new(),
-        other => other.py_str(),
-    };
-    if !is_container_runtime(&rt) {
+    if !is_container_runtime(&pv_str(Some(&runtime))) {
         row.insert("service_status".into(), Pv::s("NOT_APPLICABLE"));
         row.insert("message".into(), Pv::s("This runtime has no SPCS service."));
         return Ok(Output::Collection(vec![row]));
@@ -213,12 +200,8 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
         to_string_literal(&schema)
     ))?;
     let mut services = Vec::new();
-    for r in sc.rows.clone() {
-        let lr = lower_row(&sc, &r, cli);
-        let val = |k: &str| match lr.get(k) {
-            None | Some(Pv::None) => String::new(),
-            Some(v) => v.py_str().trim().to_string(),
-        };
+    for lr in lower_rows(cli, &sc) {
+        let val = |k: &str| pv_str(lr.get(k)).trim().to_string();
         if val("managing_object_domain").to_uppercase() == "STREAMLIT"
             && names_the_app(&val("managing_object_name"), &app)
         {
@@ -246,10 +229,7 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
             "current_instances".into(),
             s.get("current_instances").cloned().unwrap_or(Pv::None),
         );
-        let sn = match &sname {
-            Pv::None => String::new(),
-            v => v.py_str(),
-        };
+        let sn = pv_str(Some(&sname));
         if !sn.is_empty() {
             let q = [
                 app.database.as_deref().unwrap_or(""),
@@ -265,7 +245,7 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
                 to_string_literal(&q)
             ))? {
                 Ok(c) => {
-                    let payload = c.rows.first().and_then(|r| r.first().cloned().flatten());
+                    let payload = Cli::first_cell_opt(&c);
                     if let Some(p) = payload {
                         r.insert(
                             "container_status".into(),
@@ -291,7 +271,7 @@ pub fn status(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn share(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
+    let f = crate::object::fqn_arg(cli, "name")?;
     let role = cli.str("to_role");
     let users = cli.list("to_user");
     if role.is_some() && !users.is_empty() {
@@ -348,7 +328,7 @@ pub fn share(cli: &mut Cli) -> Result<Output> {
                 }
             }
         };
-    let opt = if wgo { " WITH GRANT OPTION" } else { "" };
+    let opt = if wgo { WITH_GRANT_OPTION } else { "" };
     let mut cursors = Vec::new();
     for g in &grantees {
         cursors.push(cli.execute_query(&format!(
@@ -372,8 +352,8 @@ pub fn share(cli: &mut Cli) -> Result<Output> {
                     cli.console.warning(&format!(
                         "Could not grant USAGE on {} to {}: {}",
                         ty.to_lowercase(),
-                        snow_api::sql::sanitize_for_terminal(g),
-                        snow_api::sql::sanitize_for_terminal(&e.msg_with(true))
+                        snow_api::sanitize::for_terminal(g),
+                        snow_api::sanitize::for_terminal(&e.msg_with(true))
                     ));
                 }
             }
@@ -381,7 +361,7 @@ pub fn share(cli: &mut Cli) -> Result<Output> {
     } else if !users.is_empty() && resolved.database.is_some() {
         cli.console.warning(&format!(
             "A user may also need USAGE on {} to open the app. Re-run with --grant-location-usage to grant it.",
-            snow_api::sql::sanitize_for_terminal(&resolved.prefix())
+            snow_api::sanitize::for_terminal(&resolved.prefix())
         ));
     }
     // `_record_user_grants(target, users)`.
@@ -393,8 +373,7 @@ pub fn share(cli: &mut Cli) -> Result<Output> {
                     .iter()
                     .map(|u| crate::streamlit_grants::Grant {
                         privilege: "USAGE".into(),
-                        role: None,
-                        user: Some(u.clone()),
+                        user: u.clone(),
                         with_grant_option: wgo,
                     })
                     .collect();
@@ -408,13 +387,13 @@ pub fn share(cli: &mut Cli) -> Result<Output> {
                     .map(|u| {
                         format!(
                             "      - privilege: USAGE\n        user: {}",
-                            snow_api::sql::sanitize_for_terminal(u)
+                            snow_api::sanitize::for_terminal(u)
                         )
                     })
                     .collect();
                 cli.console.warning(&format!(
                     "Could not record the share in snowflake.yml, because {}. Add it under the app's grants to keep the share on the next deploy:\n{}",
-                    snow_api::sql::sanitize_for_terminal(&r),
+                    snow_api::sanitize::for_terminal(&r),
                     entries.join("\n")
                 ));
             }
@@ -430,6 +409,35 @@ pub fn share(cli: &mut Cli) -> Result<Output> {
 }
 
 const WAREHOUSE_RUNTIME: &str = "SYSTEM$WAREHOUSE_RUNTIME";
+
+const WITH_GRANT_OPTION: &str = " WITH GRANT OPTION";
+
+/// The fields that only a versioned deployment applies.
+const VERSIONED_ONLY: [&str; 5] = [
+    "execute_as",
+    "app_warehouse",
+    "artifact_repositories",
+    "idle_auto_shutdown_time_seconds",
+    "schedules",
+];
+
+/// Whether snowflake.yml sets `k`; an empty list counts as unset.
+fn is_set(model: &snow_api::project::PyV, k: &str) -> bool {
+    model
+        .get(k)
+        .is_some_and(|v| !v.is_none() && v.as_list().is_none_or(|l| !l.is_empty()))
+}
+
+/// The end of a deploy: the app URL, opened in the browser with `--open`.
+fn deployed(cli: &mut Cli, f: Fqn) -> Result<Output> {
+    let url = url_for(cli, f)?;
+    if cli.flag("open_") {
+        snow_connector::auth::open_browser(&url);
+    }
+    Ok(Output::message(format!(
+        "Streamlit successfully deployed and available under {url}"
+    )))
+}
 
 fn covers(art: &snow_api::project::PyV, target: &str, root: &std::path::Path) -> bool {
     let (src, dest, _) = crate::artifacts::mapping_of(art);
@@ -514,33 +522,22 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
     }
     let container = runtime
         .as_deref()
-        .is_some_and(|r| r.starts_with("SYSTEM$ST_CONTAINER_RUNTIME"));
+        .is_some_and(|r| r.starts_with(CONTAINER_RUNTIME));
     let pool_applies = pool.is_some() && runtime.as_deref() != Some(WAREHOUSE_RUNTIME);
     if pool.is_some() && (!pool_applies || (legacy && runtime.is_none())) {
         cli.console.warning(&format!(
             "compute_pool {} is ignored because runtime_name is {}, which does not run on a compute pool. Remove compute_pool, or set runtime_name to SYSTEM$ST_CONTAINER_RUNTIME_PY3_11.",
-            snow_api::sql::sanitize_for_terminal(pool.as_deref().unwrap_or_default()),
+            snow_api::sanitize::for_terminal(pool.as_deref().unwrap_or_default()),
             runtime.clone().unwrap_or_else(|| WAREHOUSE_RUNTIME.into())
         ));
     }
-    let set_fields: Vec<&str> = [
-        "execute_as",
-        "app_warehouse",
-        "artifact_repositories",
-        "idle_auto_shutdown_time_seconds",
-        "schedules",
-    ]
-    .into_iter()
-    .filter(|k| {
-        model
-            .get(k)
-            .is_some_and(|v| !v.is_none() && v.as_list().is_none_or(|l| !l.is_empty()))
-    })
-    .collect();
+    let set_fields: Vec<&str> = VERSIONED_ONLY
+        .into_iter()
+        .filter(|k| is_set(&model, k))
+        .collect();
     let new_create_container =
         |new: bool| container || (new && pool.is_some() && runtime.is_none());
-    let validate = |cli: &mut Cli, new: bool| -> Result<()> {
-        let _ = cli;
+    let validate = |new: bool| -> Result<()> {
         if legacy && !set_fields.is_empty() {
             return Err(SnowError::cli(format!(
                 "{} cannot be set on a --legacy deployment. Remove --legacy to use versioned deployment, or remove them from snowflake.yml.",
@@ -559,11 +556,7 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
             )));
         }
         for field in ["artifact_repositories", "schedules"] {
-            if model
-                .get(field)
-                .is_some_and(|v| !v.is_none() && v.as_list().is_none_or(|l| !l.is_empty()))
-                && !c
-            {
+            if is_set(&model, field) && !c {
                 return Err(SnowError::cli(format!(
                     "{field} only applies to container runtimes, but runtime_name is {rt_label}. Remove {field}, or set runtime_name to SYSTEM$ST_CONTAINER_RUNTIME_PY3_11."
                 )));
@@ -573,7 +566,7 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
     };
     let unnamed_pool = pool.is_some() && runtime.is_none();
     if !(replace && unnamed_pool) {
-        validate(cli, !legacy)?;
+        validate(!legacy)?;
     }
     let fm = crate::entities::fqn(&model, &id)?;
     let f = cli.using_connection(fm.clone())?;
@@ -595,29 +588,26 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
                 cli.console.warning("Deployment style is changing from versioned to legacy. Your existing files will remain in the versioned stage. If needed, manually copy any additional files to the legacy stage after deployment.");
             }
         }
-        return deploy_legacy(cli, &id, &model, &fm, &f, &map, prune, exists);
+        deploy_legacy(cli, &id, &model, &fm, &f, &map, prune, exists)?;
+        return deployed(cli, f);
     }
     if replace && unnamed_pool {
-        validate(cli, true)?;
+        validate(true)?;
     }
     if model.str_of("app_warehouse").is_some() && new_create_container(true) {
         cli.console.warning(&format!(
             "app_warehouse {} is ignored because runtime_name is {}. Remove app_warehouse, or set runtime_name to {WAREHOUSE_RUNTIME}.",
-            snow_api::sql::sanitize_for_terminal(&model.str_of("app_warehouse").unwrap_or_default()),
+            snow_api::sanitize::for_terminal(&model.str_of("app_warehouse").unwrap_or_default()),
             runtime.clone().unwrap_or_else(|| "the container default".into())
         ));
     }
     if exists {
         // _is_legacy_deployment()
         let legacy_existing = match cli.try_query(&describe)? {
-            Ok(c) => match c.rows.first().cloned() {
-                Some(r) => {
-                    let row = lower_row(&c, &r, cli);
-                    !pv_str(row.get("root_location")).is_empty()
-                        && pv_str(row.get("live_version_location_uri")).is_empty()
-                }
-                None => false,
-            },
+            Ok(c) => lower_rows(cli, &c).first().is_some_and(|row| {
+                !pv_str(row.get("root_location")).is_empty()
+                    && pv_str(row.get("live_version_location_uri")).is_empty()
+            }),
             Err(_) => false,
         };
         if legacy_existing {
@@ -634,15 +624,16 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
             container,
             pool_applies,
         )?;
-        let url = url_for(cli, f)?;
-        if cli.flag("open_") {
-            snow_connector::auth::open_browser(&url);
-        }
-        return Ok(Output::message(format!(
-            "Streamlit successfully deployed and available under {url}"
-        )));
+        return deployed(cli, f);
     }
-    let q = deploy_sql(cli, &model, &f, CreateMode::IfNotExists, None, None)?;
+    let q = deploy_sql(
+        cli,
+        &model,
+        &f,
+        CreateMode::IfNotExists,
+        Source::Versioned,
+        None,
+    )?;
     settings_ddl(cli, &model, &q)?;
     let stage_root = ensure_live_version(cli, &f, &fm, true)?;
     crate::artifacts::sync_vstage(cli, &bundle_root, &map, prune, &stage_root, true)?;
@@ -650,36 +641,12 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
     if let Some(sch) = model.get("schedules").filter(|v| !v.is_none()) {
         warm_up_sync(cli, &f, &sch.clone(), Some(vec![]))?;
     }
-    let url = url_for(cli, f)?;
-    if cli.flag("open_") {
-        snow_connector::auth::open_browser(&url);
-    }
-    Ok(Output::message(format!(
-        "Streamlit successfully deployed and available under {url}"
-    )))
-}
-
-/// `_sql_object_name`: quote each part of a (possibly dotted) name.
-pub fn sql_object_name(name: &str) -> String {
-    let re = regex::Regex::new(r#"^(?:"(?:[^"]|"")*"|[^."]+)(?:\.(?:"(?:[^"]|"")*"|[^."]+))*$"#)
-        .expect("re");
-    if !re.is_match(name) {
-        return to_identifier(name);
-    }
-    regex::Regex::new(r#""(?:[^"]|"")*"|[^."]+"#)
-        .expect("re")
-        .find_iter(name)
-        .map(|m| to_identifier(m.as_str()))
-        .collect::<Vec<_>>()
-        .join(".")
+    deployed(cli, f)
 }
 
 fn describe_row(cli: &mut Cli, sql: &str) -> Result<indexmap::IndexMap<String, Pv>> {
     let c = cli.execute_query(sql)?;
-    Ok(match c.rows.first().cloned() {
-        Some(r) => lower_row(&c, &r, cli),
-        None => indexmap::IndexMap::new(),
-    })
+    Ok(lower_rows(cli, &c).into_iter().next().unwrap_or_default())
 }
 
 fn pv_str(v: Option<&Pv>) -> String {
@@ -708,6 +675,89 @@ fn upper_list(v: Option<&Pv>) -> Vec<String> {
     };
     out.sort();
     out
+}
+
+/// The `get_alter_sql` clauses that both deploy styles share, MAIN_FILE through
+/// EXTERNAL_ACCESS_INTEGRATIONS; returns whether MAIN_FILE changes.
+fn head_clauses(
+    model: &snow_api::project::PyV,
+    cur: &indexmap::IndexMap<String, Pv>,
+    clauses: &mut Vec<String>,
+    unset: &mut Vec<String>,
+) -> Result<bool> {
+    let id = |s: &str| s.trim().to_uppercase();
+    let main = model.str_of("main_file");
+    if main.as_deref() == Some("") {
+        return Err(SnowError::cli(
+            "main_file cannot be empty. Set it to the app's entrypoint file.",
+        ));
+    }
+    let main_changed = main
+        .as_ref()
+        .is_some_and(|m| *m != pv_str(cur.get("main_file")));
+    if main_changed {
+        clauses.push(format!(
+            "MAIN_FILE = {}",
+            to_string_literal(main.as_deref().unwrap_or_default())
+        ));
+    }
+    if let Some(wh) = model.str_of("query_warehouse").filter(|s| !s.is_empty())
+        && id(&pv_str(cur.get("query_warehouse"))) != id(&wh)
+    {
+        clauses.push(format!("QUERY_WAREHOUSE = {}", to_identifier(&wh)));
+    }
+    for (k, prop) in [("title", "TITLE"), ("comment", "COMMENT")] {
+        let want = model.str_of(k).unwrap_or_default().trim().to_string();
+        let have = pv_str(cur.get(k)).trim().to_string();
+        if !want.is_empty() && have != want {
+            clauses.push(format!("{prop} = {}", to_string_literal(&want)));
+        } else if !have.is_empty() && want.is_empty() {
+            unset.push(prop.to_string());
+        }
+    }
+    let eais: Vec<String> = model.str_list("external_access_integrations");
+    let mut want_eai: Vec<String> = eais.iter().map(|e| e.to_uppercase()).collect();
+    want_eai.sort();
+    let have_eai = upper_list(cur.get("external_access_integrations"));
+    if !want_eai.is_empty() && have_eai != want_eai {
+        clauses.push(format!(
+            "external_access_integrations=({})",
+            eais.iter()
+                .map(|e| sql_object_name(e))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    } else if !have_eai.is_empty() && want_eai.is_empty() {
+        unset.push("EXTERNAL_ACCESS_INTEGRATIONS".into());
+    }
+    Ok(main_changed)
+}
+
+/// The `get_alter_sql` IMPORTS clause: the new list, or `IMPORTS = ()` to clear the live one.
+fn imports_clause(
+    model: &snow_api::project::PyV,
+    cur: &indexmap::IndexMap<String, Pv>,
+    clauses: &mut Vec<String>,
+) {
+    let imports: Vec<String> = model.str_list("imports");
+    let mut want: Vec<String> = imports.iter().map(|i| i.to_uppercase()).collect();
+    want.sort();
+    let have = upper_list(cur.get("import_urls"));
+    if want == have {
+        return;
+    }
+    if !imports.is_empty() {
+        clauses.push(format!(
+            "IMPORTS = ({})",
+            imports
+                .iter()
+                .map(|i| to_string_literal(i))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    } else if !have.is_empty() {
+        clauses.push("IMPORTS = ()".into());
+    }
 }
 
 fn settings_ddl(cli: &mut Cli, model: &snow_api::project::PyV, sql: &str) -> Result<()> {
@@ -765,7 +815,14 @@ fn replace_existing(
         }
         let old_root = pv_str(cur.get("root_location"));
         let live_wh = Some(pv_str(cur.get("query_warehouse")));
-        let q = deploy_sql(cli, model, f, CreateMode::Replace, None, live_wh)?;
+        let q = deploy_sql(
+            cli,
+            model,
+            f,
+            CreateMode::Replace,
+            Source::Versioned,
+            live_wh,
+        )?;
         settings_ddl(cli, model, &q)?;
         let stage_root = ensure_live_version(cli, f, fm, false)?;
         copy_legacy_stage(cli, &old_root, &stage_root);
@@ -792,8 +849,7 @@ fn replace_existing(
             _ => String::new(),
         };
         let c = cli.execute_query(&format!("SHOW STREAMLITS LIKE {pat}{scope};"))?;
-        for r in c.rows.clone() {
-            let row = lower_row(&c, &r, cli);
+        for row in lower_rows(cli, &c) {
             if pv_str(row.get("name")).to_uppercase() == unquote_identifier(&f.name).to_uppercase()
             {
                 for k in [
@@ -855,34 +911,7 @@ fn replace_existing(
     let mut clauses = Vec::new();
     let mut unset = Vec::new();
     let mut pre_unset = Vec::new();
-    if main.as_deref() == Some("") {
-        return Err(SnowError::cli(
-            "main_file cannot be empty. Set it to the app's entrypoint file.",
-        ));
-    }
-    let main_changed = main
-        .as_ref()
-        .is_some_and(|m| *m != pv_str(cur.get("main_file")));
-    if main_changed {
-        clauses.push(format!(
-            "MAIN_FILE = {}",
-            to_string_literal(main.as_deref().unwrap_or_default())
-        ));
-    }
-    if let Some(wh) = ms("query_warehouse")
-        && id(&pv_str(cur.get("query_warehouse"))) != id(&wh)
-    {
-        clauses.push(format!("QUERY_WAREHOUSE = {}", to_identifier(&wh)));
-    }
-    for (k, prop) in [("title", "TITLE"), ("comment", "COMMENT")] {
-        let want = model.str_of(k).unwrap_or_default().trim().to_string();
-        let have = pv_str(cur.get(k)).trim().to_string();
-        if !want.is_empty() && have != want {
-            clauses.push(format!("{prop} = {}", to_string_literal(&want)));
-        } else if !have.is_empty() && want.is_empty() {
-            unset.push(prop.to_string());
-        }
-    }
+    let main_changed = head_clauses(model, &cur, &mut clauses, &mut unset)?;
     let list_of = |k: &str| -> Vec<String> {
         let mut v: Vec<String> = model
             .get(k)
@@ -892,23 +921,6 @@ fn replace_existing(
         v.sort();
         v
     };
-    let (want_eai, have_eai) = (
-        list_of("external_access_integrations"),
-        upper_list(cur.get("external_access_integrations")),
-    );
-    if !want_eai.is_empty() && have_eai != want_eai {
-        let names: Vec<String> = model
-            .get("external_access_integrations")
-            .and_then(PyV::as_list)
-            .map(|l| l.iter().map(|x| sql_object_name(&x.py_str())).collect())
-            .unwrap_or_default();
-        clauses.push(format!(
-            "external_access_integrations=({})",
-            names.join(", ")
-        ));
-    } else if !have_eai.is_empty() && want_eai.is_empty() {
-        unset.push("EXTERNAL_ACCESS_INTEGRATIONS".into());
-    }
     let want_sec = model
         .get("secrets")
         .and_then(PyV::as_dict)
@@ -936,26 +948,7 @@ fn replace_existing(
     } else if !have_sec.is_empty() && want_sec.is_empty() {
         unset.push("SECRETS".into());
     }
-    let (want_imp, have_imp) = (list_of("imports"), upper_list(cur.get("import_urls")));
-    if want_imp != have_imp {
-        let imports: Vec<String> = model
-            .get("imports")
-            .and_then(PyV::as_list)
-            .map(|l| l.iter().map(PyV::py_str).collect())
-            .unwrap_or_default();
-        if !imports.is_empty() {
-            clauses.push(format!(
-                "IMPORTS = ({})",
-                imports
-                    .iter()
-                    .map(|i| to_string_literal(i))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
-        } else if !have_imp.is_empty() {
-            clauses.push("IMPORTS = ()".into());
-        }
-    }
+    imports_clause(model, &cur, &mut clauses);
     let rt = model.str_of("runtime_name");
     let live_rt = pv_str(cur.get("runtime_name"));
     if let Some(r) = rt.as_ref().filter(|r| id(&live_rt) != id(r)) {
@@ -964,7 +957,7 @@ fn replace_existing(
             cli.console.warning(&format!(
                 "Moving Streamlit {} from runtime {} to {r}. This changes how the app runs.",
                 fm.sql_identifier(),
-                snow_api::sql::sanitize_for_terminal(&live_rt)
+                snow_api::sanitize::for_terminal(&live_rt)
             ));
         }
     }
@@ -1080,7 +1073,7 @@ fn replace_existing(
     if live_container && diff.has_changes() {
         cli.console.step(&format!(
             "Restarting Streamlit app {} so the new files take effect",
-            snow_api::sql::sanitize_for_terminal(&f.identifier())
+            snow_api::sanitize::for_terminal(&f.identifier())
         ));
         let verbose = cli.connector_info;
         cli.connection()?
@@ -1190,12 +1183,11 @@ fn grant_privileges(cli: &mut Cli, model: &snow_api::project::PyV, fm: &Fqn) -> 
             return Err(SnowError::cli(format!(
                 "Could not list the grants on Streamlit {}, so grants removed from snowflake.yml were not revoked: {}. Check that the current role can run SHOW GRANTS on the app, or remove grants from snowflake.yml to leave the app's grants unmanaged.",
                 fm.identifier(),
-                snow_api::sql::sanitize_for_terminal(&e.msg_with(true))
+                snow_api::sanitize::for_terminal(&e.msg_with(true))
             )));
         }
     };
-    for r in c.rows.clone() {
-        let row = lower_row(&c, &r, cli);
+    for row in lower_rows(cli, &c) {
         let privilege = pv_str(row.get("privilege"));
         if privilege.to_uppercase() == "OWNERSHIP" {
             continue;
@@ -1233,7 +1225,7 @@ fn grant_privileges(cli: &mut Cli, model: &snow_api::project::PyV, fm: &Fqn) -> 
     }
     for (p, role, user, opt) in &desired {
         let g = grantee_sql(role.as_deref(), user.as_deref());
-        let wgo = if *opt { " WITH GRANT OPTION" } else { "" };
+        let wgo = if *opt { WITH_GRANT_OPTION } else { "" };
         cli.execute_query(&format!("GRANT {p} ON STREAMLIT {ident} TO {g}{wgo}"))?;
     }
     Ok(())
@@ -1303,8 +1295,8 @@ pub fn bundle_entity(
     Ok(bundle_inner(cli, id, model, None)?.1)
 }
 
-/// `_deploy_legacy` for an app that does not exist yet: sync the bundle to
-/// `@<stage>/<name>` and `CREATE STREAMLIT ... ROOT_LOCATION`.
+/// `_deploy_legacy`: sync the bundle to `@<stage>/<name>`, then `CREATE STREAMLIT ...
+/// ROOT_LOCATION` for a new app or `ALTER STREAMLIT` for an existing one.
 #[allow(clippy::too_many_arguments)]
 fn deploy_legacy(
     cli: &mut Cli,
@@ -1315,7 +1307,7 @@ fn deploy_legacy(
     map: &crate::artifacts::BundleMap,
     prune: bool,
     exists: bool,
-) -> Result<Output> {
+) -> Result<()> {
     use snow_api::project::PyV;
     let stage = model.str_of("stage").unwrap_or_else(|| "streamlit".into());
     cli.console
@@ -1336,22 +1328,20 @@ fn deploy_legacy(
     ));
     if exists {
         let cur = describe_row(cli, &format!("DESCRIBE STREAMLIT {};", f.sql_identifier()))?;
-        if let Some(alter) = legacy_alter_sql(model, f, &cur, &stage_root)? {
-            cli.execute_query(&alter)?;
-        }
+        cli.execute_query(&legacy_alter_sql(model, f, &cur, &stage_root)?)?;
         sync_tags(cli, model, f)?;
     } else {
-        let q = deploy_sql(cli, model, f, CreateMode::Plain, Some(&stage_root), None)?;
+        let q = deploy_sql(
+            cli,
+            model,
+            f,
+            CreateMode::Plain,
+            Source::RootLocation(&stage_root),
+            None,
+        )?;
         cli.execute_query(&q)?;
     }
-    grant_privileges(cli, model, fm)?;
-    let url = url_for(cli, f.clone())?;
-    if cli.flag("open_") {
-        snow_connector::auth::open_browser(&url);
-    }
-    Ok(Output::message(format!(
-        "Streamlit successfully deployed and available under {url}"
-    )))
+    grant_privileges(cli, model, fm)
 }
 
 /// `WarmUpTasks.sync(schedules, linked)`: the scheduled tasks that start the app.
@@ -1365,7 +1355,6 @@ fn warm_up_sync(
         append_to_identifier, escape_like_pattern, to_identifier, to_string_literal,
         unquote_identifier,
     };
-    use snow_api::project::PyV;
     const SUFFIX: &str = "__STREAMLIT_LIFECYCLE";
     let schema = app
         .schema
@@ -1426,11 +1415,7 @@ fn warm_up_sync(
         .str_of("timezone")
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| "UTC".into());
-    let crons: Vec<String> = schedules
-        .get("cron_exprs")
-        .and_then(PyV::as_list)
-        .map(|l| l.iter().map(PyV::py_str).collect())
-        .unwrap_or_default();
+    let crons: Vec<String> = schedules.str_list("cron_exprs");
     let definition = format!(
         "SELECT SYSTEM$START_STREAMLIT({})",
         to_string_literal(&dotted(&app.name))
@@ -1461,8 +1446,7 @@ fn warm_up_sync(
     )? {
         Ok(c) => {
             let mut m = indexmap::IndexMap::new();
-            for r in c.rows.clone() {
-                let row = lower_row(&c, &r, cli);
+            for row in lower_rows(cli, &c) {
                 let matches = |k: &str, want: &Option<String>| {
                     want.as_ref()
                         .is_none_or(|w| pv_str(row.get(k)) == unquote_identifier(w))
@@ -1477,7 +1461,7 @@ fn warm_up_sync(
             return Err(SnowError::cli(format!(
                 "Could not list the warm-up tasks of Streamlit {}: {}. The CLI did not change the tasks. Deploy again when the problem is fixed.",
                 app_ident.sql_identifier(),
-                snow_api::sql::sanitize_for_terminal(&e.msg_with(verbose))
+                snow_api::sanitize::for_terminal(&e.msg_with(verbose))
             )));
         }
     };
@@ -1495,7 +1479,7 @@ fn warm_up_sync(
                 cli.try_query(&format!("DROP TASK IF EXISTS {};", task_fqn(t))),
                 Ok(Ok(_))
             ) {
-                undropped.push(snow_api::sql::sanitize_for_terminal(&shown_of(t)));
+                undropped.push(snow_api::sanitize::for_terminal(&shown_of(t)));
             }
         }
         let note = if !undropped.is_empty() {
@@ -1516,7 +1500,7 @@ fn warm_up_sync(
         SnowError::cli(format!(
             "Could not {step} for Streamlit {}: {}. {cause}{note}",
             app_ident.sql_identifier(),
-            snow_api::sql::sanitize_for_terminal(&msg)
+            snow_api::sanitize::for_terminal(&msg)
         ))
     };
     for (slot, cron) in crons.iter().enumerate() {
@@ -1534,7 +1518,7 @@ fn warm_up_sync(
                 .identifier();
             cli.console.step(&format!(
                 "Creating warm-up task {}",
-                snow_api::sql::sanitize_for_terminal(&shown)
+                snow_api::sanitize::for_terminal(&shown)
             ));
             let q = format!(
                 "CREATE OR REPLACE TASK {}\nSCHEDULE = {}\nAS {definition};",
@@ -1666,36 +1650,28 @@ enum CreateMode {
     Replace,
 }
 
-/// `get_deploy_sql(...)`: `root_location` is the legacy ROOT_LOCATION stage.
+/// Where `get_deploy_sql` points the app.
+#[derive(Clone, Copy)]
+enum Source<'a> {
+    /// The live version stage, filled after the CREATE.
+    Versioned,
+    /// The legacy ROOT_LOCATION stage.
+    RootLocation(&'a str),
+    /// `FROM` the artifacts directory of an application package.
+    From(&'a str),
+}
+
+/// `get_deploy_sql(...)`.
 fn deploy_sql(
     cli: &mut Cli,
     model: &snow_api::project::PyV,
     f: &Fqn,
     mode: CreateMode,
-    root_location: Option<&str>,
-    live_wh: Option<String>,
-) -> Result<String> {
-    deploy_sql_from(cli, model, f, mode, root_location, None, live_wh)
-}
-
-fn deploy_sql_from(
-    cli: &mut Cli,
-    model: &snow_api::project::PyV,
-    f: &Fqn,
-    mode: CreateMode,
-    root_location: Option<&str>,
-    artifacts_dir: Option<&str>,
+    source: Source,
     live_wh: Option<String>,
 ) -> Result<String> {
     use snow_api::identifiers::{to_identifier, to_string_literal};
     use snow_api::project::PyV;
-    let strs = |k: &str| -> Vec<String> {
-        model
-            .get(k)
-            .and_then(PyV::as_list)
-            .map(|l| l.iter().map(PyV::py_str).collect())
-            .unwrap_or_default()
-    };
     let mut q = match mode {
         CreateMode::Replace => "CREATE OR REPLACE STREAMLIT",
         CreateMode::IfNotExists => "CREATE STREAMLIT IF NOT EXISTS",
@@ -1703,16 +1679,19 @@ fn deploy_sql_from(
     }
     .to_string();
     q.push_str(&format!(" {}", f.sql_identifier()));
-    if let Some(r) = root_location {
-        q.push_str(&format!("\nROOT_LOCATION = {}", to_string_literal(r)));
-    } else if let Some(d) = artifacts_dir {
-        q.push_str(&format!("\nFROM {}", to_string_literal(d)));
+    match source {
+        Source::RootLocation(r) => {
+            q.push_str(&format!("\nROOT_LOCATION = {}", to_string_literal(r)))
+        }
+        Source::From(d) => q.push_str(&format!("\nFROM {}", to_string_literal(d))),
+        Source::Versioned => {}
     }
+    let legacy = matches!(source, Source::RootLocation(_));
     q.push_str(&format!(
         "\nMAIN_FILE = {}",
         to_string_literal(&model.str_of("main_file").unwrap_or_default())
     ));
-    let imports = strs("imports");
+    let imports = model.str_list("imports");
     if !imports.is_empty() {
         q.push_str(&format!(
             "\nIMPORTS = ({})",
@@ -1741,7 +1720,7 @@ fn deploy_sql_from(
     if let Some(c) = model.str_of("comment").filter(|s| !s.is_empty()) {
         q.push_str(&format!("\nCOMMENT = {}", to_string_literal(&c)));
     }
-    let eais = strs("external_access_integrations");
+    let eais = model.str_list("external_access_integrations");
     if !eais.is_empty() {
         q.push_str(&format!(
             "\nexternal_access_integrations=({})",
@@ -1764,10 +1743,10 @@ fn deploy_sql_from(
     let pool = model.str_of("compute_pool");
     let container = runtime
         .as_deref()
-        .is_some_and(|r| r.starts_with("SYSTEM$ST_CONTAINER_RUNTIME"));
+        .is_some_and(|r| r.starts_with(CONTAINER_RUNTIME));
     let treat_container =
         container || (mode != CreateMode::Replace && pool.is_some() && runtime.is_none());
-    if root_location.is_some() {
+    if legacy {
         q.push_str(&format!(
             "\nRUNTIME_NAME = {}",
             to_string_literal(WAREHOUSE_RUNTIME)
@@ -1785,7 +1764,7 @@ fn deploy_sql_from(
         if let Some(aw) = model.str_of("app_warehouse").filter(|_| !treat_container) {
             q.push_str(&format!("\nWAREHOUSE = {}", to_identifier(&aw)));
         }
-        let repos = strs("artifact_repositories");
+        let repos = model.str_list("artifact_repositories");
         if !repos.is_empty() {
             q.push_str(&format!(
                 "\nARTIFACT_REPOSITORIES = ({})",
@@ -1813,7 +1792,7 @@ fn deploy_sql_from(
                 .join(",")
         ));
     }
-    if root_location.is_none()
+    if !legacy
         && !treat_container
         && model.str_of("execute_as").as_deref() == Some("RESTRICTED CALLER")
     {
@@ -1876,7 +1855,7 @@ fn ensure_live_version(cli: &mut Cli, f: &Fqn, fm: &Fqn, map_missing: bool) -> R
 
 /// `_copy_legacy_stage_if_present(old_root, new_stage_root)`: best effort.
 fn copy_legacy_stage(cli: &mut Cli, old_root: &str, new_root: &str) {
-    use snow_api::sql::sanitize_for_terminal as san;
+    use snow_api::sanitize::for_terminal as san;
     let source = snow_api::stage_path::StagePath::from_stage_str(old_root).path_for_sql();
     let dest = format!("{}/", new_root.trim_end_matches('/'));
     let q = format!(
@@ -1905,79 +1884,12 @@ fn legacy_alter_sql(
     f: &Fqn,
     cur: &indexmap::IndexMap<String, Pv>,
     root: &str,
-) -> Result<Option<String>> {
-    use snow_api::identifiers::{to_identifier, to_string_literal};
-    use snow_api::project::PyV;
+) -> Result<String> {
     let id = |s: &str| s.trim().to_uppercase();
     let mut clauses = vec![format!("ROOT_LOCATION = {}", to_string_literal(root))];
     let mut unset: Vec<String> = Vec::new();
-    let main = model.str_of("main_file");
-    if main.as_deref() == Some("") {
-        return Err(SnowError::cli(
-            "main_file cannot be empty. Set it to the app's entrypoint file.",
-        ));
-    }
-    if let Some(m) = main
-        .as_ref()
-        .filter(|m| **m != pv_str(cur.get("main_file")))
-    {
-        clauses.push(format!("MAIN_FILE = {}", to_string_literal(m)));
-    }
-    if let Some(wh) = model.str_of("query_warehouse").filter(|s| !s.is_empty())
-        && id(&pv_str(cur.get("query_warehouse"))) != id(&wh)
-    {
-        clauses.push(format!("QUERY_WAREHOUSE = {}", to_identifier(&wh)));
-    }
-    for (k, prop) in [("title", "TITLE"), ("comment", "COMMENT")] {
-        let want = model.str_of(k).unwrap_or_default().trim().to_string();
-        let have = pv_str(cur.get(k)).trim().to_string();
-        if !want.is_empty() && have != want {
-            clauses.push(format!("{prop} = {}", to_string_literal(&want)));
-        } else if !have.is_empty() && want.is_empty() {
-            unset.push(prop.to_string());
-        }
-    }
-    let raw = |k: &str| -> Vec<String> {
-        model
-            .get(k)
-            .and_then(PyV::as_list)
-            .map(|l| l.iter().map(PyV::py_str).collect())
-            .unwrap_or_default()
-    };
-    let upper_sorted = |v: &[String]| {
-        let mut v: Vec<String> = v.iter().map(|x| x.to_uppercase()).collect();
-        v.sort();
-        v
-    };
-    let eais = raw("external_access_integrations");
-    let have_eai = upper_list(cur.get("external_access_integrations"));
-    if !eais.is_empty() && have_eai != upper_sorted(&eais) {
-        clauses.push(format!(
-            "external_access_integrations=({})",
-            eais.iter()
-                .map(|e| sql_object_name(e))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    } else if !have_eai.is_empty() && eais.is_empty() {
-        unset.push("EXTERNAL_ACCESS_INTEGRATIONS".into());
-    }
-    let imports = raw("imports");
-    let have_imp = upper_list(cur.get("import_urls"));
-    if upper_sorted(&imports) != have_imp {
-        if !imports.is_empty() {
-            clauses.push(format!(
-                "IMPORTS = ({})",
-                imports
-                    .iter()
-                    .map(|i| to_string_literal(i))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
-        } else if !have_imp.is_empty() {
-            clauses.push("IMPORTS = ()".into());
-        }
-    }
+    head_clauses(model, cur, &mut clauses, &mut unset)?;
+    imports_clause(model, cur, &mut clauses);
     if id(&pv_str(cur.get("runtime_name"))) != id(WAREHOUSE_RUNTIME) {
         clauses.push(format!(
             "RUNTIME_NAME = {}",
@@ -1995,7 +1907,7 @@ fn legacy_alter_sql(
             unset.join(", ")
         ));
     }
-    Ok(Some(stmts.join("\n")))
+    Ok(stmts.join("\n"))
 }
 
 /// `StreamlitEntity` as an application package child: `validate_as_child`, `bundle(dir)`,
@@ -2008,20 +1920,10 @@ pub fn child_deploy_sql(
     rel: &str,
     schema: Option<&str>,
 ) -> Result<String> {
-    let set: Vec<&str> = [
-        "execute_as",
-        "app_warehouse",
-        "artifact_repositories",
-        "idle_auto_shutdown_time_seconds",
-        "schedules",
-    ]
-    .into_iter()
-    .filter(|k| {
-        model
-            .get(k)
-            .is_some_and(|v| !v.is_none() && v.as_list().is_none_or(|l| !l.is_empty()))
-    })
-    .collect();
+    let set: Vec<&str> = VERSIONED_ONLY
+        .into_iter()
+        .filter(|k| is_set(model, k))
+        .collect();
     if !set.is_empty() {
         return Err(SnowError::cli(format!(
             "{} cannot be set on a Streamlit app in an application package. Remove them from entity {id}.",
@@ -2042,5 +1944,5 @@ pub fn child_deploy_sql(
                 .as_deref(),
         )
         .set_database(fm.database.clone().or(cd).as_deref());
-    deploy_sql_from(cli, model, &f, CreateMode::Replace, None, Some(rel), None)
+    deploy_sql(cli, model, &f, CreateMode::Replace, Source::From(rel), None)
 }

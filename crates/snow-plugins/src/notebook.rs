@@ -5,18 +5,14 @@ use snow_api::output::Output;
 use snow_api::stage_path::StagePath;
 use snow_api::{Cli, Result, SnowError};
 
-fn name(cli: &mut Cli) -> Result<Fqn> {
-    crate::object::fqn_arg(cli, "identifier")
-}
-
-fn using_conn(cli: &mut Cli, f: Fqn) -> Result<Fqn> {
-    let s = cli.connection()?.session.clone();
-    let u = cli.connection()?.user.clone();
-    Ok(f.using_session(s.database.as_deref(), s.schema.as_deref(), u.as_deref()))
+/// The Snowsight URL of the notebook.
+fn notebook_url(cli: &mut Cli, f: Fqn) -> Result<String> {
+    let f = cli.using_connection(f)?;
+    crate::snowsight::make_url(cli, &format!("/#/notebooks/{}", f.url_identifier()))
 }
 
 pub fn execute(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
+    let f = crate::object::fqn_arg(cli, "identifier")?;
     cli.execute_query(&format!("EXECUTE NOTEBOOK {}()", f.sql_identifier()))?;
     Ok(Output::message(format!(
         "Notebook {} executed.",
@@ -25,23 +21,20 @@ pub fn execute(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn get_url(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
-    let f = using_conn(cli, f)?;
-    let url = crate::snowsight::make_url(cli, &format!("/#/notebooks/{}", f.url_identifier()))?;
-    Ok(Output::message(url))
+    let f = crate::object::fqn_arg(cli, "identifier")?;
+    Ok(Output::message(notebook_url(cli, f)?))
 }
 
 pub fn open(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
-    let f = using_conn(cli, f)?;
-    let url = crate::snowsight::make_url(cli, &format!("/#/notebooks/{}", f.url_identifier()))?;
+    let f = crate::object::fqn_arg(cli, "identifier")?;
+    let url = notebook_url(cli, f)?;
     snow_connector::auth::open_browser(&url);
     Ok(Output::message(url))
 }
 
 pub fn create(cli: &mut Cli) -> Result<Output> {
-    let f = name(cli)?;
-    let f = using_conn(cli, f)?;
+    let f = crate::object::fqn_arg(cli, "identifier")?;
+    let f = cli.using_connection(f)?;
     let file = cli.str("notebook_file").unwrap_or_default();
     if !file.ends_with(".ipynb") {
         return Err(SnowError::click(format!(
@@ -72,8 +65,7 @@ pub fn create(cli: &mut Cli) -> Result<Output> {
         f.identifier()
     );
     cli.execute_queries(&q)?;
-    let url = crate::snowsight::make_url(cli, &format!("/#/notebooks/{}", f.url_identifier()))?;
-    Ok(Output::message(url))
+    Ok(Output::message(notebook_url(cli, f)?))
 }
 
 /// `snow notebook deploy` (`NotebookEntity.action_deploy`).
@@ -163,10 +155,7 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
         f.identifier()
     ));
     let r = cli.execute_query(&q);
-    let url = r.and_then(|_| {
-        let ff = using_conn(cli, f.clone())?;
-        crate::snowsight::make_url(cli, &format!("/#/notebooks/{}", ff.url_identifier()))
-    });
+    let url = r.and_then(|_| notebook_url(cli, f.clone()));
     cli.console.phase_end(None);
     Ok(Output::message(format!(
         "Notebook successfully deployed and available under {}",

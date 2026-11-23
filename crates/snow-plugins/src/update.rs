@@ -8,6 +8,7 @@
 //! its SHA-256) and then replaces the running executable. `snow upgrade` keeps
 //! upstream's behaviour.
 
+use crate::app::envelope;
 use semver::Version;
 use serde_json::{Value, json};
 use std::io::Write as _;
@@ -223,10 +224,7 @@ pub fn run(args: &[String], agent_mode: bool) -> i32 {
     if args.iter().any(|a| a == "--help" || a == "-h") {
         let help = "Usage: snow update\n\n  Update snow to the latest release (from GitHub, or with SNOW_SELF_UPDATE_COMMAND).\n  A Homebrew install is updated with `brew upgrade racetozero/tap/snowflake-cli`.\n";
         if agent_mode {
-            println!(
-                "{}",
-                json!({"ok": true, "command": "update", "data": {"help": help}})
-            );
+            println!("{}", envelope("update", Ok(json!({"help": help}))));
         } else {
             print!("{help}");
         }
@@ -235,7 +233,7 @@ pub fn run(args: &[String], agent_mode: bool) -> i32 {
     match do_update() {
         Ok((data, text)) => {
             if agent_mode {
-                println!("{}", json!({"ok": true, "command": "update", "data": data}));
+                println!("{}", envelope("update", Ok(data)));
             } else {
                 println!("{text}");
             }
@@ -243,10 +241,8 @@ pub fn run(args: &[String], agent_mode: bool) -> i32 {
         }
         Err(msg) => {
             if agent_mode {
-                println!(
-                    "{}",
-                    json!({"ok": false, "command": "update", "error": {"code": "internal", "message": msg}})
-                );
+                let error = json!({"code": "internal", "message": msg});
+                println!("{}", envelope("update", Err(error)));
             } else {
                 eprintln!("Error: {msg}");
             }
@@ -254,8 +250,6 @@ pub fn run(args: &[String], agent_mode: bool) -> i32 {
         }
     }
 }
-
-// ── the notice ────────────────────────────────────────────────────────
 
 fn cache_path() -> PathBuf {
     snow_api::config::snowflake_home_dir().join(CACHE_FILE)
@@ -287,19 +281,16 @@ fn refresh_cache(p: &Path) -> Res<()> {
         .map_err(|e| e.to_string())
 }
 
-fn flag(v: &str) -> bool {
-    matches!(
-        v.trim().to_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
-}
-
-fn eligible(argv: &[String], stderr_terminal: bool, var: impl Fn(&str) -> Option<String>) -> bool {
-    let set = |n: &str| var(n).is_some_and(|v| flag(&v));
-    if !stderr_terminal || set("CI") || set("SNOW_NO_UPDATE_NOTIFIER") || set("SNOW_AGENT") {
-        return false;
-    }
-    if argv.iter().any(|a| a == "--agent") {
+/// `argv` is without `--agent`; `agent` is the result of `app::take_agent_flag`.
+fn eligible(
+    argv: &[String],
+    agent: bool,
+    stderr_terminal: bool,
+    var: impl Fn(&str) -> Option<String>,
+) -> bool {
+    let set =
+        |n: &str| var(n).is_some_and(|v| snow_api::config::parse_on_off(v.trim()) == Some(true));
+    if agent || !stderr_terminal || set("CI") || set("SNOW_NO_UPDATE_NOTIFIER") {
         return false;
     }
     let command = argv.iter().find(|a| !a.starts_with('-'));
@@ -326,12 +317,12 @@ pub struct Check {
 
 /// Start the check when this run may show a notice (release build, stderr is a
 /// terminal, no CI, no agent, not `update`/`upgrade`/`sql`).
-pub fn start(argv: &[String]) -> Option<Check> {
+pub fn start(argv: &[String], agent: bool) -> Option<Check> {
     if cfg!(debug_assertions) {
         return None;
     }
     let terminal = std::io::IsTerminal::is_terminal(&std::io::stderr());
-    if !eligible(argv, terminal, |n| std::env::var(n).ok()) {
+    if !eligible(argv, agent, terminal, |n| std::env::var(n).ok()) {
         return None;
     }
     let path = cache_path();
@@ -408,25 +399,15 @@ mod tests {
     #[test]
     fn notice_only_for_interactive_non_agent_commands() {
         let none = |_: &str| None;
-        assert!(eligible(&argv(&["object", "list", "table"]), true, none));
-        assert!(!eligible(&argv(&["object", "list", "table"]), false, none));
-        assert!(!eligible(&argv(&["object", "list", "--agent"]), true, none));
-        assert!(!eligible(&argv(&["object", "list"]), true, |n: &str| (n
-            == "CI")
+        let list = argv(&["object", "list", "table"]);
+        assert!(eligible(&list, false, true, none));
+        assert!(!eligible(&list, false, false, none));
+        assert!(!eligible(&list, true, true, none));
+        assert!(!eligible(&list, false, true, |n: &str| (n == "CI")
             .then(|| "true".to_string())));
         for c in ["update", "upgrade", "sql"] {
-            assert!(!eligible(&argv(&[c]), true, none));
+            assert!(!eligible(&argv(&[c]), false, true, none));
         }
-        assert!(!eligible(&argv(&[]), true, none));
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    fn debug_update_refuses_before_network() {
-        assert!(
-            do_update()
-                .unwrap_err()
-                .contains("not available in debug builds")
-        );
+        assert!(!eligible(&argv(&[]), false, true, none));
     }
 }

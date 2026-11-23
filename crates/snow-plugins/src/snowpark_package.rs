@@ -1,8 +1,8 @@
 //! `snow snowpark package lookup|upload`.
 
+use crate::pep440::Version;
 use snow_api::identifiers::Fqn;
 use snow_api::output::{Output, Pv};
-use snow_api::pep440::Version;
 use snow_api::{Cli, Result, SnowError};
 use std::collections::BTreeSet;
 
@@ -76,6 +76,7 @@ impl Requirement {
 }
 
 /// `AnacondaPackages`: standardized name → (snowflake name, versions).
+#[derive(Default)]
 pub struct Anaconda {
     pub packages: indexmap::IndexMap<String, (String, BTreeSet<String>)>,
 }
@@ -196,15 +197,8 @@ pub fn upload(cli: &mut Cli) -> Result<Output> {
         .map(|n| n.to_os_string())
         .unwrap_or_default();
     let dst = tmp.path().join(&name);
-    if let Err(e) = std::fs::copy(src, &dst) {
-        let abs = std::env::current_dir().unwrap_or_default().join(src);
-        let abs = snow_api::project::model::pure_path(&abs.to_string_lossy());
-        let _ = e;
-        return Err(SnowError::unexpected(format!(
-            "[Errno 2] No such file or directory: PosixPath({})",
-            snow_click::py_repr(&abs)
-        ))
-        .named("FileNotFoundError"));
+    if std::fs::copy(src, &dst).is_err() {
+        return Err(crate::common::file_not_found(src));
     }
     let stage_name = snow_api::stage_path::posix_parts(&stage)
         .first()

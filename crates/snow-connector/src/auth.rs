@@ -7,17 +7,9 @@ use base64::Engine;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Write};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn b64url(b: &[u8]) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b)
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
 }
 
 /// Build the key-pair JWT (`AuthByKeyPair`).
@@ -40,7 +32,7 @@ pub fn keypair_jwt(account: &str, user: &str, der: &[u8]) -> Result<String, DbEr
     let account = account.split('.').next().unwrap_or(account).to_uppercase();
     let user = user.to_uppercase();
     let qualified = format!("{account}.{user}");
-    let iat = now();
+    let iat = chrono::Utc::now().timestamp();
     let header = json!({"alg": "RS256", "typ": "JWT"});
     let payload = json!({
         "iss": format!("{qualified}.SHA256:{fp}"),
@@ -437,7 +429,6 @@ pub fn open_browser(url: &str) {
         .spawn();
 }
 
-/// OAuth 2.0 token from the configured identity provider.
 fn oauth_token(conn: &Connection, authenticator: &str) -> Result<String, DbError> {
     let p = &conn.params;
     let fail = |m: String| DbError::new(ErrorKind::Programming, 251_005, None, m);
@@ -516,7 +507,7 @@ fn oauth_token(conn: &Connection, authenticator: &str) -> Result<String, DbError
         .extend_pairs(form)
         .finish();
     let r = conn
-        .agent()
+        .agent
         .post(&token_url)
         .set("Authorization", &format!("Basic {basic}"))
         .set("Content-Type", "application/x-www-form-urlencoded")

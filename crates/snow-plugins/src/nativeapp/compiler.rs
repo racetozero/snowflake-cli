@@ -6,7 +6,7 @@ use snow_api::project::PyV;
 use snow_api::{Cli, Result, SnowError};
 use std::path::Path;
 
-/// The processors an artifact declares, as lower-cased names.
+/// The processor names an artifact declares, as written (callers compare them case-insensitively).
 fn processors(artifact: &PyV) -> Vec<String> {
     artifact
         .get("processors")
@@ -41,11 +41,9 @@ fn processor_of(artifact: &PyV, name: &str) -> PyV {
 
 fn is_enabled(cli: &Cli, name: &str) -> bool {
     match name.to_lowercase().as_str() {
-        "native app setup" => {
-            cli.config
-                .feature("ENABLE_NATIVE_APP_PYTHON_SETUP", Some(false))
-                == Some(true)
-        }
+        "native app setup" => cli
+            .config
+            .feature(snow_api::config::FeatureFlag::EnableNativeAppPythonSetup),
         _ => true,
     }
 }
@@ -139,13 +137,13 @@ fn expand_templates_in_file(cli: &mut Cli, pkg: &Package, src: &Path, dest: &Pat
     let is_sql = dest
         .file_name()
         .is_some_and(|n| n.to_string_lossy().to_lowercase().ends_with(".sql"));
-    if !contents.contains("<%") && !(is_sql && snow_api::rendering::has_sql_templates(&contents)) {
+    if !contents.contains("<%") && !(is_sql && crate::rendering::has_sql_templates(&contents)) {
         return Ok(());
     }
     cli.console.step(&format!("Expanding templates in {rel}"));
     cli.console.indent();
     let overrides = pkg.project.env_overrides.clone();
-    let r = snow_api::rendering::render_project_sql(
+    let r = crate::rendering::render_project_sql(
         &contents,
         &rel,
         &pkg.project.ctx,
@@ -162,10 +160,7 @@ fn expand_templates_in_file(cli: &mut Cli, pkg: &Package, src: &Path, dest: &Pat
         .named("InvalidTemplateInFileError")
     })?;
     if expanded != contents {
-        if dest.is_symlink() {
-            std::fs::remove_file(dest)?;
-        }
-        std::fs::write(dest, expanded)?;
+        crate::artifacts::write_in_bundle(dest, expanded)?;
     }
     Ok(())
 }

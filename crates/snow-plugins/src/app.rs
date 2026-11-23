@@ -4,8 +4,8 @@
 
 use crate::registry;
 use serde_json::{Value as J, json};
-use snow_api::config::Config;
-use snow_api::output::{Format, Output, Sink, print_result};
+use snow_api::config::{Config, FeatureFlag};
+use snow_api::output::{Format, JsonTypeError, Output, Sink, print_result};
 use snow_api::{Cli, SnowError};
 use snow_click::help::{HelpEnv, print_to_string, render_error, render_help, shared_panels};
 use snow_click::spec::Param;
@@ -21,12 +21,28 @@ pub static SPEC: LazyLock<Spec> = LazyLock::new(|| Spec {
     shared_global: snow_spec::SHARED_GLOBAL_PARAMS,
 });
 
+/// A root option that runs after all root options were processed.
+#[derive(Clone, Copy)]
+enum RootAction {
+    Help,
+    Structure,
+    Docs,
+}
+
 /// State shared by the parser hooks and the command.
 pub struct App {
     pub cli: Cli,
-    /// Root `--help` / `--structure` are deferred until all root options ran.
-    deferred_root: Option<&'static str>,
+    deferred_root: Option<RootAction>,
     config_ready: bool,
+    /// The SnowError behind the last `ClickError::Exception` given to the parser.
+    pending: Option<SnowError>,
+}
+
+/// How a run ended, before it is printed.
+enum Outcome {
+    Exit(i32),
+    Ok(Output),
+    Failed { err: SnowError, from_command: bool },
 }
 
 impl App {
@@ -42,9 +58,10 @@ impl App {
                 self.config_ready = true;
                 crate::logs::init(&mut self.cli, false, false);
                 self.cli.connector_info = false;
-                crate::helpers::startup_encoding_check(&mut self.cli).map_err(to_click)
+                crate::helpers::startup_encoding_check(&mut self.cli)
+                    .map_err(|e| self.park_error(e))
             }
-            Err(e) => Err(to_click(e)),
+            Err(e) => Err(self.park_error(e)),
         }
     }
 
@@ -53,57 +70,42 @@ impl App {
             condensed: self
                 .cli
                 .config
-                .feature("ENABLE_CONDENSED_COMMAND_HELP", Some(true))
-                == Some(true),
+                .feature(FeatureFlag::EnableCondensedCommandHelp),
             docs_in_help: self
                 .cli
                 .config
-                .feature("ENABLE_COMMAND_DOCS_IN_HELP", Some(true))
-                == Some(true),
+                .feature(FeatureFlag::EnableCommandDocsInHelp),
         }
     }
-}
 
-/// Carry a SnowError through the parser as a ClickError.
-fn to_click(e: SnowError) -> ClickError {
-    match e {
-        SnowError::Click(c) => c,
-        other => {
-            let code = other.exit_code(false);
-            PENDING.with(|p| *p.borrow_mut() = Some(other.clone()));
-            ClickError::Exception {
-                message: other.message(),
-                code,
+    /// Carry a SnowError through the parser as a ClickError.
+    fn park_error(&mut self, e: SnowError) -> ClickError {
+        match e {
+            SnowError::Click(c) => c,
+            other => {
+                let err = ClickError::Exception {
+                    message: other.message(),
+                    code: other.exit_code(false),
+                };
+                self.pending = Some(other);
+                err
             }
         }
     }
 }
 
-thread_local! {
-    static PENDING: std::cell::RefCell<Option<SnowError>> = const { std::cell::RefCell::new(None) };
-}
-
 impl Hooks for App {
     fn feature_enabled(&self, flag: &str) -> bool {
-        let default = match flag {
-            "ENABLE_COMMAND_DOCS_IN_HELP"
-            | "ENABLE_CONDENSED_COMMAND_HELP"
-            | "ENABLE_DBT_GIT_METADATA" => Some(true),
-            "ENABLE_RELEASE_CHANNELS" => None,
-            _ => Some(false),
-        };
-        self.cli.config.feature(flag, default) == Some(true)
+        FeatureFlag::from_name(flag).is_some_and(|f| self.cli.config.feature(f))
     }
 
     fn convert_custom(
         &mut self,
-        _spec: &Spec,
-        _inv: &Invocation,
-        param: &'static Param,
+        _param: &'static Param,
         ty: &'static str,
         raw: &str,
     ) -> Result<Value, ClickError> {
-        crate::types::convert(&mut self.cli, param, ty, raw).map_err(to_click)
+        crate::types::convert(ty, raw).map_err(|e| self.park_error(e))
     }
 
     fn callback(
@@ -121,11 +123,10 @@ impl Hooks for App {
         if !self.config_ready {
             self.ensure_config(None)?;
         }
-        crate::callbacks::run(&mut self.cli, param, value).map_err(to_click)
+        crate::callbacks::run(&mut self.cli, param, value).map_err(|e| self.park_error(e))
     }
 
-    fn prompt(&mut self, param: &'static Param) -> Result<Value, ClickError> {
-        let _ = param;
+    fn prompt(&mut self) -> Result<Value, ClickError> {
         if self.cli.agent {
             return Err(ClickError::exception(
                 "MFA passcode is required; pass --mfa-passcode VALUE",
@@ -136,14 +137,6 @@ impl Hooks for App {
         let mut s = String::new();
         let _ = std::io::stdin().read_line(&mut s);
         Ok(Value::Str(s.trim_end_matches(['\n', '\r']).to_string()))
-    }
-
-    fn list_commands(&self, spec: &Spec, cmd: u16) -> Option<Vec<u16>> {
-        let c = spec.cmd(cmd);
-        if c.smart_app_group {
-            return crate::nativeapp::visible_app_commands(spec, cmd);
-        }
-        None
     }
 
     fn print_help(
@@ -158,7 +151,7 @@ impl Hooks for App {
         let argv = &inv.argv;
         let has_help = argv.iter().any(|a| a == "--help" || a == "-h");
         if has_help && argv.iter().any(|a| a == "--help-all") {
-            return Err(to_click(SnowError::argument(
+            return Err(self.park_error(SnowError::argument(
                 "Cannot use --help with --help-all. Use one or the other.",
             )));
         }
@@ -167,7 +160,7 @@ impl Hooks for App {
         if depth == 0 {
             rs.extend(shared_panels(spec, &env));
         }
-        emit_text(&self.cli, &print_to_string(&rs, false));
+        emit_text(&mut self.cli, &print_to_string(&rs, false));
         Ok(())
     }
 }
@@ -184,9 +177,9 @@ impl App {
             "configuration_file" => {
                 self.ensure_config(value.as_str().map(str::to_string))?;
             }
-            "custom_help" if value.as_bool() => self.deferred_root = Some("help"),
-            "structure" if value.as_bool() => self.deferred_root = Some("structure"),
-            "docs" if value.as_bool() => self.deferred_root = Some("docs"),
+            "custom_help" if value.as_bool() => self.deferred_root = Some(RootAction::Help),
+            "structure" if value.as_bool() => self.deferred_root = Some(RootAction::Structure),
+            "docs" if value.as_bool() => self.deferred_root = Some(RootAction::Docs),
             "version" if value.as_bool() => {
                 let out = Output::message(format!(
                     "Snowflake CLI version: {}",
@@ -201,29 +194,25 @@ impl App {
                 print_output(&mut self.cli, &out, Some(Format::Json));
                 return Err(ClickError::Exit(0));
             }
+            // Typer's `--install-completion` / `--show-completion` do nothing here.
             "install_completion" | "show_completion" if value.as_bool() => {
                 self.ensure_config(None)?;
-                crate::completion::run(&self.cli, param.name == "install_completion")
-                    .map_err(to_click)?;
                 return Err(ClickError::Exit(0));
             }
             "commands_registration" => {
                 self.ensure_config(None)?;
                 match self.deferred_root.take() {
-                    Some("help") => {
+                    Some(RootAction::Help) => {
                         self.print_help(spec, inv, 0)?;
                         return Err(ClickError::Exit(0));
                     }
-                    Some("structure") => {
-                        let out = crate::root::structure(spec, self);
+                    Some(RootAction::Structure) => {
+                        let out = crate::root::structure(spec);
                         print_output(&mut self.cli, &out, Some(Format::Json));
                         return Err(ClickError::Exit(0));
                     }
-                    Some("docs") => {
-                        crate::root::docs(&mut self.cli).map_err(to_click)?;
-                        return Err(ClickError::Exit(0));
-                    }
-                    _ => {}
+                    Some(RootAction::Docs) => return Err(ClickError::Exit(0)),
+                    None => {}
                 }
             }
             _ => {}
@@ -232,33 +221,42 @@ impl App {
     }
 }
 
-fn emit_text(cli: &Cli, s: &str) {
+fn emit_text(cli: &mut Cli, s: &str) {
     if cli.agent {
-        let plain = strip_ansi(s);
-        AGENT_DATA.with(|d| d.borrow_mut().push(json!({ "help": plain })));
+        let plain = snow_api::sanitize::for_terminal(s);
+        cli.agent_data.push(json!({ "help": plain }));
         return;
     }
     let _ = std::io::stdout().write_all(s.as_bytes());
 }
 
-fn strip_ansi(s: &str) -> String {
-    snow_api::sanitize::for_terminal(s)
+/// The agent-mode envelope: `ok` with `data`, or `ok: false` with `error`.
+pub fn envelope(command: &str, result: std::result::Result<J, J>) -> J {
+    match result {
+        Ok(data) => json!({"ok": true, "command": command, "data": data}),
+        Err(error) => json!({"ok": false, "command": command, "error": error}),
+    }
 }
 
-/// Print a command result in the current (or given) format.
+/// A result that cannot be printed as JSON ends the run like Python's
+/// unhandled `TypeError`.
+pub fn die_on_json_error(cli: &mut Cli, e: JsonTypeError) -> ! {
+    cli.console.warning(&format!(
+        "\nAn unexpected exception occurred. Use --debug option to see the traceback. Exception message:\n\n{}",
+        e.0
+    ));
+    cli.flush_telemetry();
+    std::process::exit(1);
+}
+
 pub fn print_output(cli: &mut Cli, out: &Output, format: Option<Format>) {
     let fmt = format.unwrap_or(cli.format);
     if cli.agent {
-        AGENT_DATA.with(|d| d.borrow_mut().push(out.to_json_value()));
+        cli.agent_data.push(out.to_json_value());
         return;
     }
-    let r = write_result(cli, |sink| print_result(out, fmt, sink));
-    if let Err(e) = r {
-        cli.console.warning(&format!(
-            "\nAn unexpected exception occurred. Use --debug option to see the traceback. Exception message:\n\n{}",
-            e.0
-        ));
-        std::process::exit(1);
+    if let Err(e) = write_result(cli, |sink| print_result(out, fmt, sink)) {
+        die_on_json_error(cli, e);
     }
 }
 
@@ -267,7 +265,8 @@ pub fn print_output(cli: &mut Cli, out: &Output, format: Option<Format>) {
 /// while quiet or spooling.
 pub fn write_result<T>(cli: &mut Cli, f: impl FnOnce(&mut Sink) -> T) -> T {
     let stdout = std::io::stdout();
-    if !cli.quiet && cli.spool.is_none() {
+    let sql = &mut cli.sql;
+    if !sql.quiet && sql.spool.is_none() {
         let is_tty = stdout.is_terminal();
         let mut lock = stdout.lock();
         let mut sink = Sink {
@@ -290,26 +289,22 @@ pub fn write_result<T>(cli: &mut Cli, f: impl FnOnce(&mut Sink) -> T) -> T {
         };
         f(&mut sink)
     };
-    if !cli.quiet {
+    if !sql.quiet {
         let mut lock = stdout.lock();
         let _ = lock.write_all(&buf);
         let _ = lock.flush();
     }
-    if let Some(file) = cli.spool.as_mut() {
+    if let Some(file) = sql.spool.as_mut() {
         let _ = file.write_all(&buf);
         let _ = file.flush();
     }
     r
 }
 
-thread_local! {
-    static AGENT_DATA: std::cell::RefCell<Vec<J>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
 /// Strip `--agent` (before `--agent-args` and `--`) and report whether it was present.
 pub fn take_agent_flag(argv: &mut Vec<String>) -> bool {
-    let mut agent = std::env::var("SNOW_AGENT")
-        .is_ok_and(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on"));
+    let mut agent =
+        std::env::var("SNOW_AGENT").is_ok_and(|v| snow_api::config::parse_on_off(&v) == Some(true));
     let mut out = Vec::with_capacity(argv.len());
     let mut passthrough = false;
     for a in argv.drain(..) {
@@ -326,8 +321,7 @@ pub fn take_agent_flag(argv: &mut Vec<String>) -> bool {
     agent
 }
 
-fn agent_error_code(e: &SnowError, enhanced: bool) -> (&'static str, i32) {
-    let _ = enhanced;
+fn agent_error_code(e: &SnowError) -> (&'static str, i32) {
     match e {
         SnowError::Click(ClickError::Usage { message, .. }) => {
             if message.starts_with("No such command") {
@@ -374,19 +368,16 @@ fn agent_error_code(e: &SnowError, enhanced: bool) -> (&'static str, i32) {
 }
 
 /// Render an error the way Typer and Snowflake CLI do.
-fn report_error(app: &mut App, inv: &Invocation, e: &SnowError, from_command: bool) -> i32 {
-    let cli = &mut app.cli;
-    let enhanced = cli.enhanced_exit_codes;
+fn report_error(cli: &mut Cli, inv: &Invocation, e: &SnowError, from_command: bool) -> i32 {
     if cli.agent {
-        let (code, exit) = agent_error_code(e, enhanced);
+        let (code, exit) = agent_error_code(e);
         let mut err = json!({"code": code, "message": e.message()});
         if let SnowError::Cli { after, .. } = e
             && !after.is_empty()
         {
             err["remediation"] = json!(after);
         }
-        let env = json!({"ok": false, "command": cli.command_name(), "error": err});
-        println!("{env}");
+        println!("{}", envelope(&cli.command_name(), Err(err)));
         return exit;
     }
     let structured = cli.format.is_structured();
@@ -402,23 +393,17 @@ fn report_error(app: &mut App, inv: &Invocation, e: &SnowError, from_command: bo
             return 1;
         }
         SnowError::Click(c) => {
-            let c = &match c.clone() {
-                ClickError::Usage {
-                    message,
-                    depth: None,
-                    no_such_option,
+            let mut c = c.clone();
+            if from_command
+                && let ClickError::Usage {
+                    depth: d @ None,
                     attach: true,
-                    class,
-                } if from_command => ClickError::Usage {
-                    message,
-                    depth: Some(inv.levels.len().saturating_sub(1)),
-                    no_such_option,
-                    attach: true,
-                    class,
-                },
-                other => other,
-            };
-            let s = print_to_string(&render_error(&SPEC, inv, c), true);
+                    ..
+                } = &mut c
+            {
+                *d = Some(inv.levels.len().saturating_sub(1));
+            }
+            let s = print_to_string(&render_error(&SPEC, inv, &c), true);
             let _ = std::io::stderr().write_all(s.as_bytes());
             if matches!(c, ClickError::Exception { .. }) && from_command && !structured {
                 eprintln!("To send feedback about Snowflake CLI: snow feedback");
@@ -471,21 +456,20 @@ fn report_error(app: &mut App, inv: &Invocation, e: &SnowError, from_command: bo
             }
         }
     }
-    e.exit_code(enhanced)
+    e.exit_code(cli.enhanced_exit_codes)
 }
 
 fn flush_warnings(cli: &mut Cli) {
     for w in cli.warnings.drain(..) {
-        if cli.agent {
-            continue;
+        if !cli.agent {
+            eprintln!("{w}");
         }
-        eprintln!("{w}");
     }
 }
 
-/// Run `snow` with `argv` (without the program name) and return the exit code.
-pub fn run(mut argv: Vec<String>) -> i32 {
-    let agent = take_agent_flag(&mut argv);
+/// Run `snow` with `argv` (without the program name and `--agent`) and
+/// return the exit code.
+pub fn run(argv: Vec<String>, agent: bool) -> i32 {
     if argv.first().is_some_and(|a| a == "skill") {
         return crate::skill::run(&argv[1..], agent);
     }
@@ -493,25 +477,33 @@ pub fn run(mut argv: Vec<String>) -> i32 {
         return crate::update::run(&argv[1..], agent);
     }
     let spec: &'static Spec = &SPEC;
-    let inv0 = Invocation {
-        levels: vec![],
-        argv: argv.clone(),
-        spec: Some(spec),
-    };
     let mut app = App {
-        cli: Cli::new(spec, inv0, agent),
+        cli: Cli::new(
+            spec,
+            Invocation {
+                levels: vec![],
+                argv: argv.clone(),
+                spec,
+            },
+            agent,
+        ),
         deferred_root: None,
         config_ready: false,
+        pending: None,
     };
-    if agent {
-        app.cli.console.collected = Some(Vec::new());
-    }
     app.cli.console.color = snow_click::term::color(false);
     if !agent {
         for w in snow_api::config::connector_import_warnings() {
             eprintln!("{w}");
         }
     }
+    let (inv, outcome) = execute(&mut app, argv);
+    finish(&mut app.cli, &inv, outcome)
+}
+
+/// Parse and run the command; the invocation is the one errors are rendered against.
+fn execute(app: &mut App, argv: Vec<String>) -> (Invocation, Outcome) {
+    let spec: &'static Spec = &SPEC;
     // Apply --config-file before anything else, like `_maybe_init_config_from_args`.
     let cut = argv
         .iter()
@@ -531,51 +523,45 @@ pub fn run(mut argv: Vec<String>) -> i32 {
     if let Some(f) = early.filter(|f| std::path::Path::new(f).exists())
         && let Err(e) = app.ensure_config(Some(f))
     {
-        let err = PENDING
-            .with(|p| p.borrow_mut().take())
-            .unwrap_or(SnowError::from(e));
+        let err = app.pending.take().unwrap_or(SnowError::from(e));
         let inv = Invocation {
             levels: vec![],
             argv,
-            spec: Some(spec),
-        };
-        return report_error(&mut app, &inv, &err, false);
-    }
-    let parsed = {
-        let mut p = Processor {
             spec,
-            hooks: &mut app,
         };
-        p.run(0, argv.clone())
-    };
+        let failed = Outcome::Failed {
+            err,
+            from_command: false,
+        };
+        return (inv, failed);
+    }
+    let parsed = Processor {
+        spec,
+        hooks: &mut *app,
+    }
+    .run(0, argv);
     let inv = match parsed {
         Ok(inv) => inv,
-        Err((ClickError::Exit(code), _)) => {
-            flush_warnings(&mut app.cli);
-            finish_agent(&app.cli, None);
-            return code;
-        }
+        Err((ClickError::Exit(code), inv)) => return (inv, Outcome::Exit(code)),
         Err((e, inv)) => {
             app.cli.inv = inv.clone();
-            flush_warnings(&mut app.cli);
             let err = match &e {
-                ClickError::Exception { .. } => PENDING
-                    .with(|p| p.borrow_mut().take())
-                    .unwrap_or(SnowError::from(e)),
+                ClickError::Exception { .. } => app.pending.take().unwrap_or(SnowError::from(e)),
                 _ => SnowError::Click(e),
             };
-            return report_error(&mut app, &inv, &err, false);
+            let failed = Outcome::Failed {
+                err,
+                from_command: false,
+            };
+            return (inv, failed);
         }
     };
     app.cli.inv = inv.clone();
     flush_warnings(&mut app.cli);
     if inv.levels.len() == 1 {
-        // `snow` with no command prints the root help.
         let _ = app.print_help(spec, &inv, 0);
-        finish_agent(&app.cli, Some(0));
-        return 0;
+        return (inv, Outcome::Exit(0));
     }
-    let path = inv.command_path();
     let (v, d) = (app.cli.verbose, app.cli.debug);
     crate::logs::init(&mut app.cli, v, d);
     let result = if app.cli.verbose && app.cli.debug {
@@ -592,48 +578,59 @@ pub fn run(mut argv: Vec<String>) -> i32 {
             );
         }
         crate::telemetry::pre_execute(&mut app.cli);
-        registry::dispatch(&path, &mut app.cli)
+        registry::dispatch(&inv.command_path(), &mut app.cli)
     };
-    let code = match result {
-        Ok(out) => {
-            print_output(&mut app.cli, &out, None);
-            crate::telemetry::command_succeeded(&mut app.cli);
-            0
-        }
-        Err(SnowError::Click(ClickError::Exit(c))) => {
-            finish_agent(&app.cli, Some(c));
-            c
-        }
-        Err(e) => {
-            crate::telemetry::command_failed(&mut app.cli, &e);
-            crate::feedback::record_last_error(&app.cli, &e);
-            flush_warnings(&mut app.cli);
-            let code = report_error(&mut app, &inv, &e, true);
-            app.cli.close_connection();
-            return code;
-        }
+    let outcome = match result {
+        Ok(out) => Outcome::Ok(out),
+        Err(SnowError::Click(ClickError::Exit(c))) => Outcome::Exit(c),
+        Err(err) => Outcome::Failed {
+            err,
+            from_command: true,
+        },
     };
-    app.cli.close_connection();
-    flush_warnings(&mut app.cli);
-    finish_agent(&app.cli, Some(code));
-    code
+    (inv, outcome)
 }
 
-fn finish_agent(cli: &Cli, _code: Option<i32>) {
-    if !cli.agent {
-        return;
-    }
-    let data = AGENT_DATA.with(|d| std::mem::take(&mut *d.borrow_mut()));
-    let data = match data.len() {
-        0 => J::Null,
-        1 => data.into_iter().next().unwrap_or(J::Null),
-        _ => J::Array(data),
+/// Print the outcome (result, error, or agent envelope), close the
+/// connection and return the exit code.
+fn finish(cli: &mut Cli, inv: &Invocation, outcome: Outcome) -> i32 {
+    let code = match &outcome {
+        Outcome::Exit(c) => *c,
+        Outcome::Ok(out) => {
+            print_output(cli, out, None);
+            crate::telemetry::send(cli, None);
+            0
+        }
+        Outcome::Failed { err, from_command } => {
+            if *from_command {
+                crate::telemetry::send(cli, Some(err));
+                crate::feedback::record_last_error(cli, err);
+            }
+            flush_warnings(cli);
+            report_error(cli, inv, err, *from_command)
+        }
     };
-    let mut env = json!({"ok": true, "command": cli.command_name(), "data": data});
-    if let Some(msgs) = &cli.console.collected
-        && !msgs.is_empty()
-    {
-        env["meta"] = json!({"messages": msgs});
+    cli.close_connection();
+    flush_warnings(cli);
+    if cli.agent && !matches!(outcome, Outcome::Failed { .. }) {
+        let data = std::mem::take(&mut cli.agent_data);
+        let data = match data.len() {
+            0 => J::Null,
+            1 => data.into_iter().next().unwrap_or(J::Null),
+            _ => J::Array(data),
+        };
+        let mut env = envelope(&cli.command_name(), Ok(data));
+        if code != 0 {
+            env["ok"] = json!(false);
+            env["error"] =
+                json!({"code": "exit", "message": format!("The command exited with code {code}.")});
+        }
+        if let Some(msgs) = &cli.console.collected
+            && !msgs.is_empty()
+        {
+            env["meta"] = json!({"messages": msgs});
+        }
+        println!("{env}");
     }
-    println!("{env}");
+    code
 }

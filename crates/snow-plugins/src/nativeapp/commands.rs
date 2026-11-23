@@ -2,6 +2,7 @@
 //! actions on application package entities.
 
 use super::package::Package;
+use crate::entities::EntityType;
 use snow_api::identifiers::to_identifier;
 use snow_api::output::{Output, Pv};
 use snow_api::project::PyV;
@@ -31,7 +32,7 @@ fn package(cli: &mut Cli) -> Result<Package> {
 }
 
 /// Deploy flags: `prune`/`recursive` defaults and the `paths`/`--prune` conflict.
-fn deploy_flags(cli: &Cli) -> Result<(bool, bool, Vec<PathBuf>)> {
+pub(crate) fn deploy_flags(cli: &Cli) -> Result<(bool, bool, Vec<PathBuf>)> {
     let paths: Vec<PathBuf> = cli.list("paths").into_iter().map(PathBuf::from).collect();
     let (prune, recursive) = match (cli.opt_bool("prune"), cli.opt_bool("recursive")) {
         (None, None) if paths.is_empty() => (true, true),
@@ -44,9 +45,8 @@ fn deploy_flags(cli: &Cli) -> Result<(bool, bool, Vec<PathBuf>)> {
 }
 
 pub fn bundle(cli: &mut Cli) -> Result<Output> {
-    match crate::apps::detect(cli)? {
-        crate::apps::Flow::Native => {}
-        flow => return crate::apps::bundle(cli, flow),
+    if let Some(flow) = crate::apps::detect(cli)? {
+        return crate::apps::bundle(cli, flow);
     }
     let pkg = package(cli)?;
     pkg.bundle(cli)?;
@@ -55,14 +55,13 @@ pub fn bundle(cli: &mut Cli) -> Result<Output> {
         .join(pkg.model.str_of("deploy_root").unwrap_or_default());
     Ok(Output::message(format!(
         "Bundle generated at {}",
-        snow_api::project::model::pure_path(&root.to_string_lossy())
+        snow_api::stage_path::pure_path(&root.to_string_lossy())
     )))
 }
 
 pub fn deploy(cli: &mut Cli) -> Result<Output> {
-    match crate::apps::detect(cli)? {
-        crate::apps::Flow::Native => {}
-        flow => return crate::apps::deploy::deploy(cli, flow),
+    if let Some(flow) = crate::apps::detect(cli)? {
+        return crate::apps::deploy::deploy(cli, flow);
     }
     reject_runtime_options(
         "deploy",
@@ -104,9 +103,8 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn validate(cli: &mut Cli) -> Result<Output> {
-    match crate::apps::detect(cli)? {
-        crate::apps::Flow::Native => {}
-        flow => return crate::apps::validate(cli, flow),
+    if let Some(flow) = crate::apps::detect(cli)? {
+        return crate::apps::validate(cli, flow);
     }
     reject_runtime_options("validate", &[("--target", cli.str("target").is_some())])?;
     let pkg = package(cli)?;
@@ -170,7 +168,7 @@ pub fn version_drop(cli: &mut Cli) -> Result<Output> {
     Ok(Output::message(m))
 }
 
-/// The application package entity named by `ws --entity-id`.
+/// The `Package` of an entity the caller already chose (`ws --entity-id`, an application's `from_.target`).
 pub fn ws_package(cli: &mut Cli, id: &str, model: &PyV) -> Result<Package> {
     let project = cli.project(false)?.expect("project").clone();
     Ok(Package {
@@ -259,13 +257,13 @@ pub fn ws_drop(cli: &mut Cli, pkg: &Package) -> Result<Output> {
 /// `native_app_only(command)`: refuse projects with only snowflake-app entities.
 fn native_only(cli: &mut Cli, command: &str) -> Result<()> {
     let p = cli.project(false)?.expect("project");
-    let types: Vec<String> = p
+    let types: Vec<Option<EntityType>> = p
         .entities()
         .values()
         .filter_map(|e| e.str_of("type"))
-        .map(|t| t.to_lowercase())
+        .map(|t| EntityType::parse(&t.to_lowercase()))
         .collect();
-    if !types.is_empty() && types.iter().all(|t| t == "snowflake-app") {
+    if !types.is_empty() && types.iter().all(|t| *t == Some(EntityType::SnowflakeApp)) {
         return Err(SnowError::click(format!(
             "'snow app {command}' is only available for Native App projects (entity types: application, application package). Your project contains snowflake-app entities."
         )));
@@ -303,9 +301,8 @@ pub fn run(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn open(cli: &mut Cli) -> Result<Output> {
-    match crate::apps::detect(cli)? {
-        crate::apps::Flow::Native => {}
-        flow => return crate::apps::open(cli, flow),
+    if let Some(flow) = crate::apps::detect(cli)? {
+        return crate::apps::open(cli, flow);
     }
     reject_runtime_options(
         "open",
@@ -330,9 +327,8 @@ pub fn open(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn teardown(cli: &mut Cli) -> Result<Output> {
-    match crate::apps::detect(cli)? {
-        crate::apps::Flow::Native => {}
-        flow => return crate::apps::teardown(cli, flow),
+    if let Some(flow) = crate::apps::detect(cli)? {
+        return crate::apps::teardown(cli, flow);
     }
     reject_runtime_options("teardown", &[("--target", cli.str("target").is_some())])?;
     let is_v1 = !cli.project(false)?.expect("project").meets_version("2");
@@ -342,14 +338,14 @@ pub fn teardown(cli: &mut Cli) -> Result<Output> {
     if is_v1 {
         pkg_opt = ents
             .iter()
-            .filter(|(_, e)| e.str_of("type").as_deref() == Some("application package"))
+            .filter(|(_, e)| EntityType::of(e) == Some(EntityType::ApplicationPackage))
             .map(|(k, _)| k.clone())
             .next_back()
             .unwrap_or_default();
     }
     let packages: Vec<(&String, &PyV)> = ents
         .iter()
-        .filter(|(_, e)| e.str_of("type").as_deref() == Some("application package"))
+        .filter(|(_, e)| EntityType::of(e) == Some(EntityType::ApplicationPackage))
         .collect();
     let (pkg_id, pkg_model) = if !pkg_opt.is_empty() {
         match packages.iter().find(|(k, _)| **k == pkg_opt) {
@@ -387,7 +383,7 @@ pub fn teardown(cli: &mut Cli) -> Result<Output> {
     );
     let root = cli.project_root();
     for (id, e) in &ents {
-        if e.str_of("type").as_deref() != Some("application") {
+        if EntityType::of(e) != Some(EntityType::Application) {
             continue;
         }
         let target = e
@@ -415,9 +411,8 @@ pub fn teardown(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn events(cli: &mut Cli) -> Result<Output> {
-    match crate::apps::detect(cli)? {
-        crate::apps::Flow::Native => {}
-        flow => return crate::apps::events::events(cli, flow),
+    if let Some(flow) = crate::apps::detect(cli)? {
+        return crate::apps::events::events(cli, flow);
     }
     reject_runtime_options(
         "events",
@@ -623,7 +618,7 @@ fn setup_inner(cli: &mut Cli, dry_run: bool) -> Result<Output> {
         .str("connection")
         .unwrap_or_else(|| cli.config.default_connection_name());
     let conf = cli.config.connection_dict(&conn_name)?;
-    let params = app_service_defaults(cli, &name)?;
+    let params = crate::apps::manager::fetch_app_service_defaults(cli, &name)?;
     let flag = |cli: &Cli, k: &str| cli.str(k).filter(|v| !v.is_empty());
     let (cli_wh, cli_db, cli_schema) = (
         flag(cli, "warehouse"),
@@ -636,22 +631,7 @@ fn setup_inner(cli: &mut Cli, dry_run: bool) -> Result<Output> {
         ));
     }
     let conf_get = |k: &str| conf.get(k).map(|v| v.py_str()).filter(|v| !v.is_empty());
-    let personal_db =
-        match cli.try_query("SELECT 'USER$' || CURRENT_USER() AS personal_database")? {
-            Ok(c) => c
-                .rows
-                .first()
-                .and_then(|r| r.first().cloned().flatten())
-                .filter(|v| !v.is_empty() && !v.ends_with('$')),
-            Err(_) => {
-                crate::logs::log(
-                    crate::logs::WARNING,
-                    "snowflake.cli._plugins.apps.manager",
-                    "Could not resolve personal database.",
-                );
-                None
-            }
-        };
+    let personal_db = crate::apps::personal_database(cli);
     let personal_schema = personal_db.as_ref().map(|_| "PUBLIC".to_string());
     let pick = |u: Option<String>,
                 a: Option<String>,
@@ -730,9 +710,7 @@ fn setup_inner(cli: &mut Cli, dry_run: bool) -> Result<Output> {
         val("schema").unwrap_or_default(),
         val("warehouse").unwrap_or_default(),
     );
-    let unq = db.trim().trim_matches('"').to_string();
-    let use_workspace = unq.to_uppercase().starts_with("USER$");
-    let code_storage = if use_workspace {
+    let code_storage = if crate::apps::is_personal_database(Some(&db)) {
         "temporary workspace"
     } else {
         "temporary stage"
@@ -894,54 +872,6 @@ fn has_streamlit_dependency(dir: &std::path::Path) -> bool {
     })
 }
 
-/// `SnowflakeAppManager.fetch_app_service_defaults(app_name)`.
-fn app_service_defaults(cli: &mut Cli, app: &str) -> Result<indexmap::IndexMap<String, String>> {
-    let mut out = indexmap::IndexMap::new();
-    if let Ok(c) = cli.try_query("SELECT * FROM TABLE(SNOWFLAKE.APPS.GET_DEFAULT_APP_SPACE())")? {
-        let rows = cli.rows(&c);
-        if let Some(r) = rows.first() {
-            for (col, key) in [
-                ("DATABASE_NAME", "database"),
-                ("QUERY_WAREHOUSE", "query_warehouse"),
-                ("BUILD_EXTERNAL_ACCESS_INTEGRATION", "build_eai"),
-            ] {
-                let v = r
-                    .get(col)
-                    .or_else(|| r.get(&col.to_lowercase()))
-                    .filter(|v| !matches!(v, Pv::None))
-                    .map(Pv::py_str);
-                if let Some(v) = v.filter(|v| !v.is_empty()) {
-                    out.insert(key.to_string(), to_identifier(&v));
-                }
-            }
-            if !out.is_empty() {
-                out.insert("schema".into(), to_identifier(app));
-                return Ok(out);
-            }
-        }
-    }
-    match cli.try_query("SELECT SYSTEM$GET_APPLICATION_SERVICE_DEFAULTS()")? {
-        Ok(c) => {
-            let cell = c.rows.first().and_then(|r| r.first().cloned().flatten());
-            if let Some(v) = cell.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()) {
-                for k in ["database", "schema", "query_warehouse", "build_eai"] {
-                    if let Some(s) = v.get(k).and_then(|x| x.as_str()).filter(|s| !s.is_empty()) {
-                        out.insert(k.into(), s.to_string());
-                    }
-                }
-            }
-        }
-        Err(_) => {
-            crate::logs::log(
-                crate::logs::WARNING,
-                "snowflake.cli._plugins.apps.manager",
-                "Could not fetch Snowflake App Runtime defaults – skipping.",
-            );
-        }
-    }
-    Ok(out)
-}
-
 /// `_report_account_capabilities`: which App Runtime capabilities the account has.
 fn setup_capabilities(cli: &mut Cli) -> Result<Output> {
     let mut used = vec!["--capabilities"];
@@ -962,7 +892,7 @@ fn setup_capabilities(cli: &mut Cli) -> Result<Output> {
         .try_query("call system$bootstrap_data_request('CLIENT_PARAMS_INFO')")
         .ok()
         .and_then(|r| r.ok())
-        .and_then(|c| c.rows.first().and_then(|r| r.first().cloned().flatten()))
+        .and_then(|c| Cli::first_cell_opt(&c))
         .and_then(|cell| serde_json::from_str::<serde_json::Value>(&cell).ok())
         .and_then(|v| v["clientParamsInfo"].as_array().cloned())
         .map(|rows| {

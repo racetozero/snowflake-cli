@@ -57,12 +57,11 @@ fn version_key(v: &str) -> (Vec<u64>, i64, u64) {
         Some(i) => (&v[..i], &v[i..]),
         None => (v, ""),
     };
-    let nums: Vec<u64> = rel
+    let mut nums: Vec<u64> = rel
         .trim_end_matches('.')
         .split('.')
         .filter_map(|p| p.parse().ok())
         .collect();
-    let mut nums = nums;
     while nums.last() == Some(&0) {
         nums.pop();
     }
@@ -102,7 +101,8 @@ fn cache_path(cli: &Cli) -> std::path::PathBuf {
         .unwrap_or_default()
 }
 
-fn now() -> f64 {
+/// `time.time()`.
+pub fn now() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
@@ -110,7 +110,7 @@ fn now() -> f64 {
 }
 
 fn fetch_latest() -> Option<String> {
-    let agent = ureq_agent();
+    let agent = snow_connector::http_agent(std::time::Duration::from_secs(1));
     let brew = agent
         .get("https://formulae.brew.sh/api/formula/snowflake-cli.json")
         .call()
@@ -127,10 +127,6 @@ fn fetch_latest() -> Option<String> {
             .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
             .and_then(|v| v["info"]["version"].as_str().map(str::to_string))
     })
-}
-
-fn ureq_agent() -> snow_connector::HttpAgent {
-    snow_connector::http_agent(std::time::Duration::from_secs(1))
 }
 
 pub fn check_version(cli: &mut Cli) -> Result<Output> {
@@ -189,7 +185,7 @@ fn schema_for(version: &str) -> &'static str {
     }
 }
 
-/// Python `json.dumps(x, indent=2, sort_keys=True)`.
+/// The `sort_keys=True` part of `json.dumps(x, indent=2, sort_keys=True)`: keys sorted at every level.
 fn sorted(v: &serde_json::Value) -> serde_json::Value {
     match v {
         serde_json::Value::Object(m) => {
@@ -310,11 +306,7 @@ pub fn startup_encoding_check(cli: &mut Cli) -> Result<()> {
     {
         return Ok(());
     }
-    let mut all = true;
-    for k in ["file_io", "subprocess", "stdout"] {
-        all = all && configured_encoding(cli, k)?.is_some();
-    }
-    if !all && locale_encoding() != "utf-8" {
+    if !encodings_configured(cli)? && locale_encoding() != "utf-8" {
         cli.warnings.push(
             "UserWarning: Encoding mismatch detected. Run 'snow helpers detect-encoding' for more details.".into(),
         );
@@ -322,12 +314,18 @@ pub fn startup_encoding_check(cli: &mut Cli) -> Result<()> {
     Ok(())
 }
 
-pub fn detect_encoding(cli: &mut Cli) -> Result<Output> {
-    let mut all = true;
+/// Whether `file_io`, `subprocess` and `stdout` all have a configured encoding.
+fn encodings_configured(cli: &Cli) -> Result<bool> {
     for k in ["file_io", "subprocess", "stdout"] {
-        all = all && configured_encoding(cli, k)?.is_some();
+        if configured_encoding(cli, k)?.is_none() {
+            return Ok(false);
+        }
     }
-    if all {
+    Ok(true)
+}
+
+pub fn detect_encoding(cli: &mut Cli) -> Result<Output> {
+    if encodings_configured(cli)? {
         return Ok(Output::message(
             "No encoding issues - your system is properly configured.",
         ));
@@ -450,7 +448,7 @@ mod installer_path {
 }
 
 pub fn clean_installer_path(cli: &mut Cli) -> Result<Output> {
-    use snow_api::sql::sanitize_for_terminal as san;
+    use snow_api::sanitize::for_terminal as san;
     if !cfg!(target_os = "macos") {
         return Ok(Output::message(
             "This command is intended only for macOS. Shell startup files were not scanned.",
@@ -582,7 +580,6 @@ pub fn plugin_toggle(cli: &mut Cli) -> Result<Output> {
     .named("PluginNotInstalledError"))
 }
 
-/// `snow helpers v1-to-v2`.
 pub fn v1_to_v2(cli: &mut Cli) -> Result<Output> {
     use snow_api::project::{PyV, conversion, definition, model, yaml};
     let root = cli.project_root();
@@ -601,10 +598,7 @@ pub fn v1_to_v2(cli: &mut Cli) -> Result<Output> {
         }
     }
     if files.is_empty() {
-        return Err(snow_api::SnowError::cli(
-            "Cannot find project definition (snowflake.yml). Please provide a path to the project or run this command in a valid project directory.",
-        )
-        .named("MissingConfigurationError"));
+        return Err(snow_api::SnowError::missing_project_definition());
     }
     let pd = definition::load_unrendered(&files, &[])?.unwrap_or(PyV::None);
     if definition::version_ge(&pd.str_of("definition_version").unwrap_or_default(), "2") {
@@ -622,7 +616,7 @@ pub fn v1_to_v2(cli: &mut Cli) -> Result<Output> {
         &pd,
         cli.flag("accept_templates"),
         Some(&template_ctx),
-        &mut |w| warns.push(w.to_string()),
+        &mut warns,
     )?;
     for w in warns {
         crate::logs::log(

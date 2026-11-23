@@ -3,6 +3,7 @@
 
 use super::facade;
 use crate::artifacts::BundleMap;
+use crate::entities::EntityType;
 use snow_api::identifiers::{
     Fqn, identifier_to_show_like_pattern, to_identifier, to_string_literal, unquote_identifier,
 };
@@ -28,12 +29,7 @@ impl StageParts {
         } else {
             format!("{stage_fqn}/{subdir}")
         };
-        let v = snow_api::identifiers::valid_identifier_regex();
-        let re = regex::Regex::new(&format!(
-            r"^(?P<prefix>(@|snow://))?(?:(?P<f>{v})\.)?(?:(?P<s>{v})\.)?(?P<name>{v})/?(?P<directory>([^/]*/?)*)?$"
-        ))
-        .expect("re");
-        let Some(m) = re.captures(&full) else {
+        let Some(m) = snow_api::identifiers::STAGE_PATH.captures(&full) else {
             return Err(SnowError::cli("Invalid stage path"));
         };
         let directory = m
@@ -106,13 +102,28 @@ impl Policy {
             Policy::Ask => crate::common::confirm(cli, prompt, false),
         }
     }
+    /// A declined prompt prints `declined` and exits 0; a non-interactive run
+    /// without `--force` prints `needs_force` and exits 1.
+    pub fn proceed_or_exit(
+        self,
+        cli: &mut Cli,
+        prompt: &str,
+        interactive: bool,
+        declined: &str,
+        needs_force: &str,
+    ) -> Result<()> {
+        if self.should_proceed(cli, prompt)? {
+            return Ok(());
+        }
+        if interactive {
+            cli.console.message(declined);
+            return Err(SnowError::Click(ClickError::Exit(0)));
+        }
+        cli.console.message(needs_force);
+        Err(SnowError::Click(ClickError::Exit(1)))
+    }
 }
 
-pub fn exit(code: i32) -> SnowError {
-    SnowError::Click(ClickError::Exit(code))
-}
-
-/// An application package entity of the (v2) project.
 pub struct Package {
     pub id: String,
     pub model: PyV,
@@ -141,9 +152,6 @@ impl Package {
             .join(field(&self.model, "deploy_root"))
             .join(field(&self.model, "stage_subdirectory"))
     }
-    pub fn bundle_root(&self) -> PathBuf {
-        self.project_root.join(field(&self.model, "bundle_root"))
-    }
     pub fn generated_root(&self) -> PathBuf {
         self.deploy_root()
             .join(field(&self.model, "generated_root"))
@@ -154,23 +162,8 @@ impl Package {
     pub fn role(&self, cli: &mut Cli) -> Result<Option<String>> {
         super::role_of(cli, &self.model)
     }
-    /// `warehouse`: `meta.warehouse`, else the connection's warehouse.
     pub fn warehouse(&self, cli: &mut Cli) -> Result<Option<String>> {
-        if let Some(w) = self
-            .model
-            .get_some("meta")
-            .and_then(|m| m.str_of("warehouse"))
-            .filter(|w| !w.is_empty())
-        {
-            return Ok(Some(to_identifier(&w)));
-        }
-        Ok(cli
-            .connection()?
-            .params
-            .warehouse
-            .clone()
-            .filter(|w| !w.is_empty())
-            .map(|w| to_identifier(&w)))
+        super::warehouse_of(cli, &self.model)
     }
     pub fn stage_path(&self) -> Result<StageParts> {
         StageParts::from_fqn(
@@ -185,11 +178,7 @@ impl Package {
         )
     }
     pub fn artifacts(&self) -> Vec<PyV> {
-        self.model
-            .get("artifacts")
-            .and_then(PyV::as_list)
-            .cloned()
-            .unwrap_or_default()
+        crate::apps::entity_artifacts(&self.model)
     }
     pub fn distribution(&self) -> String {
         let d = field(&self.model, "distribution");
@@ -215,10 +204,7 @@ impl Package {
             let sql = self.bundle_children(cli, &children)?;
             let setup = setup_script_file(&self.deploy_root())?;
             let existing = std::fs::read_to_string(&setup)?;
-            if setup.is_symlink() {
-                std::fs::remove_file(&setup)?;
-            }
-            std::fs::write(
+            crate::artifacts::write_in_bundle(
                 &setup,
                 format!(
                     "{existing}\n-- AUTO GENERATED CHILDREN SECTION\n{}\n",
@@ -267,18 +253,19 @@ impl Package {
                         .named("ValueError"),
                 );
             };
-            if entity.str_of("type").as_deref() != Some("streamlit") {
+            let ty = EntityType::of(&entity);
+            if ty != Some(EntityType::Streamlit) {
                 return Err(SnowError::unexpected(format!(
                     "'{}' object has no attribute 'validate_as_child'",
-                    match entity.str_of("type").as_deref() {
-                        Some("function") => "FunctionEntity",
-                        Some("procedure") => "ProcedureEntity",
-                        Some("application") => "ApplicationEntity",
-                        Some("application package") => "ApplicationPackageEntity",
-                        Some("notebook") => "NotebookEntity",
-                        Some("compute-pool") => "ComputePoolEntity",
-                        Some("image-repository") => "ImageRepositoryEntity",
-                        Some("service") => "ServiceEntity",
+                    match ty {
+                        Some(EntityType::Function) => "FunctionEntity",
+                        Some(EntityType::Procedure) => "ProcedureEntity",
+                        Some(EntityType::Application) => "ApplicationEntity",
+                        Some(EntityType::ApplicationPackage) => "ApplicationPackageEntity",
+                        Some(EntityType::Notebook) => "NotebookEntity",
+                        Some(EntityType::ComputePool) => "ComputePoolEntity",
+                        Some(EntityType::ImageRepository) => "ImageRepositoryEntity",
+                        Some(EntityType::Service) => "ServiceEntity",
                         _ => "EntityBase",
                     }
                 ))
@@ -530,7 +517,7 @@ impl Package {
             &self.project_root,
             &self.project,
             &hooks,
-            "application package",
+            EntityType::ApplicationPackage,
             role.as_deref(),
             warehouse.as_deref(),
             Some(&name),
@@ -750,7 +737,7 @@ pub fn execute_post_deploy_hooks(
     project_root: &Path,
     project: &snow_api::project::Project,
     hooks: &[PyV],
-    object_type: &str,
+    object_type: EntityType,
     role: Option<&str>,
     warehouse: Option<&str>,
     database: Option<&str>,
@@ -821,7 +808,7 @@ pub fn render_script_template(
         );
     };
     let overrides = project.env_overrides.clone();
-    snow_api::rendering::render_project_sql(
+    crate::rendering::render_project_sql(
         &content,
         script,
         &project.ctx,
@@ -856,14 +843,13 @@ pub fn sync_package_stage(
     cli.console.step(&format!(
         "Checking if stage {stage_fqn} exists, or creating a new one if none exists."
     ));
-    if !facade::stage_exists(cli, &stage_fqn, None)? {
+    if !facade::stage_exists(cli, &stage_fqn)? {
         facade::create_schema(
             cli,
             stage.schema.as_deref().unwrap_or_default(),
-            None,
             Some(package),
         )?;
-        facade::create_stage(cli, &stage_fqn, false, None)?;
+        facade::create_stage(cli, &stage_fqn)?;
     }
     let resolved_root = crate::stage::resolve(deploy_root);
     if print_diff {
@@ -883,11 +869,7 @@ pub fn sync_package_stage(
     if !local_paths.is_empty() {
         let resolved: Vec<PathBuf> = local_paths
             .iter()
-            .map(|p| {
-                crate::artifacts::resolve_without_follow(
-                    &std::env::current_dir().unwrap_or_default().join(p),
-                )
-            })
+            .map(|p| crate::artifacts::resolve_without_follow(p))
             .collect();
         if !recursive {
             verify_no_directories(&resolved)?;
@@ -920,8 +902,8 @@ pub fn sync_package_stage(
         let mut keep: Vec<String> = Vec::new();
         for p in deploy_paths {
             if p.is_dir() {
-                for f in walk_files(&p) {
-                    keep.push(rel_posix(&f, &droot));
+                for f in crate::artifacts::walk(&p).iter().filter(|f| !f.is_dir()) {
+                    keep.push(rel_posix(f, &droot));
                 }
             } else {
                 keep.push(rel_posix(&p, &droot));
@@ -1005,23 +987,6 @@ fn rel_posix(p: &Path, root: &Path) -> String {
         .unwrap_or(p)
         .to_string_lossy()
         .replace('\\', "/")
-}
-
-fn walk_files(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return out;
-    };
-    let mut kids: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
-    kids.sort();
-    for k in kids {
-        if k.is_dir() {
-            out.extend(walk_files(&k));
-        } else {
-            out.push(k);
-        }
-    }
-    out
 }
 
 fn verify_no_directories(paths: &[PathBuf]) -> Result<()> {
@@ -1152,7 +1117,6 @@ impl Package {
         version: Option<String>,
         patch: Option<i64>,
         label: Option<String>,
-        bundled: bool,
         policy: Policy,
         interactive: bool,
     ) -> Result<VersionInfo> {
@@ -1166,9 +1130,6 @@ impl Package {
             rl = label;
         } else {
             cli.console.message(VERSION_FROM_MANIFEST);
-            if !bundled {
-                self.bundle(cli)?;
-            }
             let (mv, mp, ml) = manifest_version_info(&self.deploy_root())?;
             let Some(mv) = mv else {
                 return Err(SnowError::click(
@@ -1184,16 +1145,13 @@ impl Package {
                     let prompt = format!(
                         "Do you want to ignore patch in manifest.yml and proceed with provided --patch {p}?"
                     );
-                    if !policy.should_proceed(cli, &prompt)? {
-                        if interactive {
-                            cli.console.message("Not creating a new patch.");
-                            return Err(exit(0));
-                        }
-                        cli.console.message(
-                            "Could not create a new patch non-interactively without --force.",
-                        );
-                        return Err(exit(1));
-                    }
+                    policy.proceed_or_exit(
+                        cli,
+                        &prompt,
+                        interactive,
+                        "Not creating a new patch.",
+                        "Could not create a new patch non-interactively without --force.",
+                    )?;
                     Some(p)
                 }
                 (Some(p), _) => Some(p),
@@ -1256,15 +1214,13 @@ impl Package {
                 "Changes detected in the git repository. (Rerun your command with --skip-git-check flag to ignore this check)",
             );
             let prompt = "You have local changes in this repository that are not part of a previous commit. Do you still want to continue?";
-            if !policy.should_proceed(cli, prompt)? {
-                if interactive {
-                    cli.console.message("Not creating a new version.");
-                    return Err(exit(0));
-                }
-                cli.console
-                    .message("Cannot create a new version non-interactively without --force.");
-                return Err(exit(1));
-            }
+            policy.proceed_or_exit(
+                cli,
+                prompt,
+                interactive,
+                "Not creating a new version.",
+                "Cannot create a new version non-interactively without --force.",
+            )?;
         }
         Ok(())
     }
@@ -1284,8 +1240,7 @@ impl Package {
     ) -> Result<VersionInfo> {
         let policy = Policy::from_flags(force, interactive);
         let map = self.bundle(cli)?;
-        let info =
-            self.resolve_version_info(cli, version, patch, label, true, policy, interactive)?;
+        let info = self.resolve_version_info(cli, version, patch, label, policy, interactive)?;
         if !skip_git_check {
             self.check_git(cli, policy, interactive)?;
         }
@@ -1342,15 +1297,13 @@ impl Package {
                 "Are you sure you want to create a new patch for version {} in application package {name}? Once added, this operation cannot be undone.",
                 info.version
             );
-            if !policy.should_proceed(cli, &prompt)? {
-                if interactive {
-                    cli.console.message("Not creating a new patch.");
-                    return Err(exit(0));
-                }
-                cli.console
-                    .message("Cannot create a new patch non-interactively without --force.");
-                return Err(exit(1));
-            }
+            policy.proceed_or_exit(
+                cli,
+                &prompt,
+                interactive,
+                "Not creating a new patch.",
+                "Cannot create a new patch non-interactively without --force.",
+            )?;
         }
         let with_label = info
             .label
@@ -1411,18 +1364,8 @@ impl Package {
         interactive: bool,
         force: bool,
     ) -> Result<String> {
-        let (interactive, policy) = if force {
-            (false, Policy::Allow)
-        } else {
-            (
-                interactive,
-                if interactive {
-                    Policy::Ask
-                } else {
-                    Policy::Deny
-                },
-            )
-        };
+        let policy = Policy::from_flags(force, interactive);
+        let interactive = interactive && !force;
         let name = self.name()?;
         if self.existing_info(cli)?.is_none() {
             return Err(SnowError::click(format!(
@@ -1460,15 +1403,13 @@ impl Package {
         let prompt = format!(
             "Are you sure you want to drop version {version} in application package {name}? Once dropped, this operation cannot be undone."
         );
-        if !policy.should_proceed(cli, &prompt)? {
-            if interactive {
-                cli.console.message("Not dropping version.");
-                return Err(exit(0));
-            }
-            cli.console
-                .message("Cannot drop version non-interactively without --force.");
-            return Err(exit(1));
-        }
+        policy.proceed_or_exit(
+            cli,
+            &prompt,
+            interactive,
+            "Not dropping version.",
+            "Cannot drop version non-interactively without --force.",
+        )?;
         let sync = crate::snowsight::ui_parameter_or(
             cli,
             "ENABLE_SYNC_GLOBAL_VERSION_DROP",

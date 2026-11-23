@@ -1,7 +1,8 @@
 //! `snow init`: create a project from a template (local directory or git repository).
 
+use crate::pep440::Version;
+use snow_api::identifiers::{is_valid_quoted_identifier, is_valid_unquoted_identifier};
 use snow_api::output::Output;
-use snow_api::pep440::Version;
 use snow_api::project::PyV;
 use snow_api::{Cli, Result, SnowError};
 use std::path::{Path, PathBuf};
@@ -34,20 +35,14 @@ fn to_snowflake_identifier(value: String) -> std::result::Result<String, minijin
     if value.is_empty() {
         return Ok(value);
     }
-    if regex::Regex::new(r#"^"((""|[^"]){0,255})"$"#)
-        .expect("re")
-        .is_match(&value)
-    {
+    if is_valid_quoted_identifier(&value) {
         return Ok(value);
     }
     let result = regex::Regex::new(r"[. -]+")
         .expect("re")
         .replace_all(&value, "_")
         .into_owned();
-    if !regex::Regex::new(r"^([a-zA-Z_])([a-zA-Z0-9_$]{0,254})$")
-        .expect("re")
-        .is_match(&result)
-    {
+    if !is_valid_unquoted_identifier(&result) {
         return Err(minijinja::Error::new(
             minijinja::ErrorKind::InvalidOperation,
             format!(
@@ -387,7 +382,7 @@ fn jinja_syntax(src: &str, e: &minijinja::Error) -> (usize, String) {
     }
     (
         e.line().unwrap_or(1),
-        snow_api::rendering::syntax_message(e, src),
+        crate::rendering::syntax_message(e, src),
     )
 }
 
@@ -512,13 +507,7 @@ pub fn init(cli: &mut Cli) -> Result<Output> {
     } else {
         let src = PathBuf::from(&source);
         if !src.exists() {
-            let abs = std::env::current_dir().unwrap_or_default().join(&src);
-            let abs = snow_api::project::model::pure_path(&abs.to_string_lossy());
-            return Err(SnowError::unexpected(format!(
-                "[Errno 2] No such file or directory: PosixPath({})",
-                snow_click::py_repr(&abs)
-            ))
-            .named("FileNotFoundError"));
+            return Err(crate::common::file_not_found(&src));
         }
         let origin = match &template {
             Some(t) => src.join(t),
@@ -557,11 +546,7 @@ pub fn init(cli: &mut Cli) -> Result<Output> {
         })?
         .unwrap_or(PyV::Dict(Default::default()));
     validate_template(&meta)?;
-    let files: Vec<String> = meta
-        .get("files_to_render")
-        .and_then(PyV::as_list)
-        .map(|l| l.iter().map(PyV::py_str).collect())
-        .unwrap_or_default();
+    let files: Vec<String> = meta.str_list("files_to_render");
     for f in &files {
         let full = root.join(f);
         if !full.exists() {
@@ -657,9 +642,7 @@ pub fn init(cli: &mut Cli) -> Result<Output> {
                 PyV::Int(i) => minijinja::Value::from(*i),
                 PyV::Float(f) => minijinja::Value::from(*f),
                 PyV::Bool(b) => minijinja::Value::from(*b),
-                other => {
-                    minijinja::Value::from(snow_api::sql::sanitize_for_terminal(&other.py_str()))
-                }
+                other => minijinja::Value::from(snow_api::sanitize::for_terminal(&other.py_str())),
             };
             if no_interactive {
                 match &default {
@@ -677,7 +660,7 @@ pub fn init(cli: &mut Cli) -> Result<Output> {
                     .unwrap_or_else(|| name.clone());
                 let text = format!(
                     "From template: {}",
-                    snow_api::sql::sanitize_for_terminal(&prompt)
+                    snow_api::sanitize::for_terminal(&prompt)
                 );
                 let dshow = default.as_ref().map(|d| d.py_str()).unwrap_or_default();
                 loop {

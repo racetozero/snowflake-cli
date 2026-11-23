@@ -11,18 +11,21 @@ fn env_columns() -> Option<usize> {
 
 static SIZE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
 
+/// The width of the first standard stream that is a terminal.
+fn width() -> Option<usize> {
+    use terminal_size::{Width, terminal_size_of};
+    if let Some((Width(w), _)) = terminal_size_of(std::io::stdin()) {
+        return Some(w as usize);
+    }
+    if let Some((Width(w), _)) = terminal_size_of(std::io::stdout()) {
+        return Some(w as usize);
+    }
+    terminal_size_of(std::io::stderr()).map(|(Width(w), _)| w as usize)
+}
+
 /// The width the terminal reports, if any standard stream is a terminal.
 pub fn terminal_width() -> Option<usize> {
-    *SIZE.get_or_init(|| {
-        if std::io::stdin().is_terminal()
-            || std::io::stdout().is_terminal()
-            || std::io::stderr().is_terminal()
-        {
-            crate::termsize::width()
-        } else {
-            None
-        }
-    })
+    *SIZE.get_or_init(width)
 }
 
 /// `rich.console.Console().width`.
@@ -42,7 +45,7 @@ pub fn rich_width() -> usize {
 pub fn click_width() -> usize {
     let cols = env_columns().or_else(|| {
         if std::io::stdout().is_terminal() {
-            crate::termsize::width()
+            width()
         } else {
             None
         }

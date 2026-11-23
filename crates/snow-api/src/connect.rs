@@ -1,32 +1,12 @@
 //! `snowflake.cli._app.snow_connector.connect_to_snowflake`.
 
-use crate::config::{Cv, try_cast_to_bool};
+use crate::config::{Cv, FeatureFlag, try_cast_to_bool};
 use crate::context::Cli;
 use crate::errors::{Result, SnowError};
 use indexmap::IndexMap;
 use snow_connector::{ConnectParams, Connection, DbError};
 
-const BOOL_KEYS: &[&str] = &[
-    "oauth_disable_pkce",
-    "oauth_enable_refresh_tokens",
-    "oauth_enable_single_use_refresh_tokens",
-    "client_store_temporary_credential",
-    "server_session_keep_alive",
-];
-
-fn as_bool(v: &Cv) -> Option<bool> {
-    try_cast_to_bool(v)
-}
-
-pub fn build_params(cli: &mut Cli, mut p: IndexMap<String, Cv>) -> Result<ConnectParams> {
-    for k in BOOL_KEYS {
-        if let Some(v) = p.get(*k).cloned()
-            && !matches!(v, Cv::Bool(_))
-            && let Some(b) = as_bool(&v)
-        {
-            p.insert((*k).to_string(), Cv::Bool(b));
-        }
-    }
+pub fn build_params(cli: &mut Cli, p: IndexMap<String, Cv>) -> Result<ConnectParams> {
     let s = |p: &IndexMap<String, Cv>, k: &str| p.get(k).map(Cv::py_str);
     let authenticator = s(&p, "authenticator");
     let mut cp = ConnectParams {
@@ -61,7 +41,7 @@ pub fn build_params(cli: &mut Cli, mut p: IndexMap<String, Cv>) -> Result<Connec
         },
         workload_identity_aws_use_outbound_token: p
             .get("workload_identity_aws_use_outbound_token")
-            .and_then(as_bool)
+            .and_then(try_cast_to_bool)
             .unwrap_or(false),
         workload_identity_host: s(&p, "workload_identity_host"),
         oauth_client_id: s(&p, "oauth_client_id"),
@@ -72,37 +52,34 @@ pub fn build_params(cli: &mut Cli, mut p: IndexMap<String, Cv>) -> Result<Connec
         oauth_scope: s(&p, "oauth_scope"),
         oauth_disable_pkce: p
             .get("oauth_disable_pkce")
-            .and_then(as_bool)
+            .and_then(try_cast_to_bool)
             .unwrap_or(false),
         client_store_temporary_credential: p
             .get("client_store_temporary_credential")
-            .and_then(as_bool),
-        server_session_keep_alive: p.get("server_session_keep_alive").and_then(as_bool),
+            .and_then(try_cast_to_bool),
+        server_session_keep_alive: p
+            .get("server_session_keep_alive")
+            .and_then(try_cast_to_bool),
         secondary_roles: s(&p, "secondary_roles"),
         application: Some(application_for(cli)),
         application_name: Some("snowcli".into()),
         ..ConnectParams::default()
     };
-    // Private key.
-    let key_source = if p.contains_key("private_key_file") {
-        Some(("file", s(&p, "private_key_file").unwrap_or_default()))
-    } else if p.contains_key("private_key_raw") {
-        Some(("raw", s(&p, "private_key_raw").unwrap_or_default()))
-    } else {
-        None
-    };
-    if let Some((kind, value)) = key_source {
+    let key_file = s(&p, "private_key_file");
+    let key_raw = s(&p, "private_key_raw");
+    if key_file.is_some() || key_raw.is_some() {
         if authenticator.as_deref().map(str::to_uppercase).as_deref() != Some("SNOWFLAKE_JWT") {
             return Err(SnowError::cli(
                 "Private Key authentication requires authenticator set to SNOWFLAKE_JWT",
             ));
         }
-        let pem = if kind == "file" {
-            std::fs::read_to_string(crate::config::expand_user(&value)).map_err(|e| {
-                SnowError::unexpected(crate::errors::python_os_error(&e, Some(&value)))
-            })?
-        } else {
-            value
+        let pem = match key_file {
+            Some(file) => {
+                std::fs::read_to_string(crate::config::expand_user(&file)).map_err(|e| {
+                    SnowError::unexpected(crate::errors::python_os_error(&e, Some(&file)))
+                })?
+            }
+            None => key_raw.unwrap_or_default(),
         };
         let passphrase = std::env::var("PRIVATE_KEY_PASSPHRASE")
             .ok()
@@ -140,7 +117,10 @@ pub fn build_params(cli: &mut Cli, mut p: IndexMap<String, Cv>) -> Result<Connec
         cp.server_session_keep_alive = Some(true);
         cp.client_session_keep_alive = Some(true);
     }
-    if cli.feature("ENABLE_SEPARATE_AUTHENTICATION_POLICY_ID", Some(false)) {
+    if cli
+        .config
+        .feature(FeatureFlag::EnableSeparateAuthenticationPolicyId)
+    {
         cp.internal_application_name = Some("SNOWFLAKE_CLI".into());
         cp.internal_application_version = Some(crate::VERSION.into());
     }
@@ -148,7 +128,7 @@ pub fn build_params(cli: &mut Cli, mut p: IndexMap<String, Cv>) -> Result<Connec
 }
 
 /// `command_info()`: `SNOWCLI.<COMMAND.PATH>`.
-pub fn application_for(cli: &Cli) -> String {
+pub(crate) fn application_for(cli: &Cli) -> String {
     let parts: Vec<String> = cli
         .inv
         .levels
@@ -168,7 +148,6 @@ pub fn db_error_to_cli(e: &DbError, verbose: bool) -> SnowError {
         snow_connector::ErrorKind::Programming => "ProgrammingError",
         snow_connector::ErrorKind::Database => "DatabaseError",
         snow_connector::ErrorKind::Operational => "OperationalError",
-        snow_connector::ErrorKind::Interface => "InterfaceError",
         snow_connector::ErrorKind::Forbidden => "ForbiddenError",
     })
 }
@@ -179,7 +158,7 @@ pub fn connect(cli: &mut Cli, p: ConnectParams) -> Result<Connection> {
         .conn
         .fields
         .get("oauth_enable_refresh_tokens")
-        .and_then(as_bool);
+        .and_then(try_cast_to_bool);
     let store = p.client_store_temporary_credential;
     Connection::connect(p).map_err(|e| {
         let mut msg = e.msg_with(cli.verbose || cli.debug);

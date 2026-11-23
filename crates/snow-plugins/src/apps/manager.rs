@@ -5,7 +5,7 @@ use super::app_fqn;
 use indexmap::IndexMap;
 use snow_api::identifiers::{Fqn, to_identifier, to_string_literal};
 use snow_api::output::Pv;
-use snow_api::sql::sanitize_for_terminal as san;
+use snow_api::sanitize::for_terminal as san;
 use snow_api::{Cli, Result};
 
 pub const ACCOUNT_ADMIN_SETUP_URL: &str = "https://docs.snowflake.com/en/developer-guide/snowflake-app-runtime/account-admin-setup#after-setup";
@@ -34,7 +34,8 @@ pub fn first_row(
     })
 }
 
-fn pv(m: &IndexMap<String, Pv>, k: &str) -> String {
+/// The value of `k`, or `""` when it is missing or `None`.
+pub(super) fn pv(m: &IndexMap<String, Pv>, k: &str) -> String {
     match m.get(k) {
         None | Some(Pv::None) => String::new(),
         Some(v) => v.py_str(),
@@ -78,7 +79,6 @@ pub fn fetch_app_service_defaults(
     cli: &mut Cli,
     app_name: &str,
 ) -> Result<IndexMap<String, String>> {
-    // App Spaces first.
     if let Ok(Ok(row)) = first_row(cli, &format!("SELECT * FROM TABLE({APP_SPACE_FN}())"))
         && !row.is_empty()
     {
@@ -100,11 +100,7 @@ pub fn fetch_app_service_defaults(
     }
     match cli.try_query(&format!("SELECT {DEFAULTS_FN}()"))? {
         Ok(c) => {
-            let cell = c
-                .rows
-                .first()
-                .and_then(|r| r.first().cloned().flatten())
-                .unwrap_or_default();
+            let cell = Cli::first_cell_opt(&c).unwrap_or_default();
             if cell.is_empty() {
                 return Ok(IndexMap::new());
             }
@@ -134,6 +130,11 @@ pub fn fetch_app_service_defaults(
                 let params = fetch_snow_apps_parameters(cli)?;
                 return filter_accessible_remote_defaults(cli, params);
             }
+            crate::logs::log(
+                crate::logs::WARNING,
+                "snowflake.cli._plugins.apps.manager",
+                "Could not fetch Snowflake App Runtime defaults – skipping.",
+            );
             Ok(IndexMap::new())
         }
     }
@@ -220,11 +221,7 @@ fn missing_privileges(
         Ok(c) => c,
         Err(_) => return Ok(Err(())),
     };
-    let cell = c
-        .rows
-        .first()
-        .and_then(|r| r.first().cloned().flatten())
-        .unwrap_or_default();
+    let cell = Cli::first_cell_opt(&c).unwrap_or_default();
     let mut out = Vec::new();
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&cell) {
         flatten_missing(&v, &mut out);
@@ -391,7 +388,7 @@ pub fn per_account_cert_probe_host(cli: &mut Cli) -> Option<String> {
                 t["type"].as_str() == Some("SNOWFLAKE_DEPLOYMENT")
                     && t["host"]
                         .as_str()
-                        .is_some_and(|h| crate::snowsight::host_region_pub(h).is_some())
+                        .is_some_and(|h| crate::snowsight::host_region(h).is_some())
             })?["host"]
                 .as_str()?
                 .to_string();

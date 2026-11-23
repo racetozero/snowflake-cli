@@ -1,8 +1,9 @@
 //! `snow spcs compute-pool`.
 
 use super::{
-    already_exists, fqn, py_bool, strip_empty_lines, tags_clause, validate_and_set_instances,
+    already_exists, py_bool, simple, strip_empty_lines, tags_clause, validate_and_set_instances,
 };
+use crate::object::fqn_arg;
 use snow_api::identifiers::{Fqn, is_valid_object_name, to_string_literal};
 use snow_api::output::Output;
 use snow_api::{Cli, Result, SnowError};
@@ -20,7 +21,7 @@ pub fn validate_name(raw: &str) -> Result<()> {
 }
 
 fn pool(cli: &Cli) -> Result<String> {
-    Ok(fqn(cli, "name")?.identifier())
+    Ok(fqn_arg(cli, "name")?.identifier())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -84,11 +85,6 @@ pub fn create(cli: &mut Cli) -> Result<Output> {
     let c = cli
         .try_execute(&sql)
         .map_err(|e| already_exists(e, "compute-pool", &name, false, verbose))?;
-    Ok(cli.single_query_result(&c))
-}
-
-fn simple(cli: &mut Cli, sql: String) -> Result<Output> {
-    let c = cli.execute_query(&sql)?;
     Ok(cli.single_query_result(&c))
 }
 
@@ -174,6 +170,6 @@ pub fn unset(cli: &mut Cli) -> Result<Output> {
 }
 
 pub fn status(cli: &mut Cli) -> Result<Output> {
-    let n = fqn(cli, "pool_name")?.identifier();
+    let n = fqn_arg(cli, "pool_name")?.identifier();
     simple(cli, format!("call system$get_compute_pool_status('{n}')"))
 }

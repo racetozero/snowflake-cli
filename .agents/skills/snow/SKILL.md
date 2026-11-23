@@ -76,6 +76,7 @@ progress never reach stdout:
 | `confirmation_required` |    3 | The command would ask "are you sure". See rule 4.                       |
 | `unknown`               |    4 | No such command. Check `snow <group> --help --agent`.                   |
 | `internal`              |    5 | Unexpected failure.                                                     |
+| `exit`                  |  any | The command ended with a non-zero exit code. `data` holds its output.   |
 
 For `auth`, ask the user to fix the connection, and give them
 `snow connection test -c NAME --agent`. Never guess credentials. `--debug`

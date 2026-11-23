@@ -85,7 +85,7 @@ impl Default for Column {
     }
 }
 
-/// A box-less table (Rich `Table` with `box=None`, `show_header=False`).
+/// Rich `Table`: box-less (`box=None`) unless `ascii_box`, with an optional header row.
 #[derive(Debug, Clone)]
 pub struct Table {
     pub columns: Vec<Column>,
@@ -189,9 +189,6 @@ impl Table {
     pub fn add_column(&mut self, c: Column) {
         self.columns.push(c);
     }
-    pub fn row_count(&self) -> usize {
-        self.rows
-    }
     pub fn add_row(&mut self, cells: Vec<Option<R>>) {
         let mut cells = cells;
         while cells.len() < self.columns.len() {
@@ -213,7 +210,6 @@ impl Table {
     }
 }
 
-/// A renderable.
 #[derive(Debug, Clone)]
 pub enum R {
     Text(Text),
@@ -238,12 +234,10 @@ pub enum R {
     /// `Align(renderable, "left", pad=False)`.
     Align(Box<R>),
     Constrain(Box<R>, usize),
-    /// A Markdown list built by the Markdown renderer.
     MdList {
         items: Vec<Vec<R>>,
         ordered: bool,
         start: usize,
-        style: Style,
     },
     /// A Markdown code block (`rich.syntax.Syntax(..., word_wrap=True, padding=1)`).
     Syntax(String),
@@ -364,8 +358,7 @@ pub fn render(r: &R, o: Opts) -> Vec<Segment> {
             items,
             ordered,
             start,
-            style,
-        } => markdown::render_list(items, *ordered, *start, *style, o),
+        } => markdown::render_list(items, *ordered, *start, o),
         R::Syntax(code) => render_syntax(code, o),
         R::RelatedTopic { title, url } => {
             let mut out = Vec::new();
@@ -419,7 +412,7 @@ pub fn render_text(t: &Text, o: Opts) -> Vec<Segment> {
     let overflow = t.overflow.or(o.overflow).unwrap_or(Overflow::Fold);
     let no_wrap = t.no_wrap.or(o.no_wrap).unwrap_or(false);
     let lines = t.wrap(o.max_width, justify, overflow, no_wrap);
-    Text::join_lines(lines).render(t.end)
+    Text::join_lines(lines).render("\n")
 }
 
 /// `Console.render_lines`.
@@ -543,7 +536,7 @@ fn render_syntax(code: &str, o: Opts) -> Vec<Segment> {
         parts.pop();
     }
     for line in parts {
-        let mut t = Text::new(expand(line));
+        let mut t = Text::new(crate::text::expand_tabs(line, 8));
         t.style = style;
         let r = R::Text(t);
         lines.extend(render_lines(
@@ -567,12 +560,6 @@ fn render_syntax(code: &str, o: Opts) -> Vec<Segment> {
     }
     out.push(Segment::new(format!("{}\n", " ".repeat(width)), style));
     out
-}
-
-fn expand(line: &str) -> String {
-    let mut t = Text::new(line.to_string());
-    t.expand_tabs(8);
-    t.plain
 }
 
 /// Python `textwrap.dedent`.
@@ -610,10 +597,6 @@ pub fn dedent(text: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
-
-// ----------------------------------------------------------------------------
-// Tables
-// ----------------------------------------------------------------------------
 
 fn padding_width(t: &Table, index: usize) -> usize {
     let (_, right, _, mut left) = t.padding;
@@ -1041,8 +1024,6 @@ fn render_columns(items: &[R], o: Opts) -> Vec<Segment> {
     }
     let column_count = column_count.max(1);
     let mut table = Table::grid((0, 1, 0, 1));
-    table.collapse_padding = true;
-    table.pad_edge = false;
     let order = iter(column_count);
     for chunk in order.chunks(column_count) {
         table.add_row(

@@ -32,25 +32,6 @@ fn configured_authenticator(cli: &mut Cli) -> Option<String> {
 pub fn pre_execute(cli: &mut Cli) {
     // `snow auth login` connects outside the CLI context; its events never open
     // (or borrow) the ambient connection.
-    if is_auth_login(cli) {
-        return;
-    }
-    if cli.connection_if_open().is_some() {
-        send(cli, "executing_command", None);
-        return;
-    }
-    let Some(auth) = configured_authenticator(cli) else {
-        return;
-    };
-    if INTERACTIVE.contains(&auth.as_str()) {
-        return;
-    }
-    if cli.connection().is_ok() {
-        send(cli, "executing_command", None);
-    }
-}
-
-fn is_auth_login(cli: &Cli) -> bool {
     let names: Vec<&str> = cli
         .inv
         .levels
@@ -58,21 +39,23 @@ fn is_auth_login(cli: &Cli) -> bool {
         .skip(1)
         .map(|l| l.info_name.as_str())
         .collect();
-    names == ["auth", "login"]
-}
-
-pub fn command_succeeded(cli: &mut Cli) {
-    send(cli, "executing_command", None);
-}
-
-pub fn command_failed(cli: &mut Cli, e: &SnowError) {
-    send(cli, "executing_command", Some(e));
-}
-
-fn send(cli: &mut Cli, kind: &str, err: Option<&SnowError>) {
-    if is_auth_login(cli) {
+    if names == ["auth", "login"] {
         return;
     }
+    if cli.connection_if_open().is_none() {
+        let Some(auth) = configured_authenticator(cli) else {
+            return;
+        };
+        if INTERACTIVE.contains(&auth.as_str()) {
+            return;
+        }
+        let _ = cli.connection();
+    }
+    send(cli, None);
+}
+
+/// Queue an `executing_command` event; without an open connection it is dropped.
+pub fn send(cli: &mut Cli, err: Option<&SnowError>) {
     let command: Vec<String> = cli
         .inv
         .levels
@@ -81,16 +64,12 @@ fn send(cli: &mut Cli, kind: &str, err: Option<&SnowError>) {
         .map(|l| l.info_name.clone())
         .collect();
     let elapsed = cli.started.elapsed().as_millis() as u64;
-    let format = cli.format.name();
-    let Some(conn) = cli.connection_if_open() else {
-        return;
-    };
     let mut message = serde_json::json!({
-        "type": kind,
+        "type": "executing_command",
         "source": "snowcli",
         "version_cli": snow_api::VERSION,
         "command": command,
-        "command_output_type": format,
+        "command_output_type": cli.format.name(),
         "command_execution_time": elapsed,
         "command_result_status": if err.is_some() { "failure" } else { "success" },
     });
@@ -98,5 +77,5 @@ fn send(cli: &mut Cli, kind: &str, err: Option<&SnowError>) {
         message["error_type"] = serde_json::json!(e.class_name());
     }
     let ts = chrono::Utc::now().timestamp_millis().to_string();
-    conn.send_telemetry(serde_json::json!([{ "message": message, "timestamp": ts }]));
+    cli.queue_telemetry(serde_json::json!({ "message": message, "timestamp": ts }));
 }

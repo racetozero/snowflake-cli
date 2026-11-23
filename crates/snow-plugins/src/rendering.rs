@@ -5,11 +5,11 @@
 //! logic blocks disabled for the SQL syntaxes, strict undefined values and
 //! dictionary-only attribute lookup.
 
-use crate::console::Console;
-use crate::errors::SnowError;
 use indexmap::IndexMap;
 use minijinja::value::{Object, ObjectRepr, Value};
 use minijinja::{Environment, ErrorKind, UndefinedBehavior};
+use snow_api::SnowError;
+use snow_api::console::Console;
 use std::sync::{Arc, Mutex};
 
 const NO_BLOCKS: &str = "___very___unique___block___to___disable___logic___blocks___";
@@ -114,10 +114,7 @@ struct EnvObject {
 impl Object for EnvObject {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         let k = key.as_str()?;
-        if let Some(v) = self.overrides.get(k) {
-            return Some(Value::from(v.clone()));
-        }
-        if let Ok(v) = std::env::var(k) {
+        if let Some(v) = snow_api::project::definition::env_override(&self.overrides, k) {
             return Some(Value::from(v));
         }
         if let Some(v) = self.defaults.get(k) {
@@ -275,8 +272,18 @@ fn render_with(
     })
 }
 
-fn pyv_value(v: &crate::project::PyV, misses: &Misses) -> Value {
-    use crate::project::PyV;
+fn pyv_value(v: &snow_api::project::PyV, misses: &Misses) -> Value {
+    use snow_api::project::PyV;
+    let dict = |items: &IndexMap<String, PyV>| {
+        Value::from_object(DictObject {
+            items: items
+                .iter()
+                .map(|(k, x)| (k.clone(), pyv_value(x, misses)))
+                .collect(),
+            misses: misses.clone(),
+            root: false,
+        })
+    };
     match v {
         PyV::None => Value::from(()),
         PyV::Bool(b) => Value::from(*b),
@@ -284,24 +291,9 @@ fn pyv_value(v: &crate::project::PyV, misses: &Misses) -> Value {
         PyV::Float(f) => Value::from(*f),
         PyV::Str(s) | PyV::Timestamp(s) => Value::from(s.clone()),
         PyV::List(l) => Value::from(l.iter().map(|x| pyv_value(x, misses)).collect::<Vec<_>>()),
-        PyV::Dict(d) => Value::from_object(DictObject {
-            items: d
-                .iter()
-                .map(|(k, x)| (k.clone(), pyv_value(x, misses)))
-                .collect(),
-            misses: misses.clone(),
-            root: false,
-        }),
+        PyV::Dict(d) => dict(d),
         PyV::Override(x) => pyv_value(x, misses),
-        PyV::Model(m) => Value::from_object(DictObject {
-            items: m
-                .fields
-                .iter()
-                .map(|(k, x)| (k.clone(), pyv_value(x, misses)))
-                .collect(),
-            misses: misses.clone(),
-            root: false,
-        }),
+        PyV::Model(m) => dict(&m.fields),
     }
 }
 
@@ -311,18 +303,18 @@ fn pyv_value(v: &crate::project::PyV, misses: &Misses) -> Value {
 pub fn render_project_sql(
     content: &str,
     reference_name: &str,
-    ctx: &crate::project::PyV,
+    ctx: &snow_api::project::PyV,
     env_overrides: &IndexMap<String, String>,
     console: &mut Console,
     sql: bool,
 ) -> Result<String, (String, Option<usize>)> {
     let misses: Misses = Arc::new(Mutex::new(None));
     let mut items: IndexMap<String, Value> = IndexMap::new();
-    if let crate::project::PyV::Dict(d) = ctx {
+    if let snow_api::project::PyV::Dict(d) = ctx {
         for (k, v) in d {
             if k == "env" {
                 let defaults = match v {
-                    crate::project::PyV::Dict(e) => e
+                    snow_api::project::PyV::Dict(e) => e
                         .iter()
                         .map(|(k, x)| (k.clone(), pyv_value(x, &misses)))
                         .collect(),

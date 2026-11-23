@@ -7,14 +7,8 @@ pub mod facade;
 pub mod package;
 pub mod snowpark_processor;
 
-use snow_click::Spec;
-
-/// `SmartAppGroup.list_commands`: hide the other app family's commands.
-pub fn visible_app_commands(spec: &Spec, cmd: u16) -> Option<Vec<u16>> {
-    let _ = (spec, cmd);
-    None
-}
-
+use crate::entities::EntityType;
+use facade::errno;
 use snow_api::identifiers::{to_identifier, unquote_identifier};
 use snow_api::output::{Output, Pv, Row};
 use snow_api::project::PyV;
@@ -32,14 +26,14 @@ pub struct AppEntities {
 
 fn find(
     ents: &indexmap::IndexMap<String, PyV>,
-    ty: &str,
+    ty: EntityType,
     id: &str,
     option: &str,
     required: bool,
 ) -> Result<Option<(String, PyV)>> {
     let of_type: Vec<(&String, &PyV)> = ents
         .iter()
-        .filter(|(_, e)| e.str_of("type").as_deref() == Some(ty))
+        .filter(|(_, e)| EntityType::of(e) == Some(ty))
         .collect();
     let found = if !id.is_empty() {
         of_type
@@ -81,7 +75,7 @@ pub fn entities(cli: &mut Cli, app_required: bool) -> Result<AppEntities> {
         let mut package_id = String::new();
         let mut app_id = None;
         for (id, e) in &ents {
-            if e.str_of("type").as_deref() == Some("application package") {
+            if EntityType::of(e) == Some(EntityType::ApplicationPackage) {
                 package_id = id.clone();
             } else {
                 app_id = Some(id.clone());
@@ -99,7 +93,7 @@ pub fn entities(cli: &mut Cli, app_required: bool) -> Result<AppEntities> {
     }
     let app = find(
         &ents,
-        "application",
+        EntityType::Application,
         &app_opt,
         "--app-entity-id",
         app_required,
@@ -118,14 +112,14 @@ pub fn entities(cli: &mut Cli, app_required: bool) -> Result<AppEntities> {
             }
         } else if ents
             .get(&target)
-            .is_some_and(|e| e.str_of("type").as_deref() == Some("application package"))
+            .is_some_and(|e| EntityType::of(e) == Some(EntityType::ApplicationPackage))
         {
             pkg_id = target;
         }
     }
     let (package_id, package) = find(
         &ents,
-        "application package",
+        EntityType::ApplicationPackage,
         &pkg_id,
         "--package-entity-id",
         true,
@@ -155,6 +149,24 @@ pub fn role_of(cli: &mut Cli, entity: &PyV) -> Result<Option<String>> {
     cli.current_role()
 }
 
+/// The entity's warehouse: `meta.warehouse`, else the connection's warehouse.
+pub fn warehouse_of(cli: &mut Cli, entity: &PyV) -> Result<Option<String>> {
+    if let Some(w) = entity
+        .get_some("meta")
+        .and_then(|m| m.str_of("warehouse"))
+        .filter(|w| !w.is_empty())
+    {
+        return Ok(Some(to_identifier(&w)));
+    }
+    Ok(cli
+        .connection()?
+        .params
+        .warehouse
+        .clone()
+        .filter(|w| !w.is_empty())
+        .map(|w| to_identifier(&w)))
+}
+
 /// `SqlExecutor.use_role`: switch for the duration of `f` when needed.
 pub fn with_role<T>(
     cli: &mut Cli,
@@ -177,12 +189,17 @@ pub fn with_role<T>(
     r
 }
 
-fn package_name(e: &AppEntities) -> Result<String> {
-    Ok(crate::entities::fqn(&e.package, &e.package_id)?.name)
+/// The package entity's name and role, for the package-level commands.
+fn package_and_role(cli: &mut Cli) -> Result<(String, Option<String>)> {
+    let e = entities(cli, false)?;
+    let name = crate::entities::fqn(&e.package, &e.package_id)?.name;
+    Ok((name, role_of(cli, &e.package)?))
 }
 
 fn facade_error(cli: &Cli, e: &snow_connector::DbError, context: &str, package: &str) -> SnowError {
-    if e.kind == snow_connector::ErrorKind::Programming && e.errno == 2003 {
+    if e.kind == snow_connector::ErrorKind::Programming
+        && e.errno == errno::DOES_NOT_EXIST_OR_NOT_AUTHORIZED
+    {
         return facade::user_input(format!(
             "Application package {package} does not exist or you are not authorized to access it."
         ));
@@ -207,32 +224,17 @@ fn query_rows(cli: &mut Cli, sql: &str) -> std::result::Result<Vec<Row>, snow_co
 
 /// `snow app version list`.
 pub fn version_list(cli: &mut Cli) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
-    let ident = to_identifier(&name);
-    let rows = facade::use_role(cli, role.as_deref(), |cli| {
-        query_rows(
-            cli,
-            &format!("show versions in application package {ident}"),
-        )
-        .map_err(|err| {
-            facade_error(
-                cli,
-                &err,
-                &format!("Failed to show versions for application package {ident}."),
-                &ident,
-            )
-        })
-    })?;
-    Ok(Output::Collection(rows))
+    let (name, role) = package_and_role(cli)?;
+    Ok(Output::Collection(facade::show_versions(
+        cli,
+        &name,
+        role.as_deref(),
+    )?))
 }
 
 /// `snow app release-directive list`.
 pub fn release_directive_list(cli: &mut Cli) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let like = cli.str("like").unwrap_or_else(|| "%%".into());
     let channel = cli.str("channel");
     let channel = match channel {
@@ -248,7 +250,7 @@ pub fn release_directive_list(cli: &mut Cli) -> Result<Output> {
     }
     let rows = facade::use_role(cli, role.as_deref(), |cli| match query_rows(cli, &q) {
         Ok(r) => Ok(r),
-        Err(err) if err.errno == 3001 => Err(SnowError::click(format!(
+        Err(err) if err.errno == errno::INSUFFICIENT_PRIVILEGES => Err(SnowError::click(format!(
             "Insufficient privileges to show release directives for application package {name}"
         ))
         .named("InsufficientPrivilegesError")),
@@ -286,7 +288,7 @@ pub fn release_channels(cli: &mut Cli, name: &str, role: Option<&str>) -> Result
             &format!("show release channels in application package {ident}"),
         ) {
             Ok(r) => Ok(r),
-            Err(err) if err.errno == 1003 => Ok(vec![]),
+            Err(err) if err.errno == errno::SQL_COMPILATION_ERROR => Ok(vec![]),
             Err(err) => Err(facade_error(
                 cli,
                 &err,
@@ -330,9 +332,7 @@ fn sanitized_channel(
 
 /// `snow app release-channel list`.
 pub fn release_channel_list(cli: &mut Cli) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let filter = cli.str("channel");
     let rows: Vec<Row> = release_channels(cli, &name, role.as_deref())?
         .into_iter()
@@ -402,40 +402,15 @@ pub fn release_channel_list(cli: &mut Cli) -> Result<Output> {
 }
 
 fn validate_accounts(accounts: &[String]) -> Result<()> {
-    let v = snow_api::identifiers::valid_identifier_regex();
-    let re = regex::Regex::new(&format!("^(?:{v})\\.(?:{v})$")).expect("re");
+    use snow_api::identifiers::{is_valid_identifier, is_valid_object_name};
     for a in accounts {
-        if !re.is_match(a) {
+        if !is_valid_object_name(a, 1, true) || is_valid_identifier(a) {
             return Err(SnowError::click(format!(
                 "Target account {a} is not in a valid format. Make sure you provide the target account in the format 'org.account'."
             )));
         }
     }
     Ok(())
-}
-
-fn validate_channel(cli: &mut Cli, name: &str, role: Option<&str>, channel: &str) -> Result<()> {
-    let available = release_channels(cli, name, role)?;
-    if available.is_empty() {
-        return Err(SnowError::usage(format!(
-            "Release channels are not enabled for application package {name}."
-        )));
-    }
-    let names: Vec<String> = available
-        .iter()
-        .map(|r| r.get("name").map(Pv::py_str).unwrap_or_default())
-        .collect();
-    if names.contains(&unquote_identifier(channel)) {
-        return Ok(());
-    }
-    Err(SnowError::usage(format!(
-        "Release channel {channel} is not available in application package {name}. Available release channels are: ({}).",
-        names.join(", ")
-    )))
-}
-
-fn user_input(m: String) -> SnowError {
-    SnowError::click(m).named("UserInputError")
 }
 
 /// Run a facade statement under the package role, mapping errnos to `UserInputError`s.
@@ -452,7 +427,7 @@ fn facade_exec(
             let msg = e.msg_with(cli.connector_info);
             for (errno, m) in mapping {
                 if e.errno == *errno {
-                    return Err(user_input(m.replace("{msg}", &msg)));
+                    return Err(facade::user_input(m.replace("{msg}", &msg)));
                 }
             }
             Err(facade::unclassified(cli, &e, context))
@@ -466,13 +441,19 @@ fn accounts_arg(cli: &Cli) -> Vec<String> {
         .unwrap_or_default()
 }
 
-const ACCOUNT_ERRS: [i64; 2] = [1999, 906];
+/// `ACCOUNT_DOES_NOT_EXIST` / `ACCOUNT_HAS_TOO_MANY_QUALIFIERS` → "Invalid account passed in.".
+fn account_errors() -> Vec<(i64, String)> {
+    [
+        errno::ACCOUNT_DOES_NOT_EXIST,
+        errno::ACCOUNT_HAS_TOO_MANY_QUALIFIERS,
+    ]
+    .map(|e| (e, "Invalid account passed in.\n{msg}".to_string()))
+    .to_vec()
+}
 
 /// `snow app release-channel add-accounts|remove-accounts|set-accounts`.
 pub fn release_channel_accounts(cli: &mut Cli, verb: &str) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let channel = cli.str("channel").unwrap_or_default();
     let accounts = accounts_arg(cli);
     if accounts.is_empty()
@@ -480,7 +461,11 @@ pub fn release_channel_accounts(cli: &mut Cli, verb: &str) -> Result<Output> {
     {
         return Err(SnowError::click("No target accounts provided."));
     }
-    validate_channel(cli, &name, role.as_deref(), &channel)?;
+    validate_channel_in(
+        &name,
+        &release_channels(cli, &name, role.as_deref())?,
+        &channel,
+    )?;
     validate_accounts(&accounts)?;
     let (pkg, ch) = (to_identifier(&name), to_identifier(&channel));
     let (kw, ctx, done) = match verb {
@@ -504,10 +489,7 @@ pub fn release_channel_accounts(cli: &mut Cli, verb: &str) -> Result<Output> {
             "Successfully set accounts for the release channel.",
         ),
     };
-    let mut mapping: Vec<(i64, String)> = ACCOUNT_ERRS
-        .iter()
-        .map(|e| (*e, "Invalid account passed in.\n{msg}".to_string()))
-        .collect();
+    let mut mapping = account_errors();
     mapping.push((
         512017,
         format!("Cannot modify accounts for release channel {ch} in application package {pkg}."),
@@ -527,12 +509,14 @@ pub fn release_channel_accounts(cli: &mut Cli, verb: &str) -> Result<Output> {
 
 /// `snow app release-channel add-version|remove-version`.
 pub fn release_channel_version(cli: &mut Cli, add: bool) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let channel = cli.str("channel").unwrap_or_default();
     let version = cli.str("version").unwrap_or_default();
-    validate_channel(cli, &name, role.as_deref(), &channel)?;
+    validate_channel_in(
+        &name,
+        &release_channels(cli, &name, role.as_deref())?,
+        &channel,
+    )?;
     let (pkg, ch, v) = (
         to_identifier(&name),
         to_identifier(&channel),
@@ -559,9 +543,7 @@ fn channel_clause(cli: &mut Cli, name: &str, role: Option<&str>) -> Result<Optio
 
 /// `snow app release-directive set`.
 pub fn release_directive_set(cli: &mut Cli) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let directive = cli.str("directive").unwrap_or_default();
     let accounts = cli
         .str("target_accounts")
@@ -569,13 +551,11 @@ pub fn release_directive_set(cli: &mut Cli) -> Result<Output> {
     if let Some(a) = accounts.as_ref().filter(|a| !a.is_empty()) {
         validate_accounts(a)?;
         if snow_api::identifiers::same_identifiers(&directive, "DEFAULT") {
-            return Err(SnowError::Click(snow_click::ClickError::Usage {
-                message: "Target accounts can only be specified for non-default named release directives.".into(),
-                depth: None,
-                no_such_option: false,
-                attach: true,
-                class: "BadOptionUsage",
-            }));
+            return Err(SnowError::Click(snow_click::ClickError::usage_class(
+                "Target accounts can only be specified for non-default named release directives."
+                    .into(),
+                "BadOptionUsage",
+            )));
         }
     }
     let channel = channel_clause(cli, &name, role.as_deref())?;
@@ -596,9 +576,7 @@ pub fn release_directive_set(cli: &mut Cli) -> Result<Output> {
 
 /// `snow app release-directive unset`.
 pub fn release_directive_unset(cli: &mut Cli) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let directive = cli.str("directive").unwrap_or_default();
     if snow_api::identifiers::same_identifiers(&directive, "DEFAULT") {
         return Err(SnowError::click(
@@ -615,7 +593,7 @@ pub fn release_directive_unset(cli: &mut Cli) -> Result<Output> {
         role.as_deref(),
         &format!("alter application package {pkg}{ch} unset release directive {rd}"),
         &[(
-            93090,
+            errno::RELEASE_DIRECTIVE_DOES_NOT_EXIST,
             format!("Release directive {rd} does not exist in application package {pkg}."),
         )],
         &format!("Failed to unset release directive {rd} for application package {pkg}."),
@@ -627,9 +605,7 @@ pub fn release_directive_unset(cli: &mut Cli) -> Result<Output> {
 
 /// `snow app release-directive add-accounts|remove-accounts`.
 pub fn release_directive_accounts(cli: &mut Cli, add: bool) -> Result<Output> {
-    let e = entities(cli, false)?;
-    let name = package_name(&e)?;
-    let role = role_of(cli, &e.package)?;
+    let (name, role) = package_and_role(cli)?;
     let directive = cli.str("directive").unwrap_or_default();
     let accounts = accounts_arg(cli);
     if accounts.is_empty() {
@@ -644,7 +620,7 @@ pub fn release_directive_accounts(cli: &mut Cli, add: bool) -> Result<Output> {
         ("remove", "removing")
     };
     if snow_api::identifiers::same_identifiers(&rd, "DEFAULT") {
-        return Err(user_input(format!(
+        return Err(facade::user_input(format!(
             "Default release directive does not support {word} accounts. Please specify a non-default release directive."
         )));
     }
@@ -655,16 +631,13 @@ pub fn release_directive_accounts(cli: &mut Cli, add: bool) -> Result<Output> {
     lines.push(format!("    modify release directive {rd}"));
     lines.push(format!("    {kw} accounts = ({})", accounts.join(",")));
     let sql = format!("{}\n", lines.join("\n"));
-    let mut mapping: Vec<(i64, String)> = ACCOUNT_ERRS
-        .iter()
-        .map(|e| (*e, "Invalid account passed in.\n{msg}".to_string()))
-        .collect();
+    let mut mapping = account_errors();
     mapping.push((
-        93090,
+        errno::RELEASE_DIRECTIVE_DOES_NOT_EXIST,
         format!("Release directive {rd} does not exist in application package {pkg}."),
     ));
     if add {
-        mapping.push((93091, format!("Some target accounts are already referenced by other release directives in application package {pkg}.\n{{msg}}")));
+        mapping.push((errno::TARGET_ACCOUNT_USED_BY_OTHER_RELEASE_DIRECTIVE, format!("Some target accounts are already referenced by other release directives in application package {pkg}.\n{{msg}}")));
     }
     let ctx = if add {
         format!("Failed to add accounts to release directive {rd} for application package {pkg}.")
@@ -714,7 +687,7 @@ pub fn add_version_to_channel(
         &format!("alter application package {pkg} modify release channel {ch} add version {v}"),
         &[
             (
-                93031,
+                errno::VERSION_DOES_NOT_EXIST,
                 format!("Version {v} does not exist in application package {pkg}."),
             ),
             (
@@ -755,7 +728,7 @@ pub fn remove_version_from_channel(
                 format!("Version {v} is not found in release channel {ch}."),
             ),
             (
-                93088,
+                errno::VERSION_REFERENCED_BY_RELEASE_DIRECTIVE,
                 format!(
                     "Cannot remove version {v} from release channel {ch} as it is referenced by a release directive."
                 ),
@@ -802,17 +775,14 @@ pub fn set_release_directive(
         .as_ref()
         .map(|c| to_identifier(c))
         .unwrap_or_else(|| "None".into());
-    let mut mapping: Vec<(i64, String)> = ACCOUNT_ERRS
-        .iter()
-        .map(|e| (*e, "Invalid account passed in.\n{msg}".to_string()))
-        .collect();
+    let mut mapping = account_errors();
     mapping.extend([
-        (93090, format!("Release directive {rd} does not exist in application package {pkg}. Please create it first by specifying --target-accounts with the `snow app release-directive set` command.")),
-        (93091, format!("Some target accounts are already referenced by other release directives in application package {pkg}.\n{{msg}}")),
+        (errno::RELEASE_DIRECTIVE_DOES_NOT_EXIST, format!("Release directive {rd} does not exist in application package {pkg}. Please create it first by specifying --target-accounts with the `snow app release-directive set` command.")),
+        (errno::TARGET_ACCOUNT_USED_BY_OTHER_RELEASE_DIRECTIVE, format!("Some target accounts are already referenced by other release directives in application package {pkg}.\n{{msg}}")),
         (512008, format!("Version {version} is not added to release channel {ch}. Please add it to the release channel first.")),
         (93036, format!("Patch {patch} for version {version} not found in application package {pkg}.")),
         (93074, format!("Version {version}, patch {patch} has not yet been approved to release to accounts outside of this organization.")),
-        (93031, format!("Version {version} does not exist in application package {pkg}.")),
+        (errno::VERSION_DOES_NOT_EXIST, format!("Version {version} does not exist in application package {pkg}.")),
     ]);
     facade_exec(
         cli,

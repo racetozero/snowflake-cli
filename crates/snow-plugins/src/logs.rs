@@ -122,6 +122,3 @@ pub fn log_plain(level: u8, msg: &str) {
 pub fn info(name: &str, msg: &str) {
     log(INFO, name, msg);
 }
-pub fn debug(name: &str, msg: &str) {
-    log(DEBUG, name, msg);
-}

@@ -4,6 +4,7 @@
 //! The skills live in `.agents/skills/<name>/SKILL.md`; `crates/snow-plugins/skills/<name>.md`
 //! holds the embedded copies and a test keeps them equal.
 
+use crate::app::envelope;
 use serde_json::json;
 use std::io::Write;
 use std::path::PathBuf;
@@ -35,10 +36,7 @@ pub fn run(args: &[String], agent: bool) -> i32 {
             "--help" | "-h" => {
                 let text = "Usage: snow skill [NAME] [--list] [--install [DIR]]\n\nPrint an agent skill (default: snow), list them, or install them into DIR/<name>/SKILL.md (default .claude/skills).\n";
                 if agent {
-                    println!(
-                        "{}",
-                        json!({"ok": true, "command": "skill", "data": {"help": text}})
-                    );
+                    println!("{}", envelope("skill", Ok(json!({"help": text}))));
                 } else {
                     print!("{text}");
                 }
@@ -51,7 +49,7 @@ pub fn run(args: &[String], agent: bool) -> i32 {
         if agent {
             println!(
                 "{}",
-                json!({"ok": false, "command": "skill", "error": {"code": "invalid", "message": msg}})
+                envelope("skill", Err(json!({"code": "invalid", "message": msg})))
             );
         } else {
             eprintln!("error: {msg}");
@@ -64,7 +62,7 @@ pub fn run(args: &[String], agent: bool) -> i32 {
             .map(|(n, t)| json!({"name": n, "description": description(t)}))
             .collect();
         if agent {
-            println!("{}", json!({"ok": true, "command": "skill", "data": rows}));
+            println!("{}", envelope("skill", Ok(json!(rows))));
         } else {
             for (n, t) in SKILLS {
                 println!("{n:<10} {}", description(t));
@@ -86,10 +84,7 @@ pub fn run(args: &[String], agent: bool) -> i32 {
             written.push(path.display().to_string());
         }
         if agent {
-            println!(
-                "{}",
-                json!({"ok": true, "command": "skill", "data": {"installed": written}})
-            );
+            println!("{}", envelope("skill", Ok(json!({"installed": written}))));
         } else {
             println!(
                 "Installed {} skill{} in {}",
@@ -111,7 +106,7 @@ pub fn run(args: &[String], agent: bool) -> i32 {
     if agent {
         println!(
             "{}",
-            json!({"ok": true, "command": "skill", "data": {"name": name, "skill": text}})
+            envelope("skill", Ok(json!({"name": name, "skill": text})))
         );
     } else {
         let mut out = std::io::stdout().lock();

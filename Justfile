@@ -9,11 +9,16 @@ upstream:
 spec:
     @target/upstream/venv/bin/python scripts/gen_cli_spec.py
 
+# Run the workspace tests with nextest, then the documentation tests.
+test *args:
+    @cargo nextest run --workspace --all-targets {{args}}
+    @cargo test --workspace --doc
+
 # Format, lint and test the workspace.
 check:
     @cargo fmt --all --check
     @cargo clippy --workspace --all-targets -- -D warnings
-    @cargo test --workspace
+    @just test
 
 # Run the differential parity checker against a release build.
 parity *args:

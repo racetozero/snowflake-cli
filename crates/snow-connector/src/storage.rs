@@ -45,9 +45,12 @@ impl Storage {
                 })?;
                 Ok(true)
             }
-            Storage::Remote(r) => {
-                r.upload(&mut |c| conn.query_request(c, false), name, body, overwrite)
-            }
+            Storage::Remote(r) => r.upload(
+                &mut |c| conn.query_request(c, false, None),
+                name,
+                body,
+                overwrite,
+            ),
         }
     }
 
@@ -62,7 +65,7 @@ impl Storage {
                 std::fs::read(location.join(src.trim_start_matches('/')))
                     .map_err(|e| DbError::new(ErrorKind::Operational, 253003, None, e.to_string()))
             }
-            Storage::Remote(r) => r.download(&mut |c| conn.query_request(c, false), idx, src),
+            Storage::Remote(r) => r.download(&mut |c| conn.query_request(c, false, None), idx, src),
         }
     }
 }

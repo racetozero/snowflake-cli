@@ -32,16 +32,6 @@ impl Project {
     pub fn meets_version(&self, required: &str) -> bool {
         version_ge(&self.version(), required)
     }
-    /// `ctx.env.<name>` (`ProjectEnvironment.__getitem__`).
-    pub fn env_value(&self, name: &str) -> Option<PyV> {
-        if let Some(v) = self.env_overrides.get(name) {
-            return Some(PyV::Str(v.clone()));
-        }
-        if let Ok(v) = std::env::var(name) {
-            return Some(PyV::Str(v));
-        }
-        self.ctx.get("env").and_then(|e| e.get(name)).cloned()
-    }
     pub fn entities(&self) -> IndexMap<String, PyV> {
         self.definition
             .get("entities")
@@ -49,6 +39,15 @@ impl Project {
             .cloned()
             .unwrap_or_default()
     }
+}
+
+/// The first two layers of `ProjectEnvironment`: `--env` overrides, then the
+/// OS environment (the definition's `env` section comes last).
+pub fn env_override(overrides: &IndexMap<String, String>, name: &str) -> Option<String> {
+    overrides
+        .get(name)
+        .cloned()
+        .or_else(|| std::env::var(name).ok())
 }
 
 /// `packaging.version.Version(a) >= Version(b)` for `1`, `1.1`, `2`.
@@ -262,12 +261,12 @@ struct Node {
 }
 
 /// `render_definition_template` + `build_project_definition`.
-pub fn render_definition(
+pub(crate) fn render_definition(
     original: PyV,
     env_overrides: &IndexMap<String, String>,
     features: &[String],
     host: &dyn Host,
-    warn: &mut dyn FnMut(&str),
+    warns: &mut Vec<String>,
 ) -> Result<(PyV, PyV), SnowError> {
     let mut definition = original;
     let version = definition.get("definition_version").map(PyV::py_str);
@@ -276,8 +275,8 @@ pub fn render_definition(
             .map(|r| !r.is_empty())
             .unwrap_or(true);
         if has {
-            warn(
-                "Ignoring template pattern in project definition file. Update 'definition_version' to 1.1 or later in snowflake.yml to enable template expansion.",
+            warns.push(
+                "Ignoring template pattern in project definition file. Update 'definition_version' to 1.1 or later in snowflake.yml to enable template expansion.".into(),
             );
         }
         let model = build(&definition, Ctx::default(), features)?;
@@ -334,12 +333,7 @@ pub fn render_definition(
         let chain = nodes[i].chain.clone();
         let is_env = chain.len() == 3 && chain[0] == "ctx" && chain[1] == "env";
         let env_hit = is_env
-            .then(|| {
-                env_overrides
-                    .get(&chain[2])
-                    .cloned()
-                    .or_else(|| std::env::var(&chain[2]).ok())
-            })
+            .then(|| env_override(env_overrides, &chain[2]))
             .flatten();
         if let Some(v) = env_hit {
             nodes[i].rendered = Some(PyV::Str(v.clone()));
@@ -364,7 +358,6 @@ pub fn render_definition(
         }
         nodes[i].templated = Some(t);
     }
-    // DFS
     let mut status = vec![0u8; nodes.len()];
     fn visit(
         i: usize,
@@ -433,13 +426,13 @@ pub fn load(
     env_overrides: &IndexMap<String, String>,
     features: &[String],
     host: &dyn Host,
-    warn: &mut dyn FnMut(&str),
+    warns: &mut Vec<String>,
 ) -> Result<Option<Project>, SnowError> {
     let files = definition_files(root);
     let Some(raw) = merged(&files)? else {
         return Ok(None);
     };
-    let (definition, ctx) = render_definition(raw, env_overrides, features, host, warn)?;
+    let (definition, ctx) = render_definition(raw, env_overrides, features, host, warns)?;
     Ok(Some(Project {
         root: root.to_path_buf(),
         definition,

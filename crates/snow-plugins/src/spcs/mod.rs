@@ -7,9 +7,10 @@ pub mod image_registry;
 pub mod image_repository;
 pub mod services;
 
-use snow_api::identifiers::{Fqn, is_valid_identifier, to_string_literal, unquote_identifier};
+use snow_api::identifiers::{is_valid_identifier, to_string_literal, unquote_identifier};
+use snow_api::output::Output;
 use snow_api::{Cli, Result, SnowError};
-use snow_connector::DbError;
+use snow_connector::{Cursor, DbError};
 
 /// `strip_empty_lines`.
 pub fn strip_empty_lines(lines: &[String]) -> String {
@@ -101,11 +102,83 @@ pub fn parse_tag(raw: &str) -> Result<()> {
     Err(err())
 }
 
-pub fn fqn(cli: &Cli, name: &str) -> Result<Fqn> {
-    crate::object::fqn_arg(cli, name)
+fn simple(cli: &mut Cli, sql: String) -> Result<Output> {
+    let c = cli.execute_query(&sql)?;
+    Ok(cli.single_query_result(&c))
 }
 
-/// Run a statement, mapping errors like `execute_query`.
-pub fn run(cli: &mut Cli, sql: &str) -> Result<snow_connector::Cursor> {
-    cli.execute_query(sql)
+fn query(cli: &mut Cli, sql: String) -> Result<Output> {
+    let c = cli.execute_query(&sql)?;
+    Ok(cli.query_result(&c))
+}
+
+/// `stream_logs` over `SYSTEM$GET_SERVICE_LOGS`: the timestamp to poll from and the
+/// lines of the last batch, which the next batch can repeat.
+#[derive(Default)]
+pub struct LogTail {
+    pub since: String,
+    prev: Vec<String>,
+}
+
+impl LogTail {
+    /// The sorted lines of `c` that were not shown yet; `since` moves to the last one.
+    pub fn take_new(&mut self, c: &Cursor) -> Vec<String> {
+        let mut records: Vec<String> = c
+            .rows
+            .iter()
+            .filter_map(|r| r.first()?.as_deref())
+            .flat_map(|b| b.split('\n'))
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        if records.is_empty() {
+            return records;
+        }
+        records.sort();
+        let first = records[0].clone();
+        for p in self.prev.iter().rev() {
+            if *p < first {
+                break;
+            }
+            if let Some(pos) = records.iter().position(|r| r == p) {
+                records.remove(pos);
+            }
+        }
+        if !records.is_empty() {
+            self.since = records
+                .last()
+                .and_then(|l| l.split(' ').next())
+                .unwrap_or_default()
+                .to_string();
+            self.prev = records.clone();
+        }
+        records
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cursor(cells: &[&str]) -> Cursor {
+        Cursor {
+            rows: cells.iter().map(|c| vec![Some(c.to_string())]).collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn log_tail_drops_lines_already_shown() {
+        let mut tail = LogTail::default();
+        let cases: [(&[&str], &[&str], &str); 4] = [
+            (&[], &[], ""),
+            (&["t2 b\nt1 a", "\n "], &["t1 a", "t2 b"], "t2"),
+            (&["t2 b\nt3 c"], &["t3 c"], "t3"),
+            (&["t3 c"], &[], "t3"),
+        ];
+        for (cells, shown, since) in cases {
+            assert_eq!(tail.take_new(&cursor(cells)), shown);
+            assert_eq!(tail.since, since);
+        }
+    }
 }

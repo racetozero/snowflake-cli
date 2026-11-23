@@ -1,5 +1,6 @@
 //! `snow ws` (workspace: snowflake.yml entities).
 
+use crate::entities::EntityType;
 use snow_api::output::Output;
 use snow_api::project::{model, yaml};
 use snow_api::{Cli, Result};
@@ -10,13 +11,13 @@ pub fn dump(cli: &mut Cli) -> Result<Output> {
     Ok(Output::message(yaml::safe_dump(&dumped)))
 }
 
-const ACTIONS: [(&str, &[&str]); 10] = [
+const ACTIONS: [(EntityType, &[&str]); 10] = [
     (
-        "application",
+        EntityType::Application,
         &["action_deploy", "action_drop", "action_events"],
     ),
     (
-        "application package",
+        EntityType::ApplicationPackage,
         &[
             "action_bundle",
             "action_deploy",
@@ -41,7 +42,7 @@ const ACTIONS: [(&str, &[&str]); 10] = [
         ],
     ),
     (
-        "streamlit",
+        EntityType::Streamlit,
         &[
             "action_bundle",
             "action_deploy",
@@ -53,7 +54,7 @@ const ACTIONS: [(&str, &[&str]); 10] = [
         ],
     ),
     (
-        "procedure",
+        EntityType::Procedure,
         &[
             "action_bundle",
             "action_deploy",
@@ -63,7 +64,7 @@ const ACTIONS: [(&str, &[&str]); 10] = [
         ],
     ),
     (
-        "function",
+        EntityType::Function,
         &[
             "action_bundle",
             "action_deploy",
@@ -72,11 +73,11 @@ const ACTIONS: [(&str, &[&str]); 10] = [
             "action_execute",
         ],
     ),
-    ("compute-pool", &[]),
-    ("image-repository", &[]),
-    ("service", &[]),
+    (EntityType::ComputePool, &[]),
+    (EntityType::ImageRepository, &[]),
+    (EntityType::Service, &[]),
     (
-        "notebook",
+        EntityType::Notebook,
         &[
             "action_create",
             "action_deploy",
@@ -85,11 +86,11 @@ const ACTIONS: [(&str, &[&str]); 10] = [
             "action_teardown",
         ],
     ),
-    ("snowflake-app", &[]),
+    (EntityType::SnowflakeApp, &[]),
 ];
 
 /// `WorkspaceManager(...).perform_action(entity_id, action)`: entity lookup and support check.
-fn entity_for(cli: &mut Cli, action: &str) -> Result<(String, snow_api::project::PyV, String)> {
+fn entity_for(cli: &mut Cli, action: &str) -> Result<(String, snow_api::project::PyV, EntityType)> {
     let id = cli.str("entity_id").unwrap_or_default();
     let p = cli.project(false)?.expect("project");
     if !p.meets_version("2") {
@@ -104,57 +105,53 @@ fn entity_for(cli: &mut Cli, action: &str) -> Result<(String, snow_api::project:
             snow_api::SnowError::unexpected(format!("No such entity ID: {id}")).named("ValueError"),
         );
     };
-    let ty = model.str_of("type").unwrap_or_default();
+    let ty = EntityType::of(&model);
     // `SnowparkEntity.__init__` refuses unless ENABLE_NATIVE_APP_CHILDREN is on.
-    if (ty == "function" || ty == "procedure")
-        && cli
+    if matches!(ty, Some(EntityType::Function | EntityType::Procedure))
+        && !cli
             .config
-            .feature("ENABLE_NATIVE_APP_CHILDREN", Some(false))
-            != Some(true)
+            .feature(snow_api::config::FeatureFlag::EnableNativeAppChildren)
     {
         return Err(
             snow_api::SnowError::unexpected("Snowpark entity is not implemented yet")
                 .named("NotImplementedError"),
         );
     }
-    let supported = ACTIONS
-        .iter()
-        .find(|(t, _)| *t == ty)
-        .is_some_and(|(_, a)| a.contains(&action));
-    if !supported {
+    let Some(ty) = ty.filter(|ty| ACTIONS.iter().any(|(t, a)| t == ty && a.contains(&action)))
+    else {
         return Err(snow_api::SnowError::unexpected(format!(
             "This entity type does not support \"{action}\""
         ))
         .named("ValueError"));
-    }
+    };
     Ok((id, model, ty))
 }
 
 /// Unreachable: `entity_for` already refused unsupported pairs.
-fn unported(_ty: &str, action: &str) -> snow_api::SnowError {
+fn unported(action: &str) -> snow_api::SnowError {
     snow_api::SnowError::unexpected(format!("This entity type does not support \"{action}\""))
         .named("ValueError")
 }
 
 pub fn bundle(cli: &mut Cli) -> Result<Output> {
     let (id, model, ty) = entity_for(cli, "action_bundle")?;
-    match ty.as_str() {
-        "application package" => {
+    match ty {
+        EntityType::ApplicationPackage => {
             let pkg = crate::nativeapp::commands::ws_package(cli, &id, &model)?;
             crate::nativeapp::commands::ws_bundle(cli, &pkg)
         }
-        "streamlit" => {
+        EntityType::Streamlit => {
             let root = crate::streamlit::bundle_entity(cli, &id, &model)?;
             Ok(Output::message(format!(
                 "Bundle generated at {}",
                 root.display()
             )))
         }
-        "function" | "procedure" => Err(snow_api::SnowError::unexpected(
+        EntityType::Function | EntityType::Procedure => Err(snow_api::SnowError::unexpected(
             "SnowparkEntity.action_bundle() missing 2 required positional arguments: 'ignore_anaconda' and 'skip_version_check'",
         )
         .named("TypeError")),
-        other => Err(unported(other, "ws bundle")),
+        _ => Err(unported("ws bundle")),
     }
 }
 
@@ -189,7 +186,7 @@ fn snowpark_deploy_sql(model: &snow_api::project::PyV, id: &str) -> Result<Strin
         q.push(format!(
             "external_access_integrations=({})",
             eai.iter()
-                .map(|x| crate::streamlit::sql_object_name(x))
+                .map(|x| snow_api::identifiers::sql_object_name(x))
                 .collect::<Vec<_>>()
                 .join(", ")
         ));
@@ -203,7 +200,7 @@ fn snowpark_deploy_sql(model: &snow_api::project::PyV, id: &str) -> Result<Strin
                 format!(
                     "{}={}",
                     snow_api::identifiers::to_string_literal(k),
-                    crate::streamlit::sql_object_name(&v.py_str())
+                    snow_api::identifiers::sql_object_name(&v.py_str())
                 )
             })
             .collect();
@@ -259,45 +256,30 @@ fn application_entity(
                 .named("ValueError"),
         );
     };
-    let root = cli.project_root();
+    let pkg = crate::nativeapp::commands::ws_package(cli, &target, &pkg_model)?;
     let app = crate::nativeapp::application::App {
         id: id.to_string(),
         model: model.clone(),
-        project: project.clone(),
-        project_root: root.clone(),
-    };
-    let pkg = crate::nativeapp::package::Package {
-        id: target,
-        model: pkg_model,
-        project_root: root,
         project,
+        project_root: cli.project_root(),
     };
     Ok((app, pkg))
 }
 
 pub fn deploy(cli: &mut Cli) -> Result<Output> {
-    let paths = cli.list("paths");
-    let (mut prune, mut recursive) = (cli.opt_bool("prune"), cli.opt_bool("recursive"));
-    if prune.is_none() && recursive.is_none() && paths.is_empty() {
-        prune = Some(true);
-        recursive = Some(true);
-    }
-    let _ = recursive;
-    if !paths.is_empty() && prune == Some(true) {
-        return Err(snow_api::SnowError::incompatible(&["paths", "--prune"]));
-    }
+    crate::nativeapp::commands::deploy_flags(cli)?;
     let (id, model, ty) = entity_for(cli, "action_deploy")?;
-    match ty.as_str() {
-        "application package" => {
+    match ty {
+        EntityType::ApplicationPackage => {
             let pkg = crate::nativeapp::commands::ws_package(cli, &id, &model)?;
             crate::nativeapp::commands::ws_deploy(cli, &pkg)
         }
-        "function" | "procedure" => {
+        EntityType::Function | EntityType::Procedure => {
             let q = snowpark_deploy_sql(&model, &id)?;
             cli.execute_query(&q)?;
             Ok(Output::message("Deployed successfully."))
         }
-        "application" => {
+        EntityType::Application => {
             let (app, pkg) = application_entity(cli, &id, &model)?;
             app.deploy(
                 cli,
@@ -312,43 +294,43 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
             )?;
             Ok(Output::message("Deployed successfully."))
         }
-        "streamlit" => Err(snow_api::SnowError::unexpected(
+        EntityType::Streamlit => Err(snow_api::SnowError::unexpected(
             "StreamlitEntity.deploy() missing 2 required positional arguments: '_open' and 'replace'",
         )
         .named("TypeError")),
-        "notebook" => Err(snow_api::SnowError::unexpected(
+        EntityType::Notebook => Err(snow_api::SnowError::unexpected(
             "NotebookEntity.action_deploy() missing 1 required positional argument: 'replace'",
         )
         .named("TypeError")),
-        other => Err(unported(other, "ws deploy")),
+        _ => Err(unported("ws deploy")),
     }
 }
 
 pub fn drop(cli: &mut Cli) -> Result<Output> {
     let (id, model, ty) = entity_for(cli, "action_drop")?;
-    match ty.as_str() {
-        "application package" => {
+    match ty {
+        EntityType::ApplicationPackage => {
             let pkg = crate::nativeapp::commands::ws_package(cli, &id, &model)?;
             crate::nativeapp::commands::ws_drop(cli, &pkg)
         }
-        "streamlit" => {
+        EntityType::Streamlit => {
             let f = crate::entities::fqn(&model, &id)?;
             cli.execute_query(&format!("DROP STREAMLIT {};", f.sql_identifier()))?;
             Ok(Output::Empty)
         }
-        "notebook" => Err(snow_api::SnowError::click(
+        EntityType::Notebook => Err(snow_api::SnowError::click(
             "action DROP not supported by NOTEBOOK entity",
         )),
-        "function" | "procedure" => {
+        EntityType::Function | EntityType::Procedure => {
             let f = crate::entities::fqn(&model, &id)?;
             cli.execute_query(&format!(
                 "DROP {} {};",
-                ty.to_uppercase(),
+                ty.as_str().to_uppercase(),
                 f.sql_identifier()
             ))?;
             Ok(Output::Empty)
         }
-        "application" => {
+        EntityType::Application => {
             let (app, _) = application_entity(cli, &id, &model)?;
             app.drop(
                 cli,
@@ -358,13 +340,13 @@ pub fn drop(cli: &mut Cli) -> Result<Output> {
             )?;
             Ok(Output::Empty)
         }
-        other => Err(unported(other, "ws drop")),
+        _ => Err(unported("ws drop")),
     }
 }
 
 pub fn simple(cli: &mut Cli, action: &str) -> Result<Output> {
     let (id, model, ty) = entity_for(cli, action)?;
-    if ty == "application package" {
+    if ty == EntityType::ApplicationPackage {
         use crate::nativeapp::commands as c;
         let pkg = c::ws_package(cli, &id, &model)?;
         return match action {
@@ -372,8 +354,8 @@ pub fn simple(cli: &mut Cli, action: &str) -> Result<Output> {
             "action_version_list" => c::ws_version_list(cli, &pkg),
             "action_version_create" => c::ws_version_create(cli, &pkg),
             "action_version_drop" => c::ws_version_drop(cli, &pkg),
-            _ => Err(unported(&ty, action)),
+            _ => Err(unported(action)),
         };
     }
-    Err(unported(&ty, action))
+    Err(unported(action))
 }

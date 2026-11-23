@@ -196,7 +196,7 @@ pub struct Invocation {
     /// The original arguments (without the program name).
     pub argv: Vec<String>,
     /// The command tree, for `command_path_to`.
-    pub spec: Option<&'static Spec>,
+    pub spec: &'static Spec,
 }
 
 impl Invocation {
@@ -214,11 +214,9 @@ impl Invocation {
         let mut parts: Vec<String> = Vec::new();
         for (i, l) in self.levels[..=depth].iter().enumerate() {
             parts.push(l.info_name.clone());
-            if i < depth
-                && let Some(spec) = self.spec
-            {
-                for p in spec.cmd(l.cmd).params {
-                    let par = spec.param(*p);
+            if i < depth {
+                for p in self.spec.cmd(l.cmd).params {
+                    let par = self.spec.param(*p);
                     if par.is_argument {
                         parts.push(par.usage_metavar.to_string());
                     }
@@ -234,45 +232,31 @@ impl Invocation {
 
 /// Application callbacks invoked while parameters are processed.
 pub trait Hooks {
-    fn feature_enabled(&self, _flag: &str) -> bool {
-        false
-    }
+    fn feature_enabled(&self, flag: &str) -> bool;
     /// Convert a value of a Snowflake CLI specific type (`Ty::Custom`).
     fn convert_custom(
         &mut self,
-        _spec: &Spec,
-        _inv: &Invocation,
-        _param: &'static Param,
-        _ty: &'static str,
+        param: &'static Param,
+        ty: &'static str,
         raw: &str,
-    ) -> Result<Value, ClickError> {
-        Ok(Value::Str(raw.to_string()))
-    }
+    ) -> Result<Value, ClickError>;
     /// Run the parameter callback; may replace the value.
     fn callback(
         &mut self,
-        _spec: &Spec,
-        _inv: &mut Invocation,
-        _param: &'static Param,
+        spec: &Spec,
+        inv: &mut Invocation,
+        param: &'static Param,
         value: Value,
-    ) -> Result<Value, ClickError> {
-        Ok(value)
-    }
+    ) -> Result<Value, ClickError>;
     /// Prompt for an option given without its optional value (`--mfa-passcode`).
-    fn prompt(&mut self, _param: &'static Param) -> Result<Value, ClickError> {
-        Ok(Value::None)
-    }
-    /// Override the visible subcommands of a group (`snow app`).
-    fn list_commands(&self, _spec: &Spec, _cmd: u16) -> Option<Vec<u16>> {
-        None
-    }
+    fn prompt(&mut self) -> Result<Value, ClickError>;
     /// Called when a level asks for its help (`--help`, `--help-all`, no
-    /// arguments with `no_args_is_help`). Returns the exit code.
+    /// arguments with `no_args_is_help`).
     fn print_help(&mut self, spec: &Spec, inv: &Invocation, depth: usize)
     -> Result<(), ClickError>;
 }
 
-fn param_hidden(spec: &Spec, hooks: &dyn Hooks, idx: u16) -> bool {
+pub fn param_is_hidden(spec: &Spec, hooks: &dyn Hooks, idx: u16) -> bool {
     let p = spec.param(idx);
     match p.hidden_flag {
         Some(f) if hooks.feature_enabled(f) => !p.hidden,
@@ -286,10 +270,6 @@ pub fn command_hidden(spec: &Spec, hooks: &dyn Hooks, idx: u16) -> bool {
         Some(f) if hooks.feature_enabled(f) => !c.hidden,
         _ => c.hidden,
     }
-}
-
-pub fn param_is_hidden(spec: &Spec, hooks: &dyn Hooks, idx: u16) -> bool {
-    param_hidden(spec, hooks, idx)
 }
 
 /// Python `repr()` of a string.
@@ -686,7 +666,6 @@ pub struct Processor<'a, H: Hooks + ?Sized> {
 impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
     fn convert_one(
         &mut self,
-        inv: &Invocation,
         param: &'static Param,
         ty: &Ty,
         raw: &str,
@@ -804,16 +783,11 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
             // A tuple converts element-wise in convert_value; a lone string
             // only reaches here for a 1-tuple.
             Ty::Tuple(_) => Ok(Value::Str(raw.to_string())),
-            Ty::Custom(name) => self.hooks.convert_custom(self.spec, inv, param, name, raw),
+            Ty::Custom(name) => self.hooks.convert_custom(param, name, raw),
         }
     }
 
-    fn convert_value(
-        &mut self,
-        inv: &Invocation,
-        param: &'static Param,
-        v: Value,
-    ) -> Result<Value, ClickError> {
+    fn convert_value(&mut self, param: &'static Param, v: Value) -> Result<Value, ClickError> {
         // type_cast_value
         if v.is_none() {
             return Ok(if param.multiple || param.nargs == -1 {
@@ -838,65 +812,51 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
                     let mut out = Vec::new();
                     for (t, it) in tys.iter().zip(items) {
                         out.push(match it {
-                            Value::Str(s) => this.convert_one(inv, param, t, &s)?,
+                            Value::Str(s) => this.convert_one(param, t, &s)?,
                             other => other,
                         });
                     }
                     Ok(Value::List(out))
                 }
-                (ty, Value::Str(s)) => this.convert_one(inv, param, ty, &s),
+                (ty, Value::Str(s)) => this.convert_one(param, ty, &s),
                 (Ty::Bool, Value::Bool(b)) => Ok(Value::Bool(b)),
                 (Ty::Int | Ty::IntRange { .. }, Value::Int(i)) => {
-                    this.convert_one(inv, param, &param.ty, &i.to_string())
+                    this.convert_one(param, &param.ty, &i.to_string())
                 }
                 (_, other) => Ok(other),
             }
         };
+        let as_items = |v: Value| match v {
+            Value::List(l) => l,
+            other => vec![other],
+        };
         let per_item = |this: &mut Self, v: Value| -> Result<Value, ClickError> {
             if param.nargs == 1 || matches!(param.ty, Ty::Tuple(_)) {
-                conv_single(this, v)
-            } else if param.nargs == -1 {
-                let items = match v {
-                    Value::List(l) => l,
-                    other => vec![other],
-                };
-                let mut out = Vec::new();
-                for it in items {
-                    out.push(conv_single(this, it)?);
-                }
-                Ok(Value::List(out))
-            } else {
-                let items = match v {
-                    Value::List(l) => l,
-                    other => vec![other],
-                };
-                if items.len() != param.nargs as usize {
-                    return Err(ClickError::bad_parameter(
-                        param,
-                        format!(
-                            "Takes {} values but {} were given.",
-                            param.nargs,
-                            items.len()
-                        ),
-                    ));
-                }
-                let mut out = Vec::new();
-                for it in items {
-                    out.push(conv_single(this, it)?);
-                }
-                Ok(Value::List(out))
+                return conv_single(this, v);
             }
+            let items = as_items(v);
+            if param.nargs != -1 && items.len() != param.nargs as usize {
+                return Err(ClickError::bad_parameter(
+                    param,
+                    format!(
+                        "Takes {} values but {} were given.",
+                        param.nargs,
+                        items.len()
+                    ),
+                ));
+            }
+            items
+                .into_iter()
+                .map(|it| conv_single(this, it))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::List)
         };
         if param.multiple {
-            let items = match v {
-                Value::List(l) => l,
-                other => vec![other],
-            };
-            let mut out = Vec::new();
-            for it in items {
-                out.push(per_item(self, it)?);
-            }
-            Ok(Value::List(out))
+            as_items(v)
+                .into_iter()
+                .map(|it| per_item(self, it))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::List)
         } else {
             per_item(self, v)
         }
@@ -912,12 +872,7 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
         }
     }
 
-    fn default_of(&self, inv: &Invocation, param: &'static Param) -> Value {
-        if param.is_flag && !param.is_bool_flag {
-            // A flag with a non-boolean flag value: the default is the flag
-            // value when some sibling option with the same name defaults to on.
-            let _ = inv;
-        }
+    fn default_of(param: &'static Param) -> Value {
         let v: serde_json::Value =
             serde_json::from_str(param.default_json).unwrap_or(serde_json::Value::Null);
         Value::from_json(&v)
@@ -951,7 +906,7 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
         // `AgentArgsCommand._agent_args_hint`: usage errors point at --agent-args.
         let name = inv.levels[depth].info_name.clone();
         self.process_level_inner(inv, depth, args).map_err(|e| match e {
-            ClickError::Usage { message, depth, no_such_option, attach, class } => {
+            ClickError::Usage { message, depth, attach, class } => {
                 // Re-formatting a BadParameter prefixes "Invalid value for X: " again.
                 let message = match class {
                     "BadParameter" => match message.find(": ") {
@@ -966,7 +921,6 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
                         "{message}\n\nIf that argument was meant for {name}, put it after --agent-args, which forwards everything following it verbatim:\n    {path} --agent-args ..."
                     ),
                     depth,
-                    no_such_option,
                     attach,
                     class,
                 }
@@ -1043,11 +997,11 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
                 Some(v) => (v, Source::CommandLine),
                 None => match Self::envvar_value(param) {
                     Some(v) => (v, Source::Environment),
-                    None => (self.default_of(inv, param), Source::Default),
+                    None => (Self::default_of(param), Source::Default),
                 },
             };
             if needs_value.contains(&p) {
-                value = self.hooks.prompt(param).map_err(|e| e.at(depth))?;
+                value = self.hooks.prompt().map_err(|e| e.at(depth))?;
                 source = Source::Prompt;
             }
             if is_help(p) {
@@ -1057,9 +1011,7 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
                 }
                 continue;
             }
-            let value = self
-                .convert_value(inv, param, value)
-                .map_err(|e| e.at(depth))?;
+            let value = self.convert_value(param, value).map_err(|e| e.at(depth))?;
             let missing = match &value {
                 Value::None => true,
                 Value::List(l) => (param.nargs != 1 || param.multiple) && l.is_empty(),
@@ -1134,7 +1086,7 @@ impl<'a, H: Hooks + ?Sized> Processor<'a, H> {
                 show_all_help: false,
             }],
             argv: argv.clone(),
-            spec: Some(self.spec),
+            spec: self.spec,
         };
         let mut args = argv;
         let mut depth = 0;
@@ -1189,8 +1141,4 @@ fn extra_args_error(rest: &[String]) -> ClickError {
     } else {
         ClickError::usage(format!("Got unexpected extra arguments ({joined})"))
     }
-}
-
-pub fn describe(min: Option<i64>, max: Option<i64>, min_open: bool, max_open: bool) -> String {
-    describe_range(min, max, min_open, max_open)
 }

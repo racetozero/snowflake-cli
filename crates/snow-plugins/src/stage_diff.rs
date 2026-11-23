@@ -3,6 +3,7 @@
 use md5::{Digest, Md5};
 use snow_api::output::{Output, Pv};
 use snow_api::{Cli, Result, SnowError};
+use snow_connector::hex;
 use std::path::{Path, PathBuf};
 
 #[derive(Default, Debug)]
@@ -81,10 +82,6 @@ pub fn compute_md5sum(file: &Path, chunk_size: Option<u64>) -> std::io::Result<S
     ))
 }
 
-fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
 pub fn file_matches_md5sum(file: &Path, remote: Option<&str>) -> Result<bool> {
     let Some(remote) = remote.filter(|r| !r.is_empty()) else {
         return Ok(false);
@@ -145,7 +142,7 @@ pub fn compute(
             .strip_prefix(directory)
             .unwrap_or(wo)
             .trim_start_matches('/');
-        let rel = snow_api::stage_path::posix_str(&snow_api::stage_path::posix_parts(rel));
+        let rel = snow_api::stage_path::pure_path(rel);
         remote.insert(rel, mi.and_then(|i| r.get(i).cloned().flatten()));
     }
     let mut out = DiffResult::default();
@@ -182,11 +179,6 @@ fn diff_line(status: &str, src: Option<&str>, dest: &str) -> String {
     let pad = " ".repeat("modified".len() - status.len());
     let src = src.map(|s| format!("{s} -> ")).unwrap_or_default();
     format!("[red]{status}[/red]: {pad}{src}{dest}")
-}
-
-/// `print_diff_to_console` (no bundle map).
-pub fn print(cli: &mut Cli, d: &DiffResult) {
-    print_with_map(cli, d, None)
 }
 
 /// `print_diff_to_console(diff, bundle_map)`.
@@ -255,6 +247,6 @@ pub fn stage_diff(cli: &mut Cli) -> Result<Output> {
     if cli.format.is_json() {
         return Ok(d.to_output());
     }
-    print(cli, &d);
+    print_with_map(cli, &d, None);
     Ok(Output::Empty)
 }

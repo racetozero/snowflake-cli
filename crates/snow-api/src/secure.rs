@@ -16,11 +16,10 @@ pub fn mkdir_p(p: &Path) -> Result<()> {
 }
 
 pub fn touch(p: &Path) -> Result<()> {
-    if !p.exists() {
-        std::fs::write(p, "")?;
-        restrict(p);
+    if p.exists() {
+        return Ok(());
     }
-    Ok(())
+    write_private(p, "")
 }
 
 pub fn restrict(p: &Path) {
@@ -34,7 +33,7 @@ pub fn restrict(p: &Path) {
 }
 
 /// Write a file, creating it with 0600 permissions when it is new.
-pub fn write_private(p: &Path, content: &str) -> Result<()> {
+pub(crate) fn write_private(p: &Path, content: &str) -> Result<()> {
     let existed = p.exists();
     std::fs::write(p, content)?;
     if !existed {
@@ -50,7 +49,7 @@ pub fn read_text(p: &Path) -> std::result::Result<String, String> {
     } else {
         std::env::current_dir().unwrap_or_default().join(p)
     };
-    let abs = crate::project::model::pure_path(&abs.to_string_lossy());
+    let abs = crate::stage_path::pure_path(&abs.to_string_lossy());
     let repr = format!("PosixPath({})", snow_click::py_repr(&abs));
     let path = Path::new(&abs);
     if !path.exists() {

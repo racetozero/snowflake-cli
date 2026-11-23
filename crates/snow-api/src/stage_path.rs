@@ -33,6 +33,11 @@ pub fn posix_str(parts: &[String]) -> String {
     parts.join("/")
 }
 
+/// `str(pathlib.PurePosixPath(s))`.
+pub fn pure_path(s: &str) -> String {
+    posix_str(&posix_parts(s))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagePath {
     stage_name: String,
@@ -48,15 +53,14 @@ fn strip_prefixes(t: &str) -> String {
 }
 
 impl StagePath {
-    pub fn new(
+    fn new(
         stage_name: &str,
         path: Option<&str>,
         git_ref: Option<&str>,
         trailing_slash: bool,
-        snow: Option<bool>,
     ) -> StagePath {
         StagePath {
-            snow_prefixed: snow.unwrap_or_else(|| stage_name.starts_with(SNOW_PREFIX)),
+            snow_prefixed: stage_name.starts_with(SNOW_PREFIX),
             stage_name: strip_prefixes(stage_name),
             path: path.map(posix_parts).unwrap_or_default(),
             git_ref: git_ref.filter(|g| !g.is_empty()).map(str::to_string),
@@ -92,7 +96,7 @@ impl StagePath {
         if snow {
             stage = format!("{SNOW_PREFIX}{resource}/{stage}");
         }
-        StagePath::new(&stage, path, None, rest.ends_with('/'), None)
+        StagePath::new(&stage, path, None, rest.ends_with('/'))
     }
 
     pub fn from_git_str(s: &str) -> StagePath {
@@ -105,7 +109,7 @@ impl StagePath {
         if snow {
             repo = format!("{SNOW_PREFIX}{repo}");
         }
-        StagePath::new(&repo, Some(&path), Some(&gref), s.ends_with('/'), None)
+        StagePath::new(&repo, Some(&path), Some(&gref), s.ends_with('/'))
     }
 
     pub fn stage(&self) -> &str {
@@ -135,22 +139,9 @@ impl StagePath {
     pub fn is_root(&self) -> bool {
         self.path.is_empty()
     }
-    pub fn git_ref(&self) -> Option<&str> {
-        self.git_ref.as_deref()
-    }
-    pub fn trailing_slash(&self) -> bool {
-        self.trailing_slash
-    }
 
-    pub fn absolute_path_opts(&self, no_fqn: bool, at_prefix: bool) -> String {
-        let mut stage = self.stage_name.clone();
-        if !self.is_user_stage()
-            && no_fqn
-            && let Ok(f) = Fqn::from_string(&stage)
-        {
-            stage = f.name;
-        }
-        let mut parts = posix_parts(&stage);
+    pub fn absolute_path(&self) -> String {
+        let mut parts = posix_parts(&self.stage_name);
         if let Some(g) = &self.git_ref {
             parts.extend(posix_parts(g));
         }
@@ -162,7 +153,7 @@ impl StagePath {
             if !s.starts_with(SNOW_PREFIX) {
                 s = format!("{SNOW_PREFIX}{s}");
             }
-        } else if at_prefix && !s.starts_with('@') {
+        } else if !s.starts_with('@') {
             s = format!("@{s}");
         }
         if self.trailing_slash {
@@ -171,22 +162,9 @@ impl StagePath {
         s
     }
 
-    pub fn absolute_path(&self) -> String {
-        self.absolute_path_opts(false, true)
-    }
-
     pub fn path_for_sql(&self) -> String {
         let p = self.absolute_path();
         if SQL_SAFE.is_match(&p) {
-            p
-        } else {
-            to_string_literal(&p)
-        }
-    }
-
-    pub fn quoted_absolute_path(&self) -> String {
-        let p = self.absolute_path();
-        if crate::identifiers::is_valid_string_literal(&p) {
             p
         } else {
             to_string_literal(&p)

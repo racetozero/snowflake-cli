@@ -1,0 +1,18 @@
+# Cases for behaviour the Rust port once got wrong.
+
+[[case]]
+name = "dcm plan sanitizes escape sequences in mismatch warnings"
+covers = ["snow dcm plan"]
+connection = true
+stages = true
+sort_sql = true
+files = { "manifest.yml" = "manifest_version: 2\ntype: DCM_PROJECT\ntargets:\n  dev:\n    project_name: db.s.proj\n    account_identifier: \"my\\e]org\\e^x\\e-y-myacc\"\n    project_owner: \"own\\e]er\\e-z\"\ndefault_target: dev\n", "sources/definitions/a.sql" = "define table t(a int);\n" }
+rules = [{ match = "PLAN", columns = ["result"], rows = [["{\"version\": 2, \"changeset\": []}"]] }, { match = "CURRENT_ORGANIZATION_NAME", columns = ["ORG", "ACCT"], rows = [["MYORG", "MYACC"]] }, { match = "select current_role", columns = ["CURRENT_ROLE()"], rows = [["OWNER_ROLE"]] }]
+normalize = [["(?i)DCM_PROJ_\\d+_(OUTPUT_)?TMP_STAGE", "DCM_PROJ_<TS>_\\1TMP_STAGE"], ["file://\\S+?/\\d+/\\*", "file://<TMPDIR>/<N>/*"], ["(Completed|Failed) \\(\\d+s\\)", "\\1 (Ns)"]]
+argv = ["dcm", "plan"]
+
+[[case]]
+name = "connection add writes fields in ConnectionConfig order"
+covers = ["snow connection add"]
+compare_config = true
+argv = ["connection", "add", "-n", "ordered", "--account", "acc", "--user", "u", "--server-session-keep-alive", "--secondary-roles", "ALL", "--client-store-temporary-credential", "--role", "r", "--no-interactive"]

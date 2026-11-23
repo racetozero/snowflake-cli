@@ -1,6 +1,7 @@
 //! Artifact bundling (`api/artifacts/bundle_map.py`, `utils.py`, `upload.py`) and
 //! `sync_deploy_root_with_stage` (`api/entities/utils.py`).
 
+use crate::stage::fnmatchcase;
 use snow_api::project::PyV;
 use snow_api::{Cli, Result, SnowError};
 use std::collections::HashMap;
@@ -8,22 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// `os.path.abspath`: absolute and normalised, symlinks not followed.
 pub fn resolve_without_follow(p: &Path) -> PathBuf {
-    let abs = if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        std::env::current_dir().unwrap_or_default().join(p)
-    };
-    let mut out = PathBuf::new();
-    for c in abs.components() {
-        match c {
-            std::path::Component::ParentDir => {
-                out.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => out.push(other),
-        }
-    }
-    out
+    crate::paths::normalize(&std::env::current_dir().unwrap_or_default().join(p))
 }
 
 fn is_in(child: &Path, parent: &Path) -> bool {
@@ -49,10 +35,6 @@ fn too_many(dest: &Path) -> SnowError {
     .named("TooManyFilesError")
 }
 
-fn fnmatchcase(name: &str, pat: &str) -> bool {
-    crate::stage::fnmatchcase(name, pat)
-}
-
 /// `pathlib.Path(root).glob(pattern)` (sorted; `**` recursive; a trailing `/` keeps directories).
 pub fn path_glob(root: &Path, pattern: &str) -> Vec<PathBuf> {
     let dirs_only = pattern.ends_with('/');
@@ -61,8 +43,7 @@ pub fn path_glob(root: &Path, pattern: &str) -> Vec<PathBuf> {
         .filter(|c| !c.is_empty() && *c != ".")
         .collect();
     let mut cur = vec![root.to_path_buf()];
-    for (i, comp) in comps.iter().enumerate() {
-        let last = i + 1 == comps.len();
+    for comp in &comps {
         let mut next = Vec::new();
         for base in &cur {
             if *comp == "**" {
@@ -107,7 +88,6 @@ pub fn path_glob(root: &Path, pattern: &str) -> Vec<PathBuf> {
                     next.push(p);
                 }
             }
-            let _ = last;
         }
         cur = next;
     }
@@ -429,7 +409,8 @@ impl BundleMap {
 }
 
 /// `os.walk` order flattened: each directory's entries (sorted), directories recursed.
-fn walk(dir: &Path) -> Vec<PathBuf> {
+/// Every path under `dir`, depth first in sorted order (= sorted by `Path` order).
+pub(crate) fn walk(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let Ok(rd) = std::fs::read_dir(dir) else {
         return out;
@@ -445,6 +426,15 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+/// Write a deploy-root file. A bundled file is a symlink into the project
+/// source, so unlink it first; writing through it would edit the user's file.
+pub fn write_in_bundle(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    if path.is_symlink() {
+        std::fs::remove_file(path)?;
+    }
+    std::fs::write(path, contents)
 }
 
 fn symlink_or_copy(src: &Path, dst: &Path) -> Result<()> {

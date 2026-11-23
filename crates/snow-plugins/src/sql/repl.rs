@@ -524,16 +524,15 @@ pub fn run(
 
 /// `_print_sql_elapsed(elapsed_seconds)`.
 fn print_elapsed(cli: &mut Cli, secs: f64) {
-    use snow_api::output::Format;
-    if !cli.timing || matches!(cli.format, Format::Json | Format::JsonExt | Format::Csv) {
+    if !cli.sql.timing || cli.format.is_structured() {
         return;
     }
     let line = format!("Time Elapsed: {secs:.3}s");
-    if !cli.quiet {
+    if !cli.sql.quiet {
         cli.console.message(&line);
     }
-    if cli.timing_in_output_file
-        && let Some(f) = cli.spool.as_mut()
+    if cli.sql.timing_in_output_file
+        && let Some(f) = cli.sql.spool.as_mut()
     {
         let _ = writeln!(f, "{line}");
         let _ = f.flush();

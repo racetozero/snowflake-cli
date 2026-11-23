@@ -9,7 +9,6 @@ use snow_api::output::{Pv, Row};
 use snow_api::{Cli, Result, SnowError};
 use snow_connector::{DbError, ErrorKind};
 
-/// Raw result rows of a statement.
 pub type Rows = Vec<Vec<Option<String>>>;
 
 pub const SPECIAL_COMMENT: &str = "GENERATED_BY_SNOWFLAKECLI";
@@ -37,6 +36,11 @@ pub mod errno {
     pub const CANNOT_SET_DEBUG_MODE_WITH_MANIFEST_VERSION: i64 = 93362;
     pub const APPLICATION_OWNS_EXTERNAL_OBJECTS: i64 = 93128;
     pub const NO_REFERENCE_SET_FOR_DEFINITION: i64 = 505019;
+    pub const APPLICATION_NO_LONGER_AVAILABLE: i64 = 93079;
+    pub const RELEASE_DIRECTIVE_DOES_NOT_EXIST: i64 = 93090;
+    pub const TARGET_ACCOUNT_USED_BY_OTHER_RELEASE_DIRECTIVE: i64 = 93091;
+    pub const ACCOUNT_DOES_NOT_EXIST: i64 = 1999;
+    pub const ACCOUNT_HAS_TOO_MANY_QUALIFIERS: i64 = 906;
 
     /// `UPGRADE_RESTRICTION_CODES`.
     pub const UPGRADE_RESTRICTION: [i64; 5] = [93044, 93045, 93046, 93055, 93079];
@@ -47,14 +51,9 @@ pub mod errno {
     ];
 }
 
-/// `str(err)` / `err.msg` for a connector error.
-pub fn msg(cli: &Cli, e: &DbError) -> String {
-    e.msg_with(cli.connector_info)
-}
-
 /// `handle_unclassified_error(err, context)`.
 pub fn unclassified(cli: &Cli, e: &DbError, context: &str) -> SnowError {
-    let m = format!("{context} {}", msg(cli, e));
+    let m = format!("{context} {}", e.msg_with(cli.connector_info));
     match e.kind {
         ErrorKind::Programming => SnowError::unexpected(format!("Invalid SQL error occurred. {m}"))
             .named("InvalidSQLError"),
@@ -95,15 +94,6 @@ fn is_prog(e: &DbError, errno: i64) -> bool {
     e.kind == ErrorKind::Programming && e.errno == errno
 }
 
-/// Run one query, handing back the connector error.
-fn run(cli: &mut Cli, sql: &str) -> Result<std::result::Result<snow_connector::Cursor, DbError>> {
-    cli.try_query(sql)
-}
-
-fn dict_rows(cli: &mut Cli, c: &snow_connector::Cursor) -> Vec<Row> {
-    cli.rows(c)
-}
-
 /// `_use_object_optional(object_type, name)`: switch for the duration of `f`.
 pub fn use_optional<T>(
     cli: &mut Cli,
@@ -113,7 +103,7 @@ pub fn use_optional<T>(
 ) -> Result<T> {
     let Some(name) = name else { return f(cli) };
     let name = to_identifier(name);
-    let row = match run(cli, &format!("select current_{kind}()"))? {
+    let row = match cli.try_query(&format!("select current_{kind}()"))? {
         Ok(c) => c,
         Err(e) => {
             return Err(unclassified(
@@ -123,10 +113,7 @@ pub fn use_optional<T>(
             ));
         }
     };
-    let prev = row
-        .rows
-        .first()
-        .and_then(|r| r.first().cloned().flatten())
+    let prev = Cli::first_cell_opt(&row)
         .filter(|s| !s.is_empty())
         .map(|s| to_identifier(&s));
     if prev.as_deref().is_some_and(|p| same_identifiers(p, &name)) {
@@ -141,7 +128,7 @@ pub fn use_optional<T>(
 }
 
 fn use_object(cli: &mut Cli, kind: &str, name: &str) -> Result<()> {
-    match run(cli, &format!("use {kind} {name}"))? {
+    match cli.try_query(&format!("use {kind} {name}"))? {
         Ok(_) => Ok(()),
         Err(e) if is_prog(&e, errno::DOES_NOT_EXIST_OR_CANNOT_BE_PERFORMED) => Err(user_input(format!(
             "Could not use {kind} {name}. Object does not exist, or operation cannot be performed."
@@ -192,18 +179,18 @@ pub fn execute_user_script(
     use_optional(cli, "role", role, |cli| {
         use_optional(cli, "warehouse", warehouse, |cli| {
             use_optional(cli, "database", database, |cli| {
-                let text = snow_api::sql::dedent(queries);
+                let text = snow_rich::render::dedent(queries);
                 for st in snow_api::splitter::split_statements(&text, true) {
-                    match run(cli, &st.text)? {
+                    match cli.try_query(&st.text)? {
                         Ok(_) => {}
                         Err(e) if e.kind == ErrorKind::Programming => {
                             let m = if e.errno == errno::NO_WAREHOUSE_SELECTED_IN_SESSION {
                                 format!(
                                     "{}. Please provide a warehouse in your project definition file, config.toml file, or via command line",
-                                    msg(cli, &e)
+                                    e.msg_with(cli.connector_info)
                                 )
                             } else {
-                                msg(cli, &e)
+                                e.msg_with(cli.connector_info)
                             };
                             return Err(SnowError::click(format!(
                                 "Failed to run script {script_name}. {m}"
@@ -255,7 +242,7 @@ pub fn create_version_in_package(
         &format!("    {using}"),
         &format!("    {label_clause}"),
     ]);
-    use_role(cli, role, |cli| match run(cli, &q)? {
+    use_role(cli, role, |cli| match cli.try_query(&q)? {
         Ok(_) => Ok(()),
         Err(e) => Err(match e.errno {
             errno::MAX_UNBOUND_VERSIONS_REACHED if e.kind == ErrorKind::Programming => {
@@ -300,7 +287,7 @@ pub fn drop_version_from_package(
         "deregister"
     };
     let q = format!("alter application package {package} {action} version {version}");
-    use_role(cli, role, |cli| match run(cli, &q)? {
+    use_role(cli, role, |cli| match cli.try_query(&q)? {
         Ok(_) => Ok(()),
         Err(e) => Err(match e.errno {
             errno::VERSION_REFERENCED_BY_RELEASE_DIRECTIVE if e.kind == ErrorKind::Programming => {
@@ -357,7 +344,7 @@ pub fn add_patch_to_package_version(
         )
     };
     use_role(cli, role, |cli| {
-        let c = match run(cli, &q)? {
+        let c = match cli.try_query(&q)? {
             Ok(c) => c,
             Err(e) => {
                 return Err(match e.errno {
@@ -390,7 +377,7 @@ pub fn add_patch_to_package_version(
                 });
             }
         };
-        let rows = dict_rows(cli, &c);
+        let rows = cli.rows(&c);
         let Some(row) = rows.first() else {
             return Err(SnowError::unexpected(
                 "Received unexpected result from query. Expected to receive the new patch but the result is empty",
@@ -409,11 +396,10 @@ pub fn add_patch_to_package_version(
 pub fn get_event_definitions(cli: &mut Cli, app: &str, role: Option<&str>) -> Result<Vec<Row>> {
     let ident = to_identifier(app);
     use_role(cli, role, |cli| {
-        match run(
-            cli,
-            &format!("show telemetry event definitions in application {ident}"),
-        )? {
-            Ok(c) => Ok(dict_rows(cli, &c)),
+        match cli.try_query(&format!(
+            "show telemetry event definitions in application {ident}"
+        ))? {
+            Ok(c) => Ok(cli.rows(&c)),
             Err(e) => Err(unclassified(
                 cli,
                 &e,
@@ -431,8 +417,9 @@ pub fn get_app_properties(
 ) -> Result<indexmap::IndexMap<String, String>> {
     let ident = to_identifier(app);
     use_role(cli, role, |cli| {
-        match run(cli, &format!("desc application {ident}"))? {
-            Ok(c) => Ok(dict_rows(cli, &c)
+        match cli.try_query(&format!("desc application {ident}"))? {
+            Ok(c) => Ok(cli
+                .rows(&c)
                 .into_iter()
                 .map(|r| {
                     (
@@ -463,7 +450,7 @@ pub fn share_telemetry_events(
         "alter application {ident} set shared telemetry events ({})",
         names.join(", ")
     );
-    use_role(cli, role, |cli| match run(cli, &q)? {
+    use_role(cli, role, |cli| match cli.try_query(&q)? {
         Ok(_) => Ok(()),
         Err(e) => Err(unclassified(
             cli,
@@ -473,13 +460,8 @@ pub fn share_telemetry_events(
     })
 }
 
-/// `create_schema(name, role, database)`.
-pub fn create_schema(
-    cli: &mut Cli,
-    name: &str,
-    role: Option<&str>,
-    database: Option<&str>,
-) -> Result<()> {
+/// `create_schema(name, database)` (the caller's role).
+pub fn create_schema(cli: &mut Cli, name: &str, database: Option<&str>) -> Result<()> {
     let fqn = Fqn::from_string(name)?;
     let ident = to_identifier(&fqn.name);
     let prefix = fqn.prefix();
@@ -488,28 +470,26 @@ pub fn create_schema(
     } else {
         Some(prefix)
     };
-    use_role(cli, role, |cli| {
-        use_optional(cli, "database", database.as_deref(), |cli| {
-            match run(cli, &format!("create schema if not exists {ident}"))? {
-                Ok(_) => Ok(()),
-                Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
-                    &format!("Insufficient privileges to create schema {name}"),
-                    role,
-                    database.as_deref(),
-                    None,
-                )),
-                Err(e) => Err(unclassified(
-                    cli,
-                    &e,
-                    &format!("Failed to create schema {name}."),
-                )),
-            }
-        })
+    use_optional(cli, "database", database.as_deref(), |cli| {
+        match cli.try_query(&format!("create schema if not exists {ident}"))? {
+            Ok(_) => Ok(()),
+            Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
+                &format!("Insufficient privileges to create schema {name}"),
+                None,
+                database.as_deref(),
+                None,
+            )),
+            Err(e) => Err(unclassified(
+                cli,
+                &e,
+                &format!("Failed to create schema {name}."),
+            )),
+        }
     })
 }
 
-/// `stage_exists(name, role, database, schema)`.
-pub fn stage_exists(cli: &mut Cli, name: &str, role: Option<&str>) -> Result<bool> {
+/// `stage_exists(name, database, schema)` (the caller's role).
+pub fn stage_exists(cli: &mut Cli, name: &str) -> Result<bool> {
     let fqn = Fqn::from_string(name)?;
     let ident = to_identifier(&fqn.name);
     let pattern = identifier_to_show_like_pattern(&ident);
@@ -519,58 +499,47 @@ pub fn stage_exists(cli: &mut Cli, name: &str, role: Option<&str>) -> Result<boo
         (None, Some(d)) => format!(" in database {d}"),
         _ => String::new(),
     };
-    let r = use_role(cli, role, |cli| {
-        match run(cli, &format!("show stages like {pattern}{clause}"))? {
-            Ok(c) => Ok(!c.rows.is_empty()),
-            Err(e) if is_prog(&e, errno::DOES_NOT_EXIST_OR_CANNOT_BE_PERFORMED) => Ok(false),
-            Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
-                &format!("Insufficient privileges to check if stage {name} exists"),
-                role,
-                fqn.database.as_deref(),
-                fqn.schema.as_deref(),
-            )),
-            Err(e) => Err(unclassified(
-                cli,
-                &e,
-                &format!("Failed to check if stage {name} exists."),
-            )),
-        }
-    });
-    match r {
-        Err(SnowError::Cli {
-            name: "CouldNotUseObjectError",
-            ..
-        }) => Ok(false),
-        other => other,
+    match cli.try_query(&format!("show stages like {pattern}{clause}"))? {
+        Ok(c) => Ok(!c.rows.is_empty()),
+        Err(e) if is_prog(&e, errno::DOES_NOT_EXIST_OR_CANNOT_BE_PERFORMED) => Ok(false),
+        Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
+            &format!("Insufficient privileges to check if stage {name} exists"),
+            None,
+            fqn.database.as_deref(),
+            fqn.schema.as_deref(),
+        )),
+        Err(e) => Err(unclassified(
+            cli,
+            &e,
+            &format!("Failed to check if stage {name} exists."),
+        )),
     }
 }
 
-/// `create_stage(name, ...)` with the default encryption and directory table.
-pub fn create_stage(cli: &mut Cli, name: &str, temporary: bool, role: Option<&str>) -> Result<()> {
+/// `create_stage(name, ...)` (not temporary, the caller's role) with the default
+/// encryption and directory table.
+pub fn create_stage(cli: &mut Cli, name: &str) -> Result<()> {
     let fqn = Fqn::from_string(name)?;
     let ident = to_identifier(&fqn.name);
     let q = format!(
-        "create{} stage if not exists {ident} encryption = (type = 'SNOWFLAKE_SSE') directory = (enable = True)",
-        if temporary { " temporary" } else { "" }
+        "create stage if not exists {ident} encryption = (type = 'SNOWFLAKE_SSE') directory = (enable = True)"
     );
-    use_role(cli, role, |cli| {
-        use_optional(cli, "database", fqn.database.as_deref(), |cli| {
-            use_optional(cli, "schema", fqn.schema.as_deref(), |cli| {
-                match run(cli, &q)? {
-                    Ok(_) => Ok(()),
-                    Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
-                        &format!("Insufficient privileges to create stage {name}"),
-                        role,
-                        fqn.database.as_deref(),
-                        fqn.schema.as_deref(),
-                    )),
-                    Err(e) => Err(unclassified(
-                        cli,
-                        &e,
-                        &format!("Failed to create stage {name}."),
-                    )),
-                }
-            })
+    use_optional(cli, "database", fqn.database.as_deref(), |cli| {
+        use_optional(cli, "schema", fqn.schema.as_deref(), |cli| {
+            match cli.try_query(&q)? {
+                Ok(_) => Ok(()),
+                Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
+                    &format!("Insufficient privileges to create stage {name}"),
+                    None,
+                    fqn.database.as_deref(),
+                    fqn.schema.as_deref(),
+                )),
+                Err(e) => Err(unclassified(
+                    cli,
+                    &e,
+                    &format!("Failed to create stage {name}."),
+                )),
+            }
         })
     })
 }
@@ -587,8 +556,8 @@ pub fn show_release_directives(
     if let Some(c) = channel.filter(|c| !c.is_empty()) {
         q.push_str(&format!(" for release channel {}", to_identifier(c)));
     }
-    use_role(cli, role, |cli| match run(cli, &q)? {
-        Ok(c) => Ok(dict_rows(cli, &c)),
+    use_role(cli, role, |cli| match cli.try_query(&q)? {
+        Ok(c) => Ok(cli.rows(&c)),
         Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
             &format!(
                 "Insufficient privileges to show release directives for application package {package}"
@@ -615,10 +584,11 @@ pub fn get_existing_app_info(cli: &mut Cli, name: &str, role: Option<&str>) -> R
             "show applications like {}",
             identifier_to_show_like_pattern(name)
         );
-        match run(cli, q.trim())? {
+        match cli.try_query(q.trim())? {
             Ok(c) => {
                 let want = unquote_identifier(name);
-                Ok(dict_rows(cli, &c)
+                Ok(cli
+                    .rows(&c)
                     .into_iter()
                     .find(|r| r.get("name").map(Pv::py_str).as_deref() == Some(&want)))
             }
@@ -649,7 +619,7 @@ pub fn create_application_package(
         &format!("    distribution = {distribution}"),
         &format!("    {rc}"),
     ]);
-    use_role(cli, role, |cli| match run(cli, &q)? {
+    use_role(cli, role, |cli| match cli.try_query(&q)? {
         Ok(_) => Ok(()),
         Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
             &format!("Insufficient privileges to create application package {package}"),
@@ -677,7 +647,7 @@ pub fn alter_application_package_properties(
         return Ok(());
     };
     let q = format!("alter application package {package}\n    set enable_release_channels = {b}\n");
-    use_role(cli, role, |cli| match run(cli, &q)? {
+    use_role(cli, role, |cli| match cli.try_query(&q)? {
         Ok(_) => Ok(()),
         Err(e) if is_prog(&e, errno::INSUFFICIENT_PRIVILEGES) => Err(insufficient(
             &format!(
@@ -702,11 +672,8 @@ pub fn alter_application_package_properties(
 pub fn show_versions(cli: &mut Cli, package: &str, role: Option<&str>) -> Result<Vec<Row>> {
     let package = to_identifier(package);
     use_role(cli, role, |cli| {
-        match run(
-            cli,
-            &format!("show versions in application package {package}"),
-        )? {
-            Ok(c) => Ok(dict_rows(cli, &c)),
+        match cli.try_query(&format!("show versions in application package {package}"))? {
+            Ok(c) => Ok(cli.rows(&c)),
             Err(e) if is_prog(&e, errno::DOES_NOT_EXIST_OR_NOT_AUTHORIZED) => {
                 Err(user_input(format!(
                     "Application package {package} does not exist or you are not authorized to access it."
@@ -723,60 +690,38 @@ pub fn show_versions(cli: &mut Cli, package: &str, role: Option<&str>) -> Result
 
 /// `SameAccountInstallMethod`.
 #[derive(Clone, Debug)]
-pub struct InstallMethod {
-    pub requires_created_by_cli: bool,
-    pub version: Option<String>,
-    pub patch: Option<i64>,
-    pub from_release_directive: bool,
+pub enum InstallMethod {
+    /// From the stage; only an application the CLI created can be upgraded.
+    UnversionedDev,
+    VersionedDev {
+        version: String,
+        patch: Option<i64>,
+    },
+    ReleaseDirective,
 }
 
 impl InstallMethod {
-    pub fn unversioned_dev() -> Self {
-        InstallMethod {
-            requires_created_by_cli: true,
-            version: None,
-            patch: None,
-            from_release_directive: false,
-        }
-    }
-    pub fn versioned_dev(version: &str, patch: Option<i64>) -> Self {
-        InstallMethod {
-            requires_created_by_cli: false,
-            version: Some(version.into()),
-            patch,
-            from_release_directive: false,
-        }
-    }
-    pub fn release_directive() -> Self {
-        InstallMethod {
-            requires_created_by_cli: false,
-            version: None,
-            patch: None,
-            from_release_directive: true,
-        }
-    }
     pub fn is_dev_mode(&self) -> bool {
-        !self.from_release_directive
+        !matches!(self, InstallMethod::ReleaseDirective)
     }
     pub fn using_clause(&self, stage_fqn: &str) -> String {
-        if self.from_release_directive {
-            return String::new();
+        match self {
+            InstallMethod::ReleaseDirective => String::new(),
+            InstallMethod::VersionedDev { version, patch } => {
+                let patch = patch
+                    .filter(|p| *p != 0)
+                    .map(|p| format!("patch {p}"))
+                    .unwrap_or_default();
+                format!("using version {} {patch}", to_identifier(version))
+            }
+            InstallMethod::UnversionedDev => format!(
+                "using {}",
+                crate::stage_execute::quote_stage_name(stage_fqn)
+            ),
         }
-        if let Some(v) = &self.version {
-            let patch = self
-                .patch
-                .filter(|p| *p != 0)
-                .map(|p| format!("patch {p}"))
-                .unwrap_or_default();
-            return format!("using version {} {patch}", to_identifier(v));
-        }
-        format!(
-            "using {}",
-            crate::stage_execute::quote_stage_name(stage_fqn)
-        )
     }
     pub fn ensure_app_usable(&self, app: &str, row: Option<&Row>) -> Result<()> {
-        if self.requires_created_by_cli {
+        if matches!(self, InstallMethod::UnversionedDev) {
             let comment = row
                 .and_then(|r| r.get("comment"))
                 .map(Pv::py_str)
@@ -833,28 +778,29 @@ pub fn upgrade_application(
             let upgrade_err = |cli: &Cli, e: DbError| -> SnowError {
                 if e.kind == ErrorKind::Programming {
                     if errno::UPGRADE_RESTRICTION.contains(&e.errno) {
-                        return user_input(msg(cli, &e))
+                        return user_input(e.msg_with(cli.connector_info))
                             .named("UpgradeApplicationRestrictionError");
                     }
                     if errno::CREATE_OR_UPGRADE_USER_ERRORS.contains(&e.errno) {
                         return user_input(format!(
                             "Failed to upgrade application {name} with the following error message:\n{}",
-                            msg(cli, &e)
+                            e.msg_with(cli.connector_info)
                         ));
                     }
                 }
                 unclassified(cli, &e, &format!("Failed to upgrade application {name}."))
             };
-            let cursor = match run(cli, &format!("alter application {name} upgrade {using}"))? {
-                Ok(c) => c,
-                Err(e) => return Err(upgrade_err(cli, e)),
-            };
+            let cursor =
+                match cli.try_query(&format!("alter application {name} upgrade {using}"))? {
+                    Ok(c) => c,
+                    Err(e) => return Err(upgrade_err(cli, e)),
+                };
             if install.is_dev_mode()
                 && let Some(d) = debug_mode
-                && let Err(e) = run(
-                    cli,
-                    &format!("alter application {name} set debug_mode = {}", bool_py(d)),
-                )?
+                && let Err(e) = cli.try_query(&format!(
+                    "alter application {name} set debug_mode = {}",
+                    bool_py(d)
+                ))?
             {
                 return Err(upgrade_err(cli, e));
             }
@@ -877,7 +823,7 @@ pub fn upgrade_application(
                         "alter application {name} set AUTHORIZE_TELEMETRY_EVENT_SHARING = {}",
                         bool_py(share).to_uppercase()
                     );
-                    if let Err(e) = run(cli, &q)? {
+                    if let Err(e) = cli.try_query(&q)? {
                         if is_prog(&e, errno::CANNOT_DISABLE_MANDATORY_TELEMETRY) {
                             return Err(user_input(
                                 "Could not disable telemetry event sharing for the application because it contains mandatory events. Please set 'share_mandatory_events' to true in the application telemetry section of the project definition file.",
@@ -946,7 +892,7 @@ pub fn create_application(
     ]);
     use_role(cli, role, |cli| {
         use_optional(cli, "warehouse", warehouse, |cli| {
-            let cursor = match run(cli, &q)? {
+            let cursor = match cli.try_query(&q)? {
                 Ok(c) => c,
                 Err(e) => {
                     if is_prog(&e, errno::APPLICATION_REQUIRES_TELEMETRY_SHARING) {
@@ -959,7 +905,7 @@ pub fn create_application(
                     {
                         return Err(user_input(format!(
                             "Failed to create application {name} with the following error message:\n{}",
-                            msg(cli, &e)
+                            e.msg_with(cli.connector_info)
                         )));
                     }
                     return Err(unclassified(
@@ -975,7 +921,7 @@ pub fn create_application(
                     &format!("alter application {name}"),
                     "set debug_mode = True",
                 ]);
-                if let Err(e) = run(cli, &q)? {
+                if let Err(e) = cli.try_query(&q)? {
                     if is_prog(&e, errno::CANNOT_SET_DEBUG_MODE_WITH_MANIFEST_VERSION) {
                         warnings.push(
                             "Did not apply debug mode to application because the manifest version is set to 2 or higher. Please use session debugging instead.".to_string(),
@@ -983,7 +929,7 @@ pub fn create_application(
                     } else {
                         warnings.push(format!(
                             "Failed to set debug mode for application {name}. {}",
-                            msg(cli, &e)
+                            e.msg_with(cli.connector_info)
                         ));
                     }
                 }

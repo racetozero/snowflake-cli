@@ -64,7 +64,7 @@ pub fn run(cli: &mut Cli, param: &'static Param, value: Value) -> Result<Value> 
         match prop {
             "silent" => {
                 cli.silent = value.as_bool();
-                cli.console.silent = cli.silent || cli.format.is_structured();
+                cli.set_format(cli.format);
             }
             "verbose" => cli.verbose = value.as_bool(),
             "enable_tracebacks" => cli.debug = value.as_bool(),
@@ -131,7 +131,7 @@ pub fn run(cli: &mut Cli, param: &'static Param, value: Value) -> Result<Value> 
                 }
             }
             match Format::parse(v.trim()) {
-                Some(f) => cli.format = f,
+                Some(f) => cli.set_format(f),
                 None => {
                     return Err(SnowError::argument(format!(
                         "Invalid output format: {}. Must be one of: TABLE, JSON, JSON_EXT, CSV, PLAIN.",
@@ -139,7 +139,6 @@ pub fn run(cli: &mut Cli, param: &'static Param, value: Value) -> Result<Value> 
                     )));
                 }
             }
-            cli.console.silent = cli.silent || cli.format.is_structured();
             return Ok(Value::Str(cli.format.name().into()));
         }
         "_decimal_precision_callback" => {
@@ -180,7 +179,7 @@ pub fn run(cli: &mut Cli, param: &'static Param, value: Value) -> Result<Value> 
             cli.env_overrides = value.strings();
             crate::common::parse_key_value_variables(&cli.env_overrides)?;
         }
-        other => return crate::plugin_callbacks::run(cli, param, other, value),
+        other => return crate::plugin_callbacks::run(other, value),
     }
     Ok(value)
 }

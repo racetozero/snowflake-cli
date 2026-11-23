@@ -21,9 +21,8 @@ pub fn is_local_oauth(c: &indexmap::IndexMap<String, Cv>) -> bool {
 
 pub fn list(cli: &mut Cli) -> Result<Output> {
     if cli.config.has_connections_file() {
-        let p = snow_api::sql::sanitize_for_terminal(
-            &cli.config.connections_file.display().to_string(),
-        );
+        let p =
+            snow_api::sanitize::for_terminal(&cli.config.connections_file.display().to_string());
         cli.console.warning(&format!(
             "Reading connections from {p}. Entries from config.toml are ignored."
         ));
@@ -60,7 +59,6 @@ fn github_available() -> bool {
 }
 
 fn github_token(cli: &Cli) -> Result<String> {
-    let err = |m: String| SnowError::cli(m);
     let audience = match std::env::var("SNOWFLAKE_AUDIENCE") {
         Ok(a) if !a.is_empty() => a,
         _ => {
@@ -71,7 +69,7 @@ fn github_token(cli: &Cli) -> Result<String> {
                     "snowflake.cli._app.auth.oidc_providers",
                     m,
                 );
-                return Err(err(m.into()));
+                return Err(SnowError::cli(m));
             }
             "snowflakecomputing.com".into()
         }
@@ -83,7 +81,7 @@ fn github_token(cli: &Cli) -> Result<String> {
             "snowflake.cli._app.auth.oidc_providers",
             &m,
         );
-        err(m)
+        SnowError::cli(m)
     };
     let token = std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN").unwrap_or_default();
     if token.is_empty() {
@@ -259,65 +257,6 @@ pub fn login(cli: &mut Cli) -> Result<Output> {
 }
 
 type Cfg = indexmap::IndexMap<String, Cv>;
-
-/// `ConnectionConfig` field order (written first, then other settings).
-const CONFIG_ORDER: &[&str] = &[
-    "account",
-    "user",
-    "password",
-    "host",
-    "region",
-    "port",
-    "protocol",
-    "database",
-    "schema",
-    "warehouse",
-    "role",
-    "authenticator",
-    "workload_identity_provider",
-    "private_key_file",
-    "private_key_raw",
-    "private_key_passphrase",
-    "token",
-    "session_token",
-    "master_token",
-    "token_file_path",
-    "oauth_client_id",
-    "oauth_client_secret",
-    "oauth_authorization_url",
-    "oauth_token_request_url",
-    "oauth_redirect_uri",
-    "oauth_scope",
-    "oauth_enable_pkce",
-    "oauth_enable_refresh_tokens",
-    "oauth_enable_single_use_refresh_tokens",
-    "client_store_temporary_credential",
-    "secondary_roles",
-    "server_session_keep_alive",
-];
-
-fn cv_to_toml(v: &Cv) -> toml_edit::Value {
-    match v {
-        Cv::Str(s) => s.as_str().into(),
-        Cv::Int(i) => (*i).into(),
-        Cv::Float(f) => (*f).into(),
-        Cv::Bool(b) => (*b).into(),
-        Cv::List(l) => {
-            let mut a = toml_edit::Array::new();
-            for x in l {
-                a.push(cv_to_toml(x));
-            }
-            toml_edit::Value::Array(a)
-        }
-        Cv::Table(t) => {
-            let mut it = toml_edit::InlineTable::new();
-            for (k, x) in t {
-                it.insert(k, cv_to_toml(x));
-            }
-            toml_edit::Value::InlineTable(it)
-        }
-    }
-}
 
 struct Edits {
     role: Option<String>,
@@ -524,11 +463,7 @@ fn open_session(
         .execute("SELECT CURRENT_USER()")
         .map_err(|e| fail(e.msg()))?;
     conn.close();
-    let u = c
-        .rows
-        .first()
-        .and_then(|r| r.first().cloned().flatten())
-        .unwrap_or_default();
+    let u = Cli::first_cell_opt(&c).unwrap_or_default();
     if u.trim().is_empty() {
         return Err(
             SnowError::cli("Sign-in did not return a user. Try again.").named("CliConnectionError")
@@ -626,15 +561,7 @@ fn login_after_checks(cli: &mut Cli, raw_account: &str, name: Option<String>) ->
     fields.insert("oauth_scope".into(), Cv::Str(oauth_scope(role.as_deref())));
     fields.insert("client_store_temporary_credential".into(), Cv::Bool(true));
     fields.insert("oauth_enable_refresh_tokens".into(), Cv::Bool(true));
-    let mut table = toml_edit::Table::new();
-    for k in CONFIG_ORDER {
-        if let Some(v) = fields.shift_remove(*k) {
-            table.insert(k, toml_edit::Item::Value(cv_to_toml(&v)));
-        }
-    }
-    for (k, v) in fields {
-        table.insert(&k, toml_edit::Item::Value(cv_to_toml(&v)));
-    }
+    let table = snow_api::config::connection_table(fields);
     let written = cli.config.add_connection(&target, table)?;
     cli.config.set_value(
         &["default_connection_name"],

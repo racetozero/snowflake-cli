@@ -1,6 +1,5 @@
 //! `snow logs`.
 
-use crate::spcs::py_bool;
 use snow_api::output::Output;
 use snow_api::{Cli, Result, SnowError};
 
@@ -125,7 +124,7 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
         let q = format!(
             "\n{i}SELECT\n{j}timestamp,\n{j}resource_attributes:\"snow.database.name\"::string as database_name,\n{j}resource_attributes:\"snow.schema.name\"::string as schema_name,\n{j}resource_attributes:\"snow.{object_type}.name\"::string as object_name,\n{j}record:severity_text::string as log_level,\n{j}value::string as log_message\n{i}FROM {table}\n{i}WHERE record_type = 'LOG'\n{i}AND (record:severity_text IN ({levels}) or record:severity_text is NULL )\n{i}AND {cond}\n{i}{ts}\n{i}ORDER BY timestamp;\n"
         );
-        snow_api::sql::dedent(&q).trim().to_string()
+        snow_rich::render::dedent(&q).trim().to_string()
     };
     let check = |c: &snow_connector::Cursor| -> Result<()> {
         if c.columns.len() != 6 && !c.rows.is_empty() {
@@ -156,6 +155,5 @@ pub fn logs(cli: &mut Cli) -> Result<Output> {
     }
     let c = cli.execute_query(&build(from.as_ref().map(|f| f.0.as_str())))?;
     check(&c)?;
-    let _ = py_bool;
     Ok(Output::Stream(c.rows.iter().map(msg).collect()))
 }

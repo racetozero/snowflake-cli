@@ -9,7 +9,6 @@ pub enum ClickError {
     Usage {
         message: String,
         depth: Option<usize>,
-        no_such_option: bool,
         /// False for errors Click raises without a context (`BadOptionUsage`
         /// from the parser): no usage line is printed.
         attach: bool,
@@ -27,31 +26,15 @@ pub enum ClickError {
 
 impl ClickError {
     pub fn usage(message: String) -> ClickError {
-        ClickError::Usage {
-            message,
-            depth: None,
-            no_such_option: false,
-            attach: true,
-            class: "UsageError",
-        }
+        ClickError::usage_class(message, "UsageError")
     }
     /// A usage error with a specific Python class name.
     pub fn usage_class(message: String, class: &'static str) -> ClickError {
-        match ClickError::usage(message) {
-            ClickError::Usage {
-                message,
-                depth,
-                no_such_option,
-                attach,
-                ..
-            } => ClickError::Usage {
-                message,
-                depth,
-                no_such_option,
-                attach,
-                class,
-            },
-            other => other,
+        ClickError::Usage {
+            message,
+            depth: None,
+            attach: true,
+            class,
         }
     }
     /// A usage error raised without a Click context.
@@ -59,7 +42,6 @@ impl ClickError {
         ClickError::Usage {
             message,
             depth: None,
-            no_such_option: false,
             attach: false,
             class: "BadOptionUsage",
         }
@@ -74,7 +56,7 @@ impl ClickError {
         matches!(
             self,
             ClickError::Usage {
-                no_such_option: true,
+                class: "NoSuchOption",
                 ..
             }
         )
@@ -84,13 +66,11 @@ impl ClickError {
             ClickError::Usage {
                 message,
                 depth: None,
-                no_such_option,
                 attach: true,
                 class,
             } => ClickError::Usage {
                 message,
                 depth: Some(d),
-                no_such_option,
                 attach: true,
                 class,
             },
@@ -111,7 +91,6 @@ impl ClickError {
         ClickError::Usage {
             message,
             depth: None,
-            no_such_option: true,
             attach: true,
             class: "NoSuchOption",
         }

@@ -31,6 +31,7 @@ Add `--agent` anywhere before `--` (or set `SNOW_AGENT=1`):
   | `confirmation_required`, `input_required` | 3 | the command would have prompted |
   | `unknown` | 4 | no such command |
   | `internal` | 5 | unexpected failure |
+  | `exit` | any | the command ended with a non-zero exit code; `data` holds its output |
 
 ## Skills
 

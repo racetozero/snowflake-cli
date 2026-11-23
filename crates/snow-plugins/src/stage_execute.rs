@@ -1,12 +1,14 @@
 //! `snow stage execute` / `snow git execute` (`StageManager.execute` and the
 //! `StagePathParts` family it uses).
 
+use regex::Regex;
 use snow_api::identifiers::{
     Fqn, is_valid_quoted_identifier, is_valid_string_literal, to_string_literal,
 };
 use snow_api::output::{Output, Pv, Row};
 use snow_api::stage_path::StagePath;
 use snow_api::{Cli, Result, SnowError};
+use std::sync::LazyLock;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Kind {
@@ -44,7 +46,7 @@ fn split_git_path(path: &str) -> Result<Vec<String>> {
 }
 
 pub fn standard_prefix(name: &str) -> String {
-    if name.starts_with("snow://") || name.starts_with('@') {
+    if crate::stage::is_stage_path(name) {
         name.to_string()
     } else {
         format!("@{name}")
@@ -108,13 +110,15 @@ impl Parts {
                 is_directory: sp.ends_with('/'),
             });
         }
-        let v = snow_api::identifiers::valid_identifier_regex();
         if sp.starts_with("snow://") {
-            let re = regex::Regex::new(&format!(
-                r"^(?P<prefix>snow://)(?P<rt>[a-zA-Z0-9\-]+)/(?:(?P<f>{v})\.)?(?:(?P<s>{v})\.)?(?P<name>{v})/?(?P<directory>([^/]*/?)*)?$"
-            ))
-            .expect("re");
-            let Some(m) = re.captures(&sp) else {
+            static VSTAGE: LazyLock<Regex> = LazyLock::new(|| {
+                let v = snow_api::identifiers::valid_identifier_regex();
+                Regex::new(&format!(
+                    r"^(?P<prefix>snow://)(?P<rt>[a-zA-Z0-9\-]+)/(?:(?P<f>{v})\.)?(?:(?P<s>{v})\.)?(?P<name>{v})/?(?P<directory>([^/]*/?)*)?$"
+                ))
+                .expect("re")
+            });
+            let Some(m) = VSTAGE.captures(&sp) else {
                 return Err(SnowError::cli(format!("Invalid vstage path: {sp}.")));
             };
             let directory = m
@@ -134,10 +138,7 @@ impl Parts {
                 is_directory: sp.ends_with('/'),
             });
         }
-        let re = regex::Regex::new(&format!(
-            r"^(?P<prefix>(@|snow://))?(?:(?P<f>{v})\.)?(?:(?P<s>{v})\.)?(?P<name>{v})/?(?P<directory>([^/]*/?)*)?$"
-        ))
-        .expect("re");
+        let re = &*snow_api::identifiers::STAGE_PATH;
         let Some(m) = re.captures(&sp) else {
             return Err(SnowError::cli("Invalid stage path"));
         };
@@ -447,13 +448,7 @@ pub fn execute(cli: &mut Cli, path_arg: &str, git: bool) -> Result<Output> {
         )));
     }
     let mut sorted = filtered;
-    sorted.sort_by(|a, b| {
-        let split = |s: &str| match s.rfind('/') {
-            Some(i) => (s[..i].to_string(), s[i + 1..].to_string()),
-            None => (String::new(), s.to_string()),
-        };
-        split(a).cmp(&split(b))
-    });
+    sorted.sort_by(|a, b| crate::stage::dir_then_name(a).cmp(&crate::stage::dir_then_name(b)));
     let vars = merged_variables(cli, &variables)?;
     let sql_vars = if vars.is_empty() {
         None

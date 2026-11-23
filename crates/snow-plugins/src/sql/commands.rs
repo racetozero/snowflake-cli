@@ -32,14 +32,21 @@ pub enum ReplCommand {
     Queries(Queries),
     Result(String),
     Abort(String),
-    Set(String, String),
+    Set(Setting),
     Spool(Option<String>),
     Edit,
     Rehash,
 }
 
-fn repr(s: &str) -> String {
-    Pv::Str(s.to_string()).py_repr()
+/// A `!set option=value`, validated when it is parsed.
+#[derive(Debug, Clone)]
+pub enum Setting {
+    OutputFile(String),
+    Quiet(bool),
+    Timing(bool),
+    TimingInOutputFile(bool),
+    Echo(bool),
+    OutputFormat(Format),
 }
 
 type Kwargs = IndexMap<String, String>;
@@ -54,7 +61,7 @@ fn parse_args(raw: &str) -> std::result::Result<(Vec<String>, Kwargs), String> {
             Some((k, v)) => {
                 let k = k.to_lowercase();
                 if kwargs.contains_key(&k) {
-                    return Err(format!("Duplicated argument {}", repr(&k)));
+                    return Err(format!("Duplicated argument {}", snow_click::py_repr(&k)));
                 }
                 kwargs.insert(k, v.to_string());
             }
@@ -255,16 +262,13 @@ const SET_OPTIONS: &[&str] = &[
     "output_file",
 ];
 
-/// `parse_bool_value`.
 pub fn parse_bool_value(option: &str, value: &str) -> std::result::Result<bool, String> {
-    match value.trim().to_lowercase().as_str() {
-        "true" | "yes" | "on" | "1" => Ok(true),
-        "false" | "no" | "off" | "0" => Ok(false),
-        _ => Err(format!(
+    snow_api::config::parse_on_off(value.trim()).ok_or_else(|| {
+        format!(
             "Invalid value for {option}: {}. Use true or false.",
-            repr(value)
-        )),
-    }
+            snow_click::py_repr(value)
+        )
+    })
 }
 
 /// `OutputFormat.from_string`.
@@ -272,7 +276,7 @@ pub fn parse_format(value: &str) -> std::result::Result<Format, String> {
     Format::parse(&value.trim().to_uppercase()).ok_or_else(|| {
         format!(
             "Invalid output format: {}. Must be one of: TABLE, JSON, JSON_EXT, CSV, PLAIN.",
-            repr(value)
+            snow_click::py_repr(value)
         )
     })
 }
@@ -292,7 +296,7 @@ fn output_file_value(value: &str) -> std::result::Result<ReplCommand, String> {
             "You must specify a value for output_file. {SET_USAGE}"
         ));
     }
-    Ok(ReplCommand::Set("output_file".into(), v.to_string()))
+    Ok(ReplCommand::Set(Setting::OutputFile(v.to_string())))
 }
 
 fn set_from(raw: &str) -> std::result::Result<ReplCommand, String> {
@@ -312,7 +316,7 @@ fn set_from(raw: &str) -> std::result::Result<ReplCommand, String> {
     let unknown: Vec<String> = kwargs
         .keys()
         .filter(|k| !SET_OPTIONS.contains(&k.as_str()))
-        .map(|k| repr(k))
+        .map(|k| snow_click::py_repr(k))
         .collect();
     if !unknown.is_empty() {
         return Err(format!(
@@ -326,32 +330,26 @@ fn set_from(raw: &str) -> std::result::Result<ReplCommand, String> {
         ));
     }
     let (option, value) = kwargs.into_iter().next().expect("one");
-    if option == "output_file" {
-        return output_file_value(&value);
-    }
-    let mut value = value;
-    match option.as_str() {
-        "quiet" | "timing" | "timing_in_output_file" => {
-            parse_bool_value(&option, &value)?;
-        }
-        "echo" => {
-            let l = value.to_lowercase();
-            if l != "true" && l != "false" {
+    let setting = match option.as_str() {
+        "output_file" => return output_file_value(&value),
+        "quiet" => Setting::Quiet(parse_bool_value(&option, &value)?),
+        "timing" => Setting::Timing(parse_bool_value(&option, &value)?),
+        "timing_in_output_file" => Setting::TimingInOutputFile(parse_bool_value(&option, &value)?),
+        "echo" => match value.to_lowercase().as_str() {
+            "true" => Setting::Echo(true),
+            "false" => Setting::Echo(false),
+            _ => {
                 return Err(format!(
                     "Invalid value for 'echo': {}. Must be true or false.",
-                    repr(&value)
+                    snow_click::py_repr(&value)
                 ));
             }
-            value = l;
-        }
-        _ => {
-            parse_format(&value)?;
-        }
-    }
-    Ok(ReplCommand::Set(option, value))
+        },
+        _ => Setting::OutputFormat(parse_format(&value)?),
+    };
+    Ok(ReplCommand::Set(setting))
 }
 
-/// `compile_repl_command`.
 pub fn compile_repl_command(text: &str) -> std::result::Result<ReplCommand, String> {
     let Some(c) = COMMAND.captures(text.trim()) else {
         return Err("Not a command".into());
@@ -423,12 +421,10 @@ fn quote_plus(s: &str) -> String {
 
 /// Spool file state (`open_spool` / `close_spool`).
 pub fn open_spool(cli: &mut Cli, path: &str) -> Result<()> {
-    cli.spool = None;
+    cli.sql.spool = None;
     let p = std::path::Path::new(path);
     let existed = p.exists();
-    let shown = snow_api::sanitize::for_terminal(&snow_api::stage_path::posix_str(
-        &snow_api::stage_path::posix_parts(path),
-    ));
+    let shown = snow_api::sanitize::for_terminal(&snow_api::stage_path::pure_path(path));
     let fail = |e: std::io::Error| {
         let detail = snow_api::errors::python_os_error(&e, None);
         let detail = detail
@@ -471,13 +467,8 @@ pub fn open_spool(cli: &mut Cli, path: &str) -> Result<()> {
             }
         }
     }
-    cli.spool = Some(file);
+    cli.sql.spool = Some(file);
     Ok(())
-}
-
-pub fn set_format(cli: &mut Cli, f: Format) {
-    cli.format = f;
-    cli.console.silent = cli.silent || f.is_structured();
 }
 
 impl ReplCommand {
@@ -590,27 +581,15 @@ impl ReplCommand {
                 let out = cli.query_result(&c);
                 print_output(cli, &out, None);
             }
-            ReplCommand::Set(option, value) => match option.as_str() {
-                "output_file" => open_spool(cli, value)?,
-                "quiet" => cli.quiet = parse_bool_value(option, value).map_err(SnowError::cli)?,
-                "timing" => cli.timing = parse_bool_value(option, value).map_err(SnowError::cli)?,
-                "timing_in_output_file" => {
-                    cli.timing_in_output_file =
-                        parse_bool_value(option, value).map_err(SnowError::cli)?
-                }
-                "echo" => {
-                    let v = value.to_lowercase();
-                    if v != "true" && v != "false" {
-                        return Err(SnowError::cli(format!(
-                            "Invalid value for 'echo': {}. Must be true or false.",
-                            snow_api::output::Pv::s(value).py_repr()
-                        )));
-                    }
-                    cli.echo = v == "true";
-                }
-                _ => set_format(cli, parse_format(value).map_err(SnowError::cli)?),
+            ReplCommand::Set(setting) => match setting {
+                Setting::OutputFile(p) => open_spool(cli, p)?,
+                Setting::Quiet(b) => cli.sql.quiet = *b,
+                Setting::Timing(b) => cli.sql.timing = *b,
+                Setting::TimingInOutputFile(b) => cli.sql.timing_in_output_file = *b,
+                Setting::Echo(b) => cli.sql.echo = *b,
+                Setting::OutputFormat(f) => cli.set_format(*f),
             },
-            ReplCommand::Spool(None) => cli.spool = None,
+            ReplCommand::Spool(None) => cli.sql.spool = None,
             ReplCommand::Spool(Some(p)) => open_spool(cli, p)?,
             ReplCommand::Edit => {
                 if !is_repl {
@@ -627,11 +606,12 @@ impl ReplCommand {
                     .ok()
                     .flatten()
                     .unwrap_or(true);
-                cli.console.message(if is_repl && auto {
-                    "Object cache cleared."
+                if is_repl && auto {
+                    super::complete::clear();
+                    cli.console.message("Object cache cleared.");
                 } else {
-                    "Autocomplete is disabled."
-                });
+                    cli.console.message("Autocomplete is disabled.");
+                }
             }
         }
         Ok(())

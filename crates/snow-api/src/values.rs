@@ -1,11 +1,11 @@
 //! Converting JSON result cells into Python values (`SnowflakeConverter`).
 
-use crate::output::{Output, Pv, Row, uniquify_columns};
+use crate::output::{Output, Pv, Row, uniquify};
 use chrono::{DateTime, Datelike, NaiveDateTime, Offset, TimeZone, Timelike, Utc};
 use snow_connector::{Column, Cursor};
 
 /// `str(decimal.Decimal(s))`.
-pub fn decimal_str(s: &str) -> String {
+pub(crate) fn decimal_str(s: &str) -> String {
     let t = s.trim();
     let (neg, body) = match t.strip_prefix('-') {
         Some(b) => (true, b),
@@ -17,7 +17,7 @@ pub fn decimal_str(s: &str) -> String {
     };
     let (int_part, frac_part) = mant.split_once('.').unwrap_or((mant, ""));
     let mut digits: String = format!("{int_part}{frac_part}");
-    let mut exp = exp_part - frac_part.len() as i64;
+    let exp = exp_part - frac_part.len() as i64;
     let trimmed = digits.trim_start_matches('0');
     digits = if trimmed.is_empty() {
         "0".into()
@@ -41,13 +41,11 @@ pub fn decimal_str(s: &str) -> String {
         }
         return format!("{sign}0.{}{digits}", "0".repeat((-point) as usize));
     }
-    // Scientific notation.
     let mut m = digits[..1].to_string();
     if n > 1 {
         m.push('.');
         m.push_str(&digits[1..]);
     }
-    let _ = &mut exp;
     format!(
         "{sign}{m}E{}{}",
         if adjusted >= 0 { "+" } else { "-" },
@@ -203,7 +201,7 @@ pub fn convert(col: &Column, cell: Option<&str>, tz_name: &str) -> Pv {
     }
 }
 
-pub fn session_timezone(conn: &snow_connector::Connection) -> String {
+pub(crate) fn session_timezone(conn: &snow_connector::Connection) -> String {
     conn.parameter("TIMEZONE")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
@@ -213,7 +211,7 @@ pub fn session_timezone(conn: &snow_connector::Connection) -> String {
 
 /// Rows of a cursor as dictionaries keyed by de-duplicated column names.
 pub fn rows(cursor: &Cursor, tz: &str, json_ext: bool) -> Vec<Row> {
-    let names = uniquify_columns(cursor.columns.iter().map(|c| c.name.clone()).collect());
+    let names = uniquify(cursor.columns.iter().map(|c| c.name.clone()).collect());
     cursor
         .rows
         .iter()
@@ -278,9 +276,6 @@ mod tests {
             name: "T".into(),
             type_name: "timestamp_tz".into(),
             scale: Some(9),
-            precision: None,
-            length: None,
-            nullable: true,
         };
         let v = convert(&col, Some("1675265104.105000000 960"), "UTC");
         assert_eq!(v.py_str(), "2023-02-01 07:25:04.105000-08:00");

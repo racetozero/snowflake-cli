@@ -3,13 +3,13 @@
 //! the result into statements and `!` commands.
 
 use super::commands::{ReplCommand, compile_repl_command};
+use crate::rendering::{RenderError, SyntaxConfig, sql_render, transpile_snowsql_templates};
 use indexmap::IndexMap;
 use regex::Regex;
 use snow_api::Result;
 use snow_api::console::Console;
-use snow_api::rendering::{RenderError, SyntaxConfig, sql_render, transpile_snowsql_templates};
 use snow_api::splitter::{Statement, split_raw};
-use snow_api::stage_path::{posix_parts, posix_str};
+use snow_api::stage_path::pure_path;
 use std::sync::LazyLock;
 
 const MAX_DEPTH: usize = 32;
@@ -65,8 +65,8 @@ pub struct Renderer<'a> {
 }
 
 impl Renderer<'_> {
-    fn vars(&self) -> snow_api::rendering::TemplateData<'_> {
-        snow_api::rendering::TemplateData {
+    fn vars(&self) -> crate::rendering::TemplateData<'_> {
+        crate::rendering::TemplateData {
             data: self.data,
             env_overrides: self.env_overrides,
         }
@@ -182,10 +182,6 @@ fn drop_comments(path_part: &str) -> String {
         .unwrap_or_default()
 }
 
-fn as_posix(p: &str) -> String {
-    posix_str(&posix_parts(p))
-}
-
 fn read_limited(path: &str) -> std::result::Result<String, ()> {
     let meta = std::fs::metadata(path).map_err(|_| ())?;
     if meta.len() > SIZE_LIMIT_MB * 1024 * 1024 {
@@ -201,7 +197,7 @@ fn from_file(path_part: &str, raw: &str) -> Parsed {
     let p = std::path::Path::new(&stripped);
     if p.is_file() {
         return match read_limited(&stripped) {
-            Ok(payload) => Parsed::new(&payload, Kind::File, Some(&as_posix(&stripped)), None),
+            Ok(payload) => Parsed::new(&payload, Kind::File, Some(&pure_path(&stripped)), None),
             Err(()) => Parsed::new(
                 path_part,
                 Kind::File,
@@ -352,7 +348,12 @@ fn parse_statement(
                 )),
             ),
             Some("https") => Parsed::new("", Kind::Url, Some(&drop_comments(&args)), None),
-            None => Parsed::new("", Kind::File, Some(&as_posix(&drop_comments(&args))), None),
+            None => Parsed::new(
+                "",
+                Kind::File,
+                Some(&pure_path(&drop_comments(&args))),
+                None,
+            ),
             Some(_) => Parsed::new(
                 &statement,
                 Kind::Unknown,
@@ -463,10 +464,10 @@ impl Reader<'_> {
                 self.out.push(Parsed::new(
                     "",
                     Kind::File,
-                    Some(&as_posix(f)),
+                    Some(&pure_path(f)),
                     Some(format!(
                         "Could not read: {} (exceeds {SIZE_LIMIT_MB} MB limit)",
-                        as_posix(f)
+                        pure_path(f)
                     )),
                 ));
                 continue;
@@ -481,10 +482,11 @@ impl Reader<'_> {
 }
 
 #[derive(Debug)]
-pub struct Compiled {
-    pub statement: Option<String>,
-    pub execute_async: bool,
-    pub command: Option<ReplCommand>,
+pub enum Compiled {
+    Sql(String),
+    /// A statement that ended with `;>`.
+    Async(String),
+    Command(ReplCommand),
 }
 
 fn is_empty_statement(s: &str) -> bool {
@@ -499,19 +501,12 @@ pub fn compile_statements(parsed: Vec<Parsed>) -> (Vec<String>, usize, Vec<Compi
     let mut compiled = Vec::new();
     for p in parsed {
         if p.kind == Kind::Query && p.error.is_none() && !is_empty_statement(&p.statement) {
-            let is_async = p.statement.ends_with(ASYNC_SUFFIX);
-            compiled.push(Compiled {
-                statement: Some(
-                    p.statement
-                        .strip_suffix(ASYNC_SUFFIX)
-                        .unwrap_or(&p.statement)
-                        .to_string(),
-                ),
-                execute_async: is_async,
-                command: None,
-            });
-            if !is_async {
-                count += 1;
+            match p.statement.strip_suffix(ASYNC_SUFFIX) {
+                Some(s) => compiled.push(Compiled::Async(s.to_string())),
+                None => {
+                    compiled.push(Compiled::Sql(p.statement.clone()));
+                    count += 1;
+                }
             }
         }
         if p.kind == Kind::ReplCommand && p.error.is_none() {
@@ -521,11 +516,7 @@ pub fn compile_statements(parsed: Vec<Parsed>) -> (Vec<String>, usize, Vec<Compi
                 .unwrap_or(&p.statement);
             let t = t.strip_suffix(';').unwrap_or(t).trim();
             match compile_repl_command(t) {
-                Ok(cmd) => compiled.push(Compiled {
-                    statement: None,
-                    execute_async: false,
-                    command: Some(cmd),
-                }),
+                Ok(cmd) => compiled.push(Compiled::Command(cmd)),
                 Err(e) => errors.push(e),
             }
         }

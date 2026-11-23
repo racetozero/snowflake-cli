@@ -5,6 +5,7 @@ pub mod deploy;
 pub mod events;
 pub mod manager;
 
+use crate::entities::EntityType;
 use snow_api::identifiers::{Fqn, to_identifier, to_string_literal, unquote_identifier};
 use snow_api::output::Output;
 use snow_api::project::PyV;
@@ -13,9 +14,9 @@ use std::path::{Path, PathBuf};
 
 const APP_YML: &str = "app.yml";
 
-/// Which product line a shared `snow app` command runs for.
+/// The Snowflake App Runtime flow a shared `snow app` command runs for
+/// (`detect` gives `None` for Native Apps).
 pub enum Flow {
-    Native,
     /// The validated `AppYmlDefinition`.
     AppYml(PyV),
     /// `snowflake.yml` with `snowflake-app` entities.
@@ -80,48 +81,51 @@ pub fn load_app_yml(root: &Path) -> Result<Option<PyV>> {
 }
 
 /// `with_app_flow_routing`: decide the flow; `None` entity checks are the caller's.
-pub fn detect(cli: &mut Cli) -> Result<Flow> {
+pub fn detect(cli: &mut Cli) -> Result<Option<Flow>> {
     if let Some(def) = load_app_yml(&cli.project_root())? {
-        return Ok(Flow::AppYml(def));
+        return Ok(Some(Flow::AppYml(def)));
     }
     let p = cli.project(false)?.expect("project");
     if !p.meets_version("2") {
-        return Ok(Flow::Native);
+        return Ok(None);
     }
     let ents = p.entities();
     let entity_id = cli.str("entity_id").unwrap_or_default();
     let explicit = !cli.str("package_entity_id").unwrap_or_default().is_empty()
         || !cli.str("app_entity_id").unwrap_or_default().is_empty();
     if explicit {
-        return Ok(Flow::Native);
+        return Ok(None);
     }
     if !entity_id.is_empty()
         && let Some(e) = ents.get(&entity_id)
     {
         let ty = e.str_of("type").unwrap_or_default().to_lowercase();
-        return match ty.as_str() {
-            "application" | "application package" => Ok(Flow::Native),
-            "snowflake-app" => Ok(Flow::Entity),
-            other => Err(SnowError::click(format!(
-                "Entity '{entity_id}' has type '{other}', which is not supported by 'snow app' commands."
+        return match EntityType::parse(&ty) {
+            Some(EntityType::Application | EntityType::ApplicationPackage) => Ok(None),
+            Some(EntityType::SnowflakeApp) => Ok(Some(Flow::Entity)),
+            _ => Err(SnowError::click(format!(
+                "Entity '{entity_id}' has type '{ty}', which is not supported by 'snow app' commands."
             ))),
         };
     }
-    let types: Vec<String> = ents
+    let types: Vec<Option<EntityType>> = ents
         .values()
         .filter_map(|e| e.str_of("type"))
-        .map(|t| t.to_lowercase())
+        .map(|t| EntityType::parse(&t.to_lowercase()))
         .collect();
-    let native = types
-        .iter()
-        .any(|t| t == "application" || t == "application package");
-    let runtime = types.iter().any(|t| t == "snowflake-app");
+    let native = types.iter().any(|t| {
+        matches!(
+            t,
+            Some(EntityType::Application | EntityType::ApplicationPackage)
+        )
+    });
+    let runtime = types.contains(&Some(EntityType::SnowflakeApp));
     if native && runtime {
         return Err(SnowError::click(
             "Project contains both Native App entities (application / application package) and Snowflake App Runtime entities (snowflake-app). Specify --entity-id (for a Snowflake App Runtime entity) or --package-entity-id / --app-entity-id (for a Native App entity) to select which entity to operate on.",
         ));
     }
-    Ok(if runtime { Flow::Entity } else { Flow::Native })
+    Ok(runtime.then_some(Flow::Entity))
 }
 
 // ── app.yml target resolution ─────────────────────────────────────────
@@ -150,39 +154,28 @@ fn opt_str(m: &PyV, k: &str) -> Option<String> {
 
 /// `_merge_baseline_and_target(app_def, target)`.
 fn merge(def: &PyV, target: Option<&PyV>) -> PyV {
-    let mut merged = indexmap::IndexMap::new();
-    for name in service_fields() {
-        if name == "code_stage" || name == "code_workspace" {
-            continue;
-        }
-        let mut v = field(def, name);
-        if let Some(t) = target {
-            let tv = field(t, name);
-            if !tv.is_none() {
-                v = tv;
-            }
-        }
-        merged.insert(name.to_string(), v);
-    }
+    // Code storage comes whole from the target when it sets either backend.
     let storage_from = match target {
         Some(t) if !field(t, "code_stage").is_none() || !field(t, "code_workspace").is_none() => t,
         _ => def,
     };
-    merged.insert("code_stage".into(), field(storage_from, "code_stage"));
-    merged.insert(
-        "code_workspace".into(),
-        field(storage_from, "code_workspace"),
-    );
-    let mut out = indexmap::IndexMap::new();
-    for name in service_fields() {
-        out.insert(
-            name.to_string(),
-            merged.shift_remove(name).unwrap_or(PyV::None),
-        );
-    }
+    let fields = service_fields()
+        .into_iter()
+        .map(|name| {
+            let v = if name == "code_stage" || name == "code_workspace" {
+                field(storage_from, name)
+            } else {
+                target
+                    .map(|t| field(t, name))
+                    .filter(|v| !v.is_none())
+                    .unwrap_or_else(|| field(def, name))
+            };
+            (name.to_string(), v)
+        })
+        .collect();
     PyV::Model(Box::new(snow_api::project::value::Model {
         name: "AppYmlTarget".into(),
-        fields: out,
+        fields,
         set: vec![],
     }))
 }
@@ -227,14 +220,56 @@ fn resolve_target(def: &PyV, name: Option<&str>) -> Result<(Option<String>, PyV)
     Ok((Some(resolved), merged))
 }
 
+/// `_CodeStorage.kind`.
+#[derive(Clone, Copy, PartialEq)]
+pub enum StorageKind {
+    Stage,
+    Workspace,
+}
+
+impl StorageKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StorageKind::Stage => "stage",
+            StorageKind::Workspace => "workspace",
+        }
+    }
+}
+
+/// The code stage encryption when none is configured.
+pub const DEFAULT_ENCRYPTION: &str = "SNOWFLAKE_SSE";
+
 /// The resolved code-storage backend (`_CodeStorage`).
 pub struct CodeStorage {
-    pub ty: &'static str,
+    pub kind: StorageKind,
     pub name: String,
     pub database: Option<String>,
     pub schema: Option<String>,
     pub encryption: String,
     pub temporary: bool,
+}
+
+impl CodeStorage {
+    /// The `<app>_CODE` backend created for one deploy and dropped after the build.
+    pub fn temporary(kind: StorageKind, app: &str) -> CodeStorage {
+        CodeStorage {
+            kind,
+            name: format!("{app}_CODE"),
+            database: None,
+            schema: None,
+            encryption: DEFAULT_ENCRYPTION.into(),
+            temporary: true,
+        }
+    }
+
+    /// The storage FQN; an unset database or schema falls back to the app's.
+    pub fn fqn(&self, database: &str, schema: &str) -> Fqn {
+        app_fqn(
+            Some(self.database.as_deref().unwrap_or(database)),
+            Some(self.schema.as_deref().unwrap_or(schema)),
+            &self.name,
+        )
+    }
 }
 
 pub fn is_personal_database(db: Option<&str>) -> bool {
@@ -255,14 +290,14 @@ fn resolve_code_storage(
     database: Option<&str>,
     app_name: &str,
 ) -> CodeStorage {
-    use snow_api::sql::sanitize_for_terminal as san;
+    use snow_api::sanitize::for_terminal as san;
     if let Some((name, db, sc, _)) = workspace {
         return CodeStorage {
-            ty: "workspace",
+            kind: StorageKind::Workspace,
             name,
             database: db,
             schema: sc,
-            encryption: "SNOWFLAKE_SSE".into(),
+            encryption: DEFAULT_ENCRYPTION.into(),
             temporary: false,
         };
     }
@@ -276,27 +311,20 @@ fn resolve_code_storage(
             ));
         }
         return CodeStorage {
-            ty: "stage",
+            kind: StorageKind::Stage,
             name,
             database: db,
             schema: sc,
-            encryption: enc.unwrap_or_else(|| "SNOWFLAKE_SSE".into()),
+            encryption: enc.unwrap_or_else(|| DEFAULT_ENCRYPTION.into()),
             temporary: false,
         };
     }
-    let ty = if is_personal_database(database) {
-        "workspace"
+    let kind = if is_personal_database(database) {
+        StorageKind::Workspace
     } else {
-        "stage"
+        StorageKind::Stage
     };
-    CodeStorage {
-        ty,
-        name: format!("{app_name}_CODE"),
-        database: None,
-        schema: None,
-        encryption: "SNOWFLAKE_SSE".into(),
-        temporary: true,
-    }
+    CodeStorage::temporary(kind, app_name)
 }
 
 fn yml_storage_ref(v: Option<String>) -> Result<Option<StorageRef>> {
@@ -330,12 +358,19 @@ pub struct Deployment {
     pub target: PyV,
 }
 
-/// `SELECT 'USER$' || CURRENT_USER()`: `None` when it fails.
-fn personal_database(cli: &mut Cli) -> Option<String> {
-    let c = cli
+/// `get_personal_database()`: `None` when it fails.
+pub(crate) fn personal_database(cli: &mut Cli) -> Option<String> {
+    let Ok(c) = cli
         .try_query("SELECT 'USER$' || CURRENT_USER() AS personal_database")
         .ok()?
-        .ok()?;
+    else {
+        crate::logs::log(
+            crate::logs::WARNING,
+            "snowflake.cli._plugins.apps.manager",
+            "Could not resolve personal database.",
+        );
+        return None;
+    };
     let v = c.rows.first()?.first()?.clone()?;
     (!v.is_empty() && !v.ends_with('$')).then_some(v)
 }
@@ -401,11 +436,7 @@ pub fn resolve_deployment(cli: &mut Cli, def: &PyV, target: Option<&str>) -> Res
         Some(&db),
         &service,
     );
-    let storage_fqn = app_fqn(
-        Some(storage.database.as_deref().unwrap_or(&db)),
-        Some(storage.schema.as_deref().unwrap_or(&sc)),
-        &storage.name,
-    );
+    let storage_fqn = storage.fqn(&db, &sc);
     Ok(Deployment {
         target_name: name,
         package_name,
@@ -447,8 +478,8 @@ fn warn_account_mismatch(cli: &mut Cli, target: Option<&str>, account: Option<St
         };
         cli.console.warning(&format!(
             "{source} declares account '{}', but per-target account binding is not yet supported; using the active connection (account '{}').",
-            snow_api::sql::sanitize_for_terminal(&account),
-            snow_api::sql::sanitize_for_terminal(&active)
+            snow_api::sanitize::for_terminal(&account),
+            snow_api::sanitize::for_terminal(&active)
         ));
     }
 }
@@ -504,7 +535,7 @@ pub fn perform_bundle(cli: &mut Cli, id: &str, artifacts: &[PyV]) -> Result<Path
     {
         return Err(SnowError::cli(format!(
             "Could not remove the bundle directory '{}': {}. Bundling cannot continue, because files left in it would be included in the bundle. This is usually a program holding files in it (an editor, terminal, file explorer, antivirus or file-indexing scan) — close it, or delete the directory yourself, then run the command again.",
-            snow_api::sql::sanitize_for_terminal(&bundle.to_string_lossy()),
+            snow_api::sanitize::for_terminal(&bundle.to_string_lossy()),
             snow_api::errors::python_os_error(&e, Some(&bundle.to_string_lossy()))
         )));
     }
@@ -536,7 +567,7 @@ fn clean_up_output(cli: &mut Cli, bundle: &Path) {
     {
         cli.console.warning(&format!(
             "Could not remove the bundle directory '{}': {}. The command itself finished successfully. This is usually a program holding files in it (an editor, terminal, file explorer, antivirus or file-indexing scan); the directory can be deleted at any time.",
-            snow_api::sql::sanitize_for_terminal(&bundle.to_string_lossy()),
+            snow_api::sanitize::for_terminal(&bundle.to_string_lossy()),
             snow_api::errors::python_os_error(&e, Some(&bundle.to_string_lossy()))
         ));
         return;
@@ -568,12 +599,11 @@ fn yml_artifacts(target: &PyV) -> Vec<PyV> {
     vec![PyV::Dict(m)]
 }
 
-/// The `snowflake-app` entities of snowflake.yml.
 fn app_entities(cli: &mut Cli) -> Result<indexmap::IndexMap<String, PyV>> {
     let p = cli.project(false)?.expect("project");
     Ok(p.entities()
         .into_iter()
-        .filter(|(_, e)| e.str_of("type").as_deref() == Some("snowflake-app"))
+        .filter(|(_, e)| EntityType::of(e) == Some(EntityType::SnowflakeApp))
         .collect())
 }
 
@@ -605,11 +635,29 @@ fn entity(cli: &mut Cli) -> Result<(String, PyV)> {
     }
 }
 
-fn entity_artifacts(e: &PyV) -> Vec<PyV> {
+/// The entity's `artifacts` list (empty when unset).
+pub(crate) fn entity_artifacts(e: &PyV) -> Vec<PyV> {
     e.get("artifacts")
         .and_then(PyV::as_list)
         .cloned()
         .unwrap_or_default()
+}
+
+/// `_reject_native_app_options(command, **options)`.
+fn reject_native_options(command: &str, options: &[(&str, bool)]) -> Result<()> {
+    let mut set: Vec<&str> = options
+        .iter()
+        .filter(|(_, v)| *v)
+        .map(|(n, _)| *n)
+        .collect();
+    if set.is_empty() {
+        return Ok(());
+    }
+    set.sort();
+    Err(SnowError::click(format!(
+        "'snow app {command}' was invoked against a Snowflake App Runtime entity (type: snowflake-app), but the following Native App options were provided: {}. Remove them and try again.",
+        set.join(", ")
+    )))
 }
 
 fn reject_target_without_yml(cli: &Cli) -> Result<()> {
@@ -637,7 +685,7 @@ pub fn bundle(cli: &mut Cli, flow: Flow) -> Result<Output> {
                 .unwrap_or_else(|| "app".into());
             perform_bundle(cli, &id, &yml_artifacts(&def))?
         }
-        _ => {
+        Flow::Entity => {
             let (id, e) = entity(cli)?;
             perform_bundle(cli, &id, &entity_artifacts(&e))?
         }
@@ -658,7 +706,7 @@ pub fn validate(cli: &mut Cli, flow: Flow) -> Result<Output> {
             let arts = yml_artifacts(&dep.target);
             (Some(dep.database), Some(dep.schema), dep.package_name, arts)
         }
-        _ => {
+        Flow::Entity => {
             reject_target_without_yml(cli)?;
             let (id, e) = entity(cli)?;
             let f = crate::entities::fqn(&e, &id)?;
@@ -913,11 +961,10 @@ pub fn open(cli: &mut Cli, flow: Flow) -> Result<Output> {
 
 /// `snowflake_app_teardown(entity_id, force, target)`.
 pub fn teardown(cli: &mut Cli, flow: Flow) -> Result<Output> {
-    if cli.opt_bool("cascade").is_some() {
-        return Err(SnowError::click(
-            "'snow app teardown' was invoked against a Snowflake App Runtime entity (type: snowflake-app), but the following Native App options were provided: --cascade. Remove them and try again.",
-        ));
-    }
+    reject_native_options(
+        "teardown",
+        &[("--cascade", cli.opt_bool("cascade").is_some())],
+    )?;
     let (service_fqn, storage, storage_fqn, code_name) = match flow {
         Flow::AppYml(def) => {
             let dep = resolve_deployment(cli, &def, cli.str("target").as_deref())?;
@@ -928,7 +975,7 @@ pub fn teardown(cli: &mut Cli, flow: Flow) -> Result<Output> {
                 dep.package_name,
             )
         }
-        _ => {
+        Flow::Entity => {
             reject_target_without_yml(cli)?;
             let (id, e) = entity(cli)?;
             let d = resolve_deploy_defaults(cli, &id, &e)?;
@@ -951,11 +998,7 @@ pub fn teardown(cli: &mut Cli, flow: Flow) -> Result<Output> {
             };
             let name = cli.using_connection(crate::entities::fqn(&e, &id)?)?.name;
             let storage = entity_code_storage(cli, &e, Some(&db), &name);
-            let sfqn = app_fqn(
-                Some(storage.database.as_deref().unwrap_or(&db)),
-                Some(storage.schema.as_deref().unwrap_or(&sc)),
-                &storage.name,
-            );
+            let sfqn = storage.fqn(&db, &sc);
             (app_fqn(Some(&db), Some(&sc), &name), storage, sfqn, name)
         }
     };
@@ -985,7 +1028,7 @@ pub fn teardown(cli: &mut Cli, flow: Flow) -> Result<Output> {
         )));
     }
     let sid = storage_fqn.identifier();
-    if storage.ty == "workspace" {
+    if storage.kind == StorageKind::Workspace {
         if storage.temporary {
             cli.console.step(&format!("Dropping workspace {sid}"));
             cli.execute_query(&format!(
@@ -1011,34 +1054,4 @@ pub fn teardown(cli: &mut Cli, flow: Flow) -> Result<Output> {
     Ok(Output::message(format!(
         "Successfully dropped application service {ident}."
     )))
-}
-
-/// The application service FQN of a read/observe command.
-pub fn command_service_pub(cli: &mut Cli, flow: Flow) -> Result<Fqn> {
-    Ok(command_service(cli, flow)?.fqn)
-}
-
-pub fn clean_up_output_pub(cli: &mut Cli, bundle: &Path) {
-    clean_up_output(cli, bundle);
-}
-
-pub fn reject_target_pub(cli: &Cli) -> Result<()> {
-    reject_target_without_yml(cli)
-}
-
-pub fn yml_artifacts_pub(target: &PyV) -> Vec<PyV> {
-    yml_artifacts(target)
-}
-
-pub fn entity_pub(cli: &mut Cli) -> Result<(String, PyV)> {
-    entity(cli)
-}
-
-pub fn entity_code_storage_pub(
-    cli: &mut Cli,
-    e: &PyV,
-    database: Option<&str>,
-    app: &str,
-) -> CodeStorage {
-    entity_code_storage(cli, e, database, app)
 }

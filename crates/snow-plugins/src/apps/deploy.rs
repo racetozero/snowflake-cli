@@ -2,33 +2,20 @@
 //! (`snowflake_app_deploy`, `_deploy_from_app_yml`, `_upload_and_build_app`).
 
 use super::manager::{self, PER_ACCOUNT_CERT_ISSUE_FUNCTION};
-use super::{CodeStorage, Flow, app_fqn, is_personal_database};
+use super::{CodeStorage, DEFAULT_ENCRYPTION, Flow, StorageKind, app_fqn, is_personal_database};
 use indexmap::IndexMap;
 use snow_api::identifiers::{
     Fqn, identifier_to_show_like_pattern, to_identifier, to_string_literal, unquote_identifier,
 };
 use snow_api::output::{Output, Pv};
 use snow_api::project::PyV;
-use snow_api::sql::sanitize_for_terminal as san;
+use snow_api::sanitize::for_terminal as san;
 use snow_api::{Cli, Result, SnowError};
 use snow_connector::DbError;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn ts() -> String {
     chrono::Local::now().format("%H:%M:%S").to_string()
-}
-
-fn db_err(cli: &Cli, e: &DbError) -> SnowError {
-    snow_api::connect::db_error_to_cli(e, cli.connector_info)
-}
-
-/// `str(ProgrammingError)`.
-fn err_str(e: &DbError) -> String {
-    e.msg_with(true)
-}
-
-fn run(cli: &mut Cli, sql: &str) -> Result<std::result::Result<snow_connector::Cursor, DbError>> {
-    cli.try_query(sql)
 }
 
 // ── upload errors (`upload_errors.py`) ────────────────────────────────
@@ -77,7 +64,10 @@ struct UploadCtx<'a> {
 /// `classify_upload_error(exc, phase=..., target=..., ...)`.
 fn classify(e: &DbError, phase: Phase, target: &str, c: &UploadCtx) -> SnowError {
     let code = (e.errno >= 0).then_some(e.errno);
-    let detail = san(&err_str(e)).trim().trim_end_matches('.').to_string();
+    let detail = san(&e.msg_with(true))
+        .trim()
+        .trim_end_matches('.')
+        .to_string();
     let safe_target = san(target);
     let prefix = if !phase.is_push() {
         let step = c
@@ -161,49 +151,6 @@ fn workspace_sub_uri(f: &Fqn, dir: &str) -> String {
     format!("{}/{}", workspace_uri(f), dir.trim_matches('/'))
 }
 
-/// `_local_path_to_file_uri(local_path)`.
-fn file_uri(p: &Path) -> String {
-    let s = p.to_string_lossy();
-    let mut esc = String::new();
-    for ch in s.chars() {
-        match ch {
-            '*' | '?' | '[' => {
-                esc.push('[');
-                esc.push(ch);
-                esc.push(']');
-            }
-            c => esc.push(c),
-        }
-    }
-    let uri = format!("file://{esc}");
-    let re = regex::Regex::new(r#"^[\w/*?\-.=&{}$#\[\]"\\!@%^+:]+$"#).expect("re");
-    if re.is_match(&uri) {
-        uri
-    } else {
-        to_string_literal(&uri.replace('\\', "\\\\"))
-    }
-}
-
-fn bundle_files(root: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    fn walk(d: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(rd) = std::fs::read_dir(d) else {
-            return;
-        };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                walk(&p, out);
-            } else if p.is_file() {
-                out.push(p);
-            }
-        }
-    }
-    walk(root, &mut out);
-    out.sort();
-    out
-}
-
 /// `upload_to_stage` / `upload_to_workspace` + `_run_uploads` + `_stream_uploads`:
 /// up to five PUTs at once on the same session, each `Uploaded` line printed as it
 /// completes (so the order varies, as upstream).
@@ -217,7 +164,10 @@ fn push_files(
 ) -> Result<std::result::Result<(), DbError>> {
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let mut jobs: Vec<(String, String)> = Vec::new();
-    for path in bundle_files(&root) {
+    for path in crate::artifacts::walk(&root)
+        .into_iter()
+        .filter(|f| f.is_file())
+    {
         let rel = path.strip_prefix(&root).unwrap_or(&path).to_path_buf();
         let rel_dir = rel
             .parent()
@@ -230,7 +180,13 @@ fn push_files(
             .unwrap_or_default();
         let sql = format!(
             "PUT {} {put_target} auto_compress=false overwrite=true",
-            file_uri(&path.canonicalize().unwrap_or(path.clone()))
+            // `_local_path_to_file_uri(local_path)`.
+            crate::stage::to_uri(&crate::stage::glob_escape(
+                &path
+                    .canonicalize()
+                    .unwrap_or(path.clone())
+                    .to_string_lossy()
+            ))
         );
         jobs.push((
             sql,
@@ -322,7 +278,7 @@ fn stage_exists(cli: &mut Cli, f: &Fqn) -> Result<std::result::Result<bool, DbEr
         to_identifier(f.database.as_deref().unwrap_or_default()),
         to_identifier(f.schema.as_deref().unwrap_or_default())
     );
-    Ok(match run(cli, &q)? {
+    Ok(match cli.try_query(&q)? {
         Ok(c) => Ok(any_name(&c, &f.name)?),
         Err(e) => Err(e),
     })
@@ -382,7 +338,7 @@ fn empty_stage(cli: &mut Cli, f: &Fqn, enc: &str) -> Result<bool> {
     } else {
         format!("Creating stage @{ident}")
     });
-    let cannot_create = match run(cli, &create_stage_sql(f, enc))? {
+    let cannot_create = match cli.try_query(&create_stage_sql(f, enc))? {
         Ok(_) => None,
         Err(e) if e.errno == 3001 => Some(e),
         Err(e) => return Err(fail(cli, &e, "create stage", "CREATE STAGE on the schema")),
@@ -394,9 +350,9 @@ fn empty_stage(cli: &mut Cli, f: &Fqn, enc: &str) -> Result<bool> {
         return Ok(true);
     }
     if cannot_create.is_none() {
-        match run(cli, &format!("DROP STAGE IF EXISTS {}", f.sql_identifier()))? {
+        match cli.try_query(&format!("DROP STAGE IF EXISTS {}", f.sql_identifier()))? {
             Ok(_) => {
-                if let Err(e) = run(cli, &create_stage_sql(f, enc))? {
+                if let Err(e) = cli.try_query(&create_stage_sql(f, enc))? {
                     return Err(fail(cli, &e, "create stage", "CREATE STAGE on the schema"));
                 }
                 return Ok(true);
@@ -416,7 +372,7 @@ fn empty_stage(cli: &mut Cli, f: &Fqn, enc: &str) -> Result<bool> {
     ));
     let root =
         snow_api::stage_path::StagePath::from_stage_str(&format!("@{ident}/")).path_for_sql();
-    if let Err(e) = run(cli, &format!("REMOVE {root}"))? {
+    if let Err(e) = cli.try_query(&format!("REMOVE {root}"))? {
         return Err(fail(cli, &e, "clear stage", "WRITE on the stage"));
     }
     Ok(false)
@@ -445,7 +401,7 @@ fn upload_via_stage(cli: &mut Cli, f: &Fqn, enc: &str, bundle: &Path) -> Result<
         &format!("@{ident}"),
         false,
     )? {
-        return Err(db_err(cli, &e));
+        return Err(snow_api::connect::db_error_to_cli(&e, cli.connector_info));
     }
     Ok(created)
 }
@@ -485,20 +441,17 @@ fn upload_via_workspace(
     };
     cli.console
         .step(&format!("Creating workspace {}", f.identifier()));
-    if let Err(e) = run(
-        cli,
-        &format!("CREATE WORKSPACE IF NOT EXISTS {}", f.sql_identifier()),
-    )? {
+    if let Err(e) = cli.try_query(&format!(
+        "CREATE WORKSPACE IF NOT EXISTS {}",
+        f.sql_identifier()
+    ))? {
         return fail(cli, e, "create workspace", "CREATE WORKSPACE on the schema");
     }
-    if let Err(e) = run(
-        cli,
-        &format!(
-            "ALTER WORKSPACE {} ADD LIVE VERSION FROM LAST",
-            f.sql_identifier()
-        ),
-    )? {
-        let text = err_str(&e);
+    if let Err(e) = cli.try_query(&format!(
+        "ALTER WORKSPACE {} ADD LIVE VERSION FROM LAST",
+        f.sql_identifier()
+    ))? {
+        let text = e.msg_with(true);
         let exists = matches!(e.errno, 99106 | 3041)
             || (text.contains("42710") && (text.contains("099106") || text.contains("003041")));
         if !exists {
@@ -507,7 +460,7 @@ fn upload_via_workspace(
     }
     cli.console
         .step(&format!("Clearing existing workspace files in {sub}/"));
-    if let Err(e) = run(cli, &format!("REMOVE {sub}/"))? {
+    if let Err(e) = cli.try_query(&format!("REMOVE {sub}/"))? {
         return fail(cli, e, "clear workspace files", "WRITE on the workspace");
     }
     cli.console
@@ -543,18 +496,29 @@ struct Pipeline {
     project_type: String,
 }
 
+/// The deploy phases `--upload-only` / `--build-only` / `--promote-only` select.
+#[derive(Clone, Copy, PartialEq)]
+enum DeployStep {
+    All,
+    UploadOnly,
+    BuildOnly,
+    PromoteOnly,
+}
+
+impl DeployStep {
+    fn uploads(self) -> bool {
+        matches!(self, DeployStep::All | DeployStep::UploadOnly)
+    }
+    fn builds(self) -> bool {
+        matches!(self, DeployStep::All | DeployStep::BuildOnly)
+    }
+}
+
 /// `_upload_and_build_app(...)`: `Some` short-circuits for --upload-only / --build-only.
-fn upload_and_build(
-    cli: &mut Cli,
-    p: &mut Pipeline,
-    upload: bool,
-    build: bool,
-    upload_only: bool,
-    build_only: bool,
-) -> Result<Option<Output>> {
-    let mut use_ws = p.storage.ty == "workspace";
+fn upload_and_build(cli: &mut Cli, p: &mut Pipeline, step: DeployStep) -> Result<Option<Output>> {
+    let mut use_ws = p.storage.kind == StorageKind::Workspace;
     let mut stage_created = false;
-    if upload {
+    if step.uploads() {
         let bundle = super::perform_bundle(cli, &p.bundle_id, &p.artifacts)?;
         let r = (|| -> Result<()> {
             if !use_ws {
@@ -566,22 +530,19 @@ fn upload_and_build(
                 cli.console.warning(&format!(
                     "Could not use a workspace for code storage in '{}': {}. Falling back to a stage.",
                     san(&p.storage_fqn.identifier()),
-                    err_str(&e)
+                    e.msg_with(true)
                 ));
                 use_ws = false;
-                p.storage_fqn = app_fqn(
-                    Some(&p.database),
-                    Some(&p.schema),
-                    &format!("{}_CODE", p.app_id),
-                );
-                stage_created = upload_via_stage(cli, &p.storage_fqn, "SNOWFLAKE_SSE", &bundle)?;
+                p.storage_fqn = CodeStorage::temporary(StorageKind::Stage, &p.app_id)
+                    .fqn(&p.database, &p.schema);
+                stage_created = upload_via_stage(cli, &p.storage_fqn, DEFAULT_ENCRYPTION, &bundle)?;
             }
             Ok(())
         })();
-        super::clean_up_output_pub(cli, &bundle);
+        super::clean_up_output(cli, &bundle);
         r?;
     }
-    if upload_only {
+    if step == DeployStep::UploadOnly {
         return Ok(Some(Output::message(if use_ws {
             format!(
                 "Artifacts uploaded to {}",
@@ -591,7 +552,7 @@ fn upload_and_build(
             format!("Artifacts uploaded to @{}", p.storage_fqn.identifier())
         })));
     }
-    if build {
+    if step.builds() {
         let (rdb, rsc) = (
             p.repo_db.clone().unwrap_or_default(),
             p.repo_schema.clone().unwrap_or_default(),
@@ -639,24 +600,24 @@ fn upload_and_build(
             job.identifier()
         );
         poll_states(cli, &job, &timeout)?;
-        if p.storage.temporary {
-            if use_ws {
-                drop_after_build(cli, "workspace", &p.storage_fqn);
+        // `stage_created` implies a stage: only `upload_via_stage` sets it.
+        if p.storage.temporary || stage_created {
+            let kind = if use_ws {
+                StorageKind::Workspace
             } else {
-                drop_after_build(cli, "stage", &p.storage_fqn);
-            }
-        } else if stage_created {
-            drop_after_build(cli, "stage", &p.storage_fqn);
+                StorageKind::Stage
+            };
+            drop_after_build(cli, kind, &p.storage_fqn);
         }
     }
-    if build_only {
+    if step == DeployStep::BuildOnly {
         return Ok(Some(Output::message("Build completed successfully.")));
     }
     Ok(None)
 }
 
-fn drop_after_build(cli: &mut Cli, kind: &str, f: &Fqn) {
-    let (step, sql) = if kind == "stage" {
+fn drop_after_build(cli: &mut Cli, kind: StorageKind, f: &Fqn) {
+    let (step, sql) = if kind == StorageKind::Stage {
         (
             format!("Dropping stage @{f} now that the build is complete"),
             format!("DROP STAGE IF EXISTS {}", f.sql_identifier()),
@@ -667,12 +628,13 @@ fn drop_after_build(cli: &mut Cli, kind: &str, f: &Fqn) {
             format!("DROP WORKSPACE IF EXISTS {}", f.sql_identifier()),
         )
     };
+    let kind = kind.as_str();
     cli.console.step(&step);
     if let Ok(Err(e)) = cli.try_query(&sql) {
         cli.console.warning(&format!(
             "Could not drop {kind} '{}' after the build completed: {}. The build succeeded; you can remove the {kind} manually if desired.",
             san(&f.identifier()),
-            err_str(&e)
+            e.msg_with(true)
         ));
     }
 }
@@ -681,7 +643,7 @@ fn drop_after_build(cli: &mut Cli, kind: &str, f: &Fqn) {
 fn build_artifact_repo(cli: &mut Cli, p: &Pipeline, source: &str) -> Result<String> {
     let first = |cli: &mut Cli, q: &str| -> Result<Option<String>> {
         let c = cli.execute_query(q)?;
-        Ok(c.rows.first().and_then(|r| r.first().cloned().flatten()))
+        Ok(Cli::first_cell_opt(&c))
     };
     let prev_db = first(cli, "SELECT CURRENT_DATABASE()")?;
     let prev_schema = first(cli, "SELECT CURRENT_SCHEMA()")?;
@@ -721,16 +683,16 @@ fn build_artifact_repo(cli: &mut Cli, p: &Pipeline, source: &str) -> Result<Stri
     Ok(r?.unwrap_or_default())
 }
 
-fn sleep_poll() {
-    std::thread::sleep(std::time::Duration::from_secs(5));
+/// The poll error text: `timeout` with "timed out" replaced by "failed".
+fn failed_text(timeout: &str) -> String {
+    static TIMED_OUT: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"(?i)\btimed out\b").expect("re"));
+    TIMED_OUT.replace(timeout, "failed").into_owned()
 }
 
 /// `_poll_until(get_build_status, done={DONE}, error={FAILED, IDLE}, pending={PENDING, RUNNING})`.
 fn poll_states(cli: &mut Cli, job: &Fqn, timeout: &str) -> Result<()> {
-    let failed = regex::Regex::new(r"(?i)\btimed out\b")
-        .expect("re")
-        .replace(timeout, "failed")
-        .into_owned();
+    let failed = failed_text(timeout);
     let mut container: Option<(String, String)> = None;
     let mut seen = 0usize;
     for _ in 0..240 {
@@ -820,10 +782,7 @@ fn build_job_logs(cli: &mut Cli, job: &Fqn, cache: &mut Option<(String, String)>
         to_string_literal(&name)
     );
     match cli.try_query(&q) {
-        Ok(Ok(c)) => c
-            .rows
-            .first()
-            .and_then(|r| r.first().cloned().flatten())
+        Ok(Ok(c)) => Cli::first_cell_opt(&c)
             .map(|t| {
                 t.lines()
                     .filter(|l| !l.is_empty())
@@ -840,25 +799,19 @@ type Desc = IndexMap<String, Pv>;
 /// `_poll_until(describe_app_service, is_done=url ready, is_error=FAILED)`.
 fn poll_endpoint(
     cli: &mut Cli,
-    f: &Fqn,
     timeout: &str,
+    describe: &dyn Fn(&mut Cli) -> Result<Desc>,
     fmt: &dyn Fn(&Desc) -> String,
 ) -> Result<Desc> {
-    let failed = regex::Regex::new(r"(?i)\btimed out\b")
-        .expect("re")
-        .replace(timeout, "failed")
-        .into_owned();
+    let failed = failed_text(timeout);
     for _ in 0..240 {
-        sleep_poll();
-        let d = match manager::describe_app_service(cli, f)? {
-            Ok(d) => d,
-            Err(e) => return Err(db_err(cli, &e)),
-        };
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let d = describe(cli)?;
         cli.console.step(&format!("[{}] Status: {}", ts(), fmt(&d)));
         if manager::url_from_describe(&d).is_some() {
             return Ok(d);
         }
-        if desc_str(&d, "status").to_uppercase() == "FAILED" {
+        if manager::pv(&d, "status").to_uppercase() == "FAILED" {
             return Err(SnowError::cli(format!("{failed} (status={})", fmt(&d))));
         }
     }
@@ -867,24 +820,23 @@ fn poll_endpoint(
     )))
 }
 
-fn desc_str(d: &Desc, k: &str) -> String {
-    match d.get(k) {
-        None | Some(Pv::None) => String::new(),
-        Some(v) => v.py_str(),
-    }
-}
-
 /// `_wait_for_app_yml_endpoint` / the snowflake.yml endpoint wait, with the FAILED follow-up.
 fn wait_endpoint(cli: &mut Cli, f: &Fqn, upgrade: bool) -> Result<String> {
     let ident = f.identifier();
+    let describe = |cli: &mut Cli| match manager::describe_app_service(cli, f)? {
+        Ok(d) => Ok(d),
+        Err(e) => Err(snow_api::connect::db_error_to_cli(&e, cli.connector_info)),
+    };
     let r = if upgrade {
         cli.console
             .step(&format!("[{}] Waiting for upgrade to complete...", ts()));
         let t = format!(
             "Upgrade timed out. Check application service state and logs:\n  DESCRIBE APPLICATION SERVICE {ident}\n  CALL SYSTEM$GET_APPLICATION_SERVICE_LOGS('{ident}')"
         );
-        poll_endpoint(cli, f, &t, &|d| {
-            if ["true", "1", "yes"].contains(&desc_str(d, "is_upgrading").to_lowercase().as_str()) {
+        poll_endpoint(cli, &t, &describe, &|d| {
+            if ["true", "1", "yes"]
+                .contains(&manager::pv(d, "is_upgrading").to_lowercase().as_str())
+            {
                 "upgrading".into()
             } else {
                 "ready".into()
@@ -898,8 +850,8 @@ fn wait_endpoint(cli: &mut Cli, f: &Fqn, upgrade: bool) -> Result<String> {
         let t = format!(
             "Application service deployment timed out. Check application service state and logs:\n  DESCRIBE APPLICATION SERVICE {ident}\n  CALL SYSTEM$GET_APPLICATION_SERVICE_LOGS('{ident}')"
         );
-        poll_endpoint(cli, f, &t, &|d| {
-            let u = desc_str(d, "url");
+        poll_endpoint(cli, &t, &describe, &|d| {
+            let u = manager::pv(d, "url");
             if u.is_empty() {
                 "url not yet available".into()
             } else {
@@ -911,7 +863,7 @@ fn wait_endpoint(cli: &mut Cli, f: &Fqn, upgrade: bool) -> Result<String> {
         Ok(d) => d,
         Err(e) => {
             if let Ok(Ok(d)) = manager::describe_app_service(cli, f)
-                && desc_str(&d, "status").to_uppercase() == "FAILED"
+                && manager::pv(&d, "status").to_uppercase() == "FAILED"
             {
                 log_service_logs(cli, f);
             }
@@ -949,10 +901,10 @@ fn ensure_app_schema(cli: &mut Cli, db: &str, schema: &str, app: &str) -> Result
         name: schema.to_string(),
         signature: None,
     };
-    if let Err(e) = run(
-        cli,
-        &format!("CREATE SCHEMA IF NOT EXISTS {}", f.sql_identifier()),
-    )? {
+    if let Err(e) = cli.try_query(&format!(
+        "CREATE SCHEMA IF NOT EXISTS {}",
+        f.sql_identifier()
+    ))? {
         let q = format!(
             "SHOW SCHEMAS LIKE {} IN DATABASE IDENTIFIER({})",
             to_string_literal(schema),
@@ -967,7 +919,7 @@ fn ensure_app_schema(cli: &mut Cli, db: &str, schema: &str, app: &str) -> Result
             "Could not create app-derived schema '{}.{}': {}. Grant CREATE SCHEMA on database '{}' to the active role, or create the schema manually.",
             san(db),
             san(schema),
-            err_str(&e),
+            e.msg_with(true),
             san(db)
         )));
     }
@@ -1021,23 +973,10 @@ fn cert_precheck(cli: &mut Cli, skip: bool, required: bool) -> Result<()> {
     }
 }
 
-fn field(m: &PyV, k: &str) -> PyV {
-    m.as_model()
-        .and_then(|m| m.fields.get(k).cloned())
-        .unwrap_or(PyV::None)
-}
-
-fn opt(m: &PyV, k: &str) -> Option<String> {
-    match field(m, k) {
-        PyV::None => None,
-        v => Some(v.py_str()).filter(|s| !s.is_empty()),
-    }
-}
-
 /// `build_service_specification(target, database, schema, include_*)`.
 fn service_spec(t: &PyV, db: &str, sc: &str, cng: bool) -> Result<String> {
     let mut spec = IndexMap::new();
-    let s = |k: &str| opt(t, k).map(PyV::Str);
+    let s = |k: &str| super::opt_str(t, k).filter(|v| !v.is_empty()).map(PyV::Str);
     for (k, include) in [
         ("query_warehouse", true),
         ("url_prefix", cng),
@@ -1057,22 +996,22 @@ fn service_spec(t: &PyV, db: &str, sc: &str, cng: bool) -> Result<String> {
         "min_instances",
         "max_instances",
     ] {
-        let v = field(t, k);
+        let v = super::field(t, k);
         if !v.is_none() {
             spec.insert(k.to_string(), v);
         }
     }
-    if let PyV::List(l) = field(t, "external_access_integrations")
+    if let PyV::List(l) = super::field(t, "external_access_integrations")
         && !l.is_empty()
     {
         spec.insert("external_access_integrations".into(), PyV::List(l));
     }
-    if let PyV::List(l) = field(t, "secrets")
+    if let PyV::List(l) = super::field(t, "secrets")
         && !l.is_empty()
     {
         let mut out = Vec::new();
         for sec in &l {
-            let secret = opt(sec, "secret").unwrap_or_default();
+            let secret = super::opt_str(sec, "secret").unwrap_or_default();
             let f = Fqn::from_string(&secret)?;
             let qualified = match (
                 f.database.clone().or_else(|| Some(db.to_string())),
@@ -1086,14 +1025,14 @@ fn service_spec(t: &PyV, db: &str, sc: &str, cng: bool) -> Result<String> {
             let mut m = IndexMap::new();
             m.insert(
                 "name".to_string(),
-                PyV::Str(opt(sec, "name").unwrap_or_default()),
+                PyV::Str(super::opt_str(sec, "name").unwrap_or_default()),
             );
             m.insert("secret".to_string(), PyV::Str(qualified));
             out.push(PyV::Dict(m));
         }
         spec.insert("secrets".into(), PyV::List(out));
     }
-    if let PyV::List(l) = field(t, "environment_variables")
+    if let PyV::List(l) = super::field(t, "environment_variables")
         && !l.is_empty()
     {
         let out = l
@@ -1102,21 +1041,24 @@ fn service_spec(t: &PyV, db: &str, sc: &str, cng: bool) -> Result<String> {
                 let mut m = IndexMap::new();
                 m.insert(
                     "name".to_string(),
-                    PyV::Str(opt(e, "name").unwrap_or_default()),
+                    PyV::Str(super::opt_str(e, "name").unwrap_or_default()),
                 );
-                m.insert("value".to_string(), PyV::Str(field(e, "value").py_str()));
+                m.insert(
+                    "value".to_string(),
+                    PyV::Str(super::field(e, "value").py_str()),
+                );
                 PyV::Dict(m)
             })
             .collect();
         spec.insert("environment_variables".into(), PyV::List(out));
     }
-    if cng && let PyV::List(l) = field(t, "postgres_instances") {
+    if cng && let PyV::List(l) = super::field(t, "postgres_instances") {
         let out = l
             .iter()
             .map(|b| {
                 let mut m = IndexMap::new();
                 for k in ["instance", "name", "authentication_mode"] {
-                    if let Some(v) = opt(b, k) {
+                    if let Some(v) = super::opt_str(b, k).filter(|v| !v.is_empty()) {
                         m.insert(k.to_string(), PyV::Str(v));
                     }
                 }
@@ -1135,56 +1077,45 @@ fn service_spec(t: &PyV, db: &str, sc: &str, cng: bool) -> Result<String> {
 
 /// `snowflake_app_deploy(...)`.
 pub fn deploy(cli: &mut Cli, flow: Flow) -> Result<Output> {
-    let mut native: Vec<&str> = Vec::new();
-    if cli.opt_bool("prune").is_some() {
-        native.push("--prune");
-    }
-    if cli.opt_bool("recursive").is_some() {
-        native.push("--recursive");
-    }
-    if !cli.list("paths").is_empty() {
-        native.push("paths");
-    }
-    if !native.is_empty() {
-        native.sort();
-        return Err(SnowError::click(format!(
-            "'snow app deploy' was invoked against a Snowflake App Runtime entity (type: snowflake-app), but the following Native App options were provided: {}. Remove them and try again.",
-            native.join(", ")
-        )));
-    }
-    let upload_only = cli.flag("upload_only");
-    let build_only = cli.flag("build_only");
-    let promote_only = cli.flag("promote_only") || cli.flag("deploy_only");
-    if [upload_only, build_only, promote_only]
-        .iter()
-        .filter(|b| **b)
-        .count()
-        > 1
-    {
-        return Err(SnowError::click(
-            "Only one of --upload-only, --build-only, or --promote-only may be specified.",
-        ));
-    }
+    super::reject_native_options(
+        "deploy",
+        &[
+            ("--prune", cli.opt_bool("prune").is_some()),
+            ("--recursive", cli.opt_bool("recursive").is_some()),
+            ("paths", !cli.list("paths").is_empty()),
+        ],
+    )?;
+    let chosen: Vec<DeployStep> = [
+        (DeployStep::UploadOnly, cli.flag("upload_only")),
+        (DeployStep::BuildOnly, cli.flag("build_only")),
+        (
+            DeployStep::PromoteOnly,
+            cli.flag("promote_only") || cli.flag("deploy_only"),
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(s, set)| set.then_some(s))
+    .collect();
+    let step = match chosen[..] {
+        [] => DeployStep::All,
+        [s] => s,
+        _ => {
+            return Err(SnowError::click(
+                "Only one of --upload-only, --build-only, or --promote-only may be specified.",
+            ));
+        }
+    };
     let skip_certs = cli.flag("skip_certs_check");
     match flow {
-        Flow::AppYml(def) => {
-            deploy_yml(cli, &def, upload_only, build_only, promote_only, skip_certs)
-        }
-        _ => {
-            super::reject_target_pub(cli)?;
-            deploy_entity(cli, upload_only, build_only, promote_only)
+        Flow::AppYml(def) => deploy_yml(cli, &def, step, skip_certs),
+        Flow::Entity => {
+            super::reject_target_without_yml(cli)?;
+            deploy_entity(cli, step)
         }
     }
 }
 
-fn deploy_yml(
-    cli: &mut Cli,
-    def: &PyV,
-    upload_only: bool,
-    build_only: bool,
-    promote_only: bool,
-    skip_certs: bool,
-) -> Result<Output> {
+fn deploy_yml(cli: &mut Cli, def: &PyV, step: DeployStep, skip_certs: bool) -> Result<Output> {
     super::ensure_python_phases(cli, def)?;
     let dep = super::resolve_deployment(cli, def, cli.str("target").as_deref())?;
     let label = san(&dep.service_name);
@@ -1197,8 +1128,8 @@ fn deploy_yml(
             .console
             .step(&format!("Deploying application service {label}.")),
     }
-    let compute = opt(&dep.target, "compute_resource");
-    let python = opt(def, "runtime")
+    let compute = super::opt_str(&dep.target, "compute_resource").filter(|c| !c.is_empty());
+    let python = super::opt_str(def, "runtime")
         .unwrap_or_default()
         .split(',')
         .any(|r| r == "python");
@@ -1218,7 +1149,7 @@ fn deploy_yml(
         }
     }
     ensure_app_schema(cli, &dep.database, &dep.schema, &dep.service_name)?;
-    if promote_only {
+    if step == DeployStep::PromoteOnly {
         cli.console
             .step("Promoting the latest built package (skipping upload and build).");
     }
@@ -1237,23 +1168,28 @@ fn deploy_yml(
         ));
     }
     if cng {
-        cert_precheck(cli, skip_certs, !upload_only && !build_only)?;
+        cert_precheck(
+            cli,
+            skip_certs,
+            matches!(step, DeployStep::All | DeployStep::PromoteOnly),
+        )?;
     }
-    let (rdb, rsc, rname) = match opt(&dep.target, "artifact_repo") {
-        Some(v) => {
-            let f = Fqn::from_string(&v)?;
-            (
-                f.database.or(Some(dep.database.clone())),
-                f.schema.or(Some(dep.schema.clone())),
-                f.name,
-            )
-        }
-        None => (
-            Some(dep.database.clone()),
-            Some(dep.schema.clone()),
-            format!("{}_REPO", dep.service_name),
-        ),
-    };
+    let (rdb, rsc, rname) =
+        match super::opt_str(&dep.target, "artifact_repo").filter(|r| !r.is_empty()) {
+            Some(v) => {
+                let f = Fqn::from_string(&v)?;
+                (
+                    f.database.or(Some(dep.database.clone())),
+                    f.schema.or(Some(dep.schema.clone())),
+                    f.name,
+                )
+            }
+            None => (
+                Some(dep.database.clone()),
+                Some(dep.schema.clone()),
+                format!("{}_REPO", dep.service_name),
+            ),
+        };
     let repo_fqn = app_fqn(rdb.as_deref(), rsc.as_deref(), &rname).identifier();
     let mut p = Pipeline {
         storage: dep.storage,
@@ -1265,25 +1201,19 @@ fn deploy_yml(
         repo_db: rdb,
         repo_schema: rsc,
         repo_name: rname,
-        build_eai: opt(&dep.target, "build_eai"),
-        build_job_location: opt(&dep.target, "build_job_location"),
+        build_eai: super::opt_str(&dep.target, "build_eai"),
+        build_job_location: super::opt_str(&dep.target, "build_job_location"),
         bundle_id: dep.package_name.clone(),
-        artifacts: super::yml_artifacts_pub(&dep.target),
+        artifacts: super::yml_artifacts(&dep.target),
         compute_pool: None,
         runtime_image: String::new(),
         project_type: String::new(),
     };
-    if let Some(r) = upload_and_build(
-        cli,
-        &mut p,
-        !build_only && !promote_only,
-        !upload_only && !promote_only,
-        upload_only,
-        build_only,
-    )? {
+    if let Some(r) = upload_and_build(cli, &mut p, step)? {
         return Ok(r);
     }
-    if matches!(field(&dep.target, "postgres_instances"), PyV::List(ref l) if !l.is_empty()) && !cng
+    if matches!(super::field(&dep.target, "postgres_instances"), PyV::List(ref l) if !l.is_empty())
+        && !cng
     {
         return Err(SnowError::cli(
             "postgres_instances is only valid when compute_resource is SERVERLESS.",
@@ -1310,24 +1240,19 @@ fn deploy_yml(
         parts.push(format!("COMPUTE_RESOURCE = {c}"));
     }
     parts.push(format!("SPECIFICATION = $$\n{spec}$$"));
-    if let Err(e) = run(cli, &parts.join("\n"))? {
+    if let Err(e) = cli.try_query(&parts.join("\n"))? {
         log_service_logs(cli, &dep.service_fqn);
         return Err(SnowError::cli(format!(
             "Deployment failed while applying application service '{ident}': {}. Verify privileges for CREATE OR ALTER APPLICATION SERVICE plus USAGE on the warehouse, secrets, and external access integrations referenced by the target.",
-            err_str(&e)
+            e.msg_with(true)
         )));
     }
     let url = wait_endpoint(cli, &dep.service_fqn, false)?;
     Ok(Output::message(format!("App ready at {url}")))
 }
 
-fn deploy_entity(
-    cli: &mut Cli,
-    upload_only: bool,
-    build_only: bool,
-    promote_only: bool,
-) -> Result<Output> {
-    let (id, e) = super::entity_pub(cli)?;
+fn deploy_entity(cli: &mut Cli, step: DeployStep) -> Result<Output> {
+    let (id, e) = super::entity(cli)?;
     let raw = crate::entities::fqn(&e, &id)?;
     let app = raw.name.clone();
     let meta = e.get_some("meta");
@@ -1342,15 +1267,11 @@ fn deploy_entity(
     let service_eai = g("service_eai")
         .filter(|s| !s.is_empty())
         .or_else(|| build_eai.clone());
-    let storage = super::entity_code_storage_pub(cli, &e, Some(&database), &app);
+    let storage = super::entity_code_storage(cli, &e, Some(&database), &app);
     let repo_name = g("artifact_repository").unwrap_or_default();
     let (rdb, rsc) = (g("artifact_repo_database"), g("artifact_repo_schema"));
     let repo_fqn = app_fqn(rdb.as_deref(), rsc.as_deref(), &repo_name).identifier();
-    let storage_fqn = app_fqn(
-        Some(storage.database.as_deref().unwrap_or(&database)),
-        Some(storage.schema.as_deref().unwrap_or(&schema)),
-        &storage.name,
-    );
+    let storage_fqn = storage.fqn(&database, &schema);
     let service_fqn = app_fqn(Some(&database), Some(&schema), &app);
     let mut p = Pipeline {
         storage,
@@ -1365,23 +1286,12 @@ fn deploy_entity(
         build_eai,
         build_job_location: None,
         bundle_id: id.clone(),
-        artifacts: e
-            .get("artifacts")
-            .and_then(PyV::as_list)
-            .cloned()
-            .unwrap_or_default(),
+        artifacts: super::entity_artifacts(&e),
         compute_pool: g("build_compute_pool"),
         runtime_image: e.str_of("runtime_image").unwrap_or_default(),
         project_type: e.str_of("spcs_test_project_type").unwrap_or_default(),
     };
-    if let Some(r) = upload_and_build(
-        cli,
-        &mut p,
-        !build_only && !promote_only,
-        !upload_only && !promote_only,
-        upload_only,
-        build_only,
-    )? {
+    if let Some(r) = upload_and_build(cli, &mut p, step)? {
         return Ok(r);
     }
     let mut comment = serde_json::Map::new();
@@ -1414,19 +1324,18 @@ fn deploy_entity(
     }
     parts.push(format!("COMMENT = '{}'", comment.replace('\'', "''")));
     let mut upgraded = false;
-    if let Err(err) = run(cli, &parts.join("\n"))? {
-        if err.errno == 2002 && err_str(&err).to_lowercase().contains("already exists") {
+    if let Err(err) = cli.try_query(&parts.join("\n"))? {
+        if err.errno == 2002 && err.msg_with(true).to_lowercase().contains("already exists") {
             cli.console.step(&format!(
                 "Application service {app} already exists. Upgrading..."
             ));
-            if let Err(ue) = run(
-                cli,
-                &format!("ALTER APPLICATION SERVICE {ident} UPGRADE\nTO VERSION LATEST"),
-            )? {
+            if let Err(ue) = cli.try_query(&format!(
+                "ALTER APPLICATION SERVICE {ident} UPGRADE\nTO VERSION LATEST"
+            ))? {
                 log_service_logs(cli, &service_fqn);
                 return Err(SnowError::cli(format!(
                     "Deployment failed while upgrading application service '{ident}': {}. Verify privileges for ALTER APPLICATION SERVICE and access to referenced objects.",
-                    err_str(&ue)
+                    ue.msg_with(true)
                 )));
             }
             upgraded = true;
@@ -1434,7 +1343,7 @@ fn deploy_entity(
             log_service_logs(cli, &service_fqn);
             return Err(SnowError::cli(format!(
                 "Deployment failed while creating application service '{ident}': {}. Verify privileges for CREATE APPLICATION SERVICE plus USAGE on configured compute pools, warehouse, and external access integrations.",
-                err_str(&err)
+                err.msg_with(true)
             )));
         }
     }
@@ -1459,37 +1368,21 @@ pub fn wait_for_service_endpoint(cli: &mut Cli, f: &Fqn) -> Result<String> {
     let timeout = format!(
         "Timed out waiting for application service '{ident}' to become ready. Check application service state and logs:\n  DESCRIBE APPLICATION SERVICE {ident}\n  CALL SYSTEM$GET_APPLICATION_SERVICE_LOGS('{ident}')"
     );
-    let failed = regex::Regex::new(r"(?i)\btimed out\b")
-        .expect("re")
-        .replace(&timeout, "failed")
-        .into_owned();
     let fmt = |d: &Desc| -> String {
         if d.is_empty() {
             return "waiting for service to be created...".into();
         }
-        let u = desc_str(d, "url");
+        let u = manager::pv(d, "url");
         if !u.is_empty() {
             return san(&u);
         }
-        let st = desc_str(d, "status").trim().to_string();
+        let st = manager::pv(d, "status").trim().to_string();
         if st.is_empty() {
             "url not yet available".into()
         } else {
             san(&st)
         }
     };
-    for _ in 0..240 {
-        sleep_poll();
-        let d = describe(cli)?;
-        cli.console.step(&format!("[{}] Status: {}", ts(), fmt(&d)));
-        if let Some(u) = manager::url_from_describe(&d) {
-            return Ok(u);
-        }
-        if desc_str(&d, "status").to_uppercase() == "FAILED" {
-            return Err(SnowError::cli(format!("{failed} (status={})", fmt(&d))));
-        }
-    }
-    Err(SnowError::cli(format!(
-        "{timeout} (timed out after 20 minutes)"
-    )))
+    let d = poll_endpoint(cli, &timeout, &describe, &fmt)?;
+    Ok(manager::url_from_describe(&d).unwrap_or_default())
 }

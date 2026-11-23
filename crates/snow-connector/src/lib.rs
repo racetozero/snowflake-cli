@@ -12,6 +12,7 @@
 
 pub mod auth;
 mod cloud;
+mod sigv4;
 mod storage;
 pub mod transfer;
 pub mod wif;
@@ -19,10 +20,15 @@ pub mod ws;
 
 use serde_json::{Map, Value, json};
 use std::io::Read;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 pub const CLIENT_APP_ID: &str = "PythonConnector";
 pub const CLIENT_APP_VERSION: &str = "4.8.1";
+
+/// Response codes of a query that is still running.
+const IN_PROGRESS: [&str; 2] = ["333333", "333334"];
+/// Response code of an expired session token.
+const SESSION_EXPIRED: &str = "390112";
 
 /// An error as the Python connector reports it.
 #[derive(Debug, Clone)]
@@ -40,7 +46,6 @@ pub enum ErrorKind {
     Programming,
     Database,
     Operational,
-    Interface,
     Forbidden,
 }
 
@@ -153,9 +158,6 @@ pub struct Column {
     pub name: String,
     pub type_name: String,
     pub scale: Option<i64>,
-    pub precision: Option<i64>,
-    pub length: Option<i64>,
-    pub nullable: bool,
 }
 
 impl Column {
@@ -195,7 +197,6 @@ pub struct Cursor {
     pub columns: Vec<Column>,
     pub rows: Vec<Vec<Option<String>>>,
     pub rowcount: Option<i64>,
-    pub statement_type_id: Option<i64>,
     /// For PUT/GET the rows are produced by the client.
     pub raw: Value,
 }
@@ -215,10 +216,20 @@ pub struct SessionInfo {
     pub role: Option<String>,
 }
 
+/// Who owns the server session; only an owned session is deleted on `close()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionState {
+    /// `auth::login` has not succeeded yet.
+    LoggingIn,
+    /// Created by this connection's login.
+    Owned,
+    /// A `worker()` handle, or reused from `session_token` + `master_token`.
+    Borrowed,
+    Closed,
+}
+
 pub struct Connection {
     agent: ureq::Agent,
-    /// Server-side bindings for the next statement (`execute_bound`).
-    bindings: Option<Map<String, Value>>,
     pub base_url: String,
     pub host: String,
     pub account: String,
@@ -228,18 +239,14 @@ pub struct Connection {
     pub session_id: Option<i64>,
     pub session: SessionInfo,
     pub parameters: Map<String, Value>,
-    pub server_version: Option<String>,
     sequence: u64,
-    closed: bool,
-    keep_session: bool,
+    state: SessionState,
     pub params: ConnectParams,
 }
 
-fn now_ms() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0)
+/// Lower-case hex digits of `b`.
+pub fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 fn uuid4() -> String {
@@ -288,11 +295,6 @@ fn net_err(e: impl std::fmt::Display) -> DbError {
     DbError::new(ErrorKind::Operational, 251_000 + 1, None, format!("{e}"))
 }
 
-/// Default host for an account identifier.
-pub fn default_host(account: &str) -> String {
-    format!("{account}.snowflakecomputing.com")
-}
-
 impl Connection {
     /// `snowflake.connector.connect(**params)`.
     pub fn connect(params: ConnectParams) -> Result<Connection, DbError> {
@@ -300,13 +302,12 @@ impl Connection {
         let host = params
             .host
             .clone()
-            .unwrap_or_else(|| default_host(&account_full));
+            .unwrap_or_else(|| format!("{account_full}.snowflakecomputing.com"));
         let protocol = params.protocol.clone().unwrap_or_else(|| "https".into());
         let port = params.port.unwrap_or(443);
         let base_url = format!("{protocol}://{host}:{port}");
         let account = account_full.split('.').next().unwrap_or("").to_string();
         let mut conn = Connection {
-            bindings: None,
             agent: agent(),
             base_url,
             host,
@@ -322,10 +323,8 @@ impl Connection {
                 role: params.role.clone(),
             },
             parameters: Map::new(),
-            server_version: None,
             sequence: 0,
-            closed: false,
-            keep_session: false,
+            state: SessionState::LoggingIn,
             params,
         };
         if let (Some(st), Some(mt)) = (
@@ -334,29 +333,19 @@ impl Connection {
         ) {
             conn.token = st;
             conn.master_token = Some(mt);
-            conn.keep_session = true;
+            conn.state = SessionState::Borrowed;
             return Ok(conn);
         }
         auth::login(&mut conn)?;
+        conn.state = SessionState::Owned;
         Ok(conn)
-    }
-
-    pub(crate) fn agent(&self) -> &ureq::Agent {
-        &self.agent
     }
 
     pub(crate) fn set_session(&mut self, data: &Value) {
         self.token = data["token"].as_str().unwrap_or_default().to_string();
         self.master_token = data["masterToken"].as_str().map(str::to_string);
         self.session_id = data["sessionId"].as_i64();
-        self.server_version = data["serverVersion"].as_str().map(str::to_string);
-        if let Some(p) = data["parameters"].as_array() {
-            for e in p {
-                if let Some(n) = e["name"].as_str() {
-                    self.parameters.insert(n.to_string(), e["value"].clone());
-                }
-            }
-        }
+        self.merge_parameters(data);
         let si = &data["sessionInfo"];
         let s = |k: &str| si[k].as_str().map(str::to_string);
         self.session = SessionInfo {
@@ -384,14 +373,16 @@ impl Connection {
         }
         let resp = match req.send_string(&body.to_string()) {
             Ok(r) => r,
-            Err(ureq::Error::Status(code, r)) => return Err(http_error(code, r, &url)),
+            Err(ureq::Error::Status(code, _)) => return Err(http_error(code, &url)),
             Err(e) => return Err(net_err(e)),
         };
         let bytes = read_body(resp).map_err(net_err)?;
         serde_json::from_slice(&bytes).map_err(net_err)
     }
 
-    fn get(&self, path_or_url: &str) -> Result<Value, DbError> {
+    /// `connection.rest.request(url, method="get", client="rest")`: also serves
+    /// non-`/api` endpoints such as `/monitoring/queries`.
+    pub fn rest_get(&self, path_or_url: &str) -> Result<Value, DbError> {
         let url = if path_or_url.starts_with("http") {
             path_or_url.to_string()
         } else {
@@ -409,11 +400,35 @@ impl Connection {
             .call()
         {
             Ok(r) => r,
-            Err(ureq::Error::Status(code, r)) => return Err(http_error(code, r, &url)),
+            Err(ureq::Error::Status(code, _)) => return Err(http_error(code, &url)),
             Err(e) => return Err(net_err(e)),
         };
         let bytes = read_body(resp).map_err(net_err)?;
         serde_json::from_slice(&bytes).map_err(net_err)
+    }
+
+    fn merge_parameters(&mut self, data: &Value) {
+        for e in data["parameters"].as_array().into_iter().flatten() {
+            if let Some(n) = e["name"].as_str() {
+                self.parameters.insert(n.to_string(), e["value"].clone());
+            }
+        }
+    }
+
+    /// `_token_request(request_type)`: `POST /session/token-request` signed with `master`.
+    fn token_request(&self, master: &str, request_type: &str) -> Result<Value, DbError> {
+        let body = json!({ "oldSessionToken": self.token, "requestType": request_type });
+        let path = format!(
+            "/session/token-request?requestId={}&request_guid={}",
+            uuid4(),
+            uuid4()
+        );
+        let v = self.post(&path, &body, Some(master))?;
+        if v["success"].as_bool() == Some(true) {
+            Ok(v)
+        } else {
+            Err(response_error(&v, ErrorKind::Database))
+        }
     }
 
     fn renew(&mut self) -> Result<(), DbError> {
@@ -425,74 +440,56 @@ impl Connection {
                 "Session expired",
             ));
         };
-        let body = json!({ "oldSessionToken": self.token, "requestType": "RENEW" });
-        let path = format!(
-            "/session/token-request?requestId={}&request_guid={}",
-            uuid4(),
-            uuid4()
-        );
-        let v = self.post(&path, &body, Some(&master))?;
-        if v["success"].as_bool() == Some(true) {
-            self.token = v["data"]["sessionToken"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
-            if let Some(m) = v["data"]["masterToken"].as_str() {
-                self.master_token = Some(m.to_string());
-            }
-            Ok(())
-        } else {
-            Err(response_error(&v, ErrorKind::Database))
+        let v = self.token_request(&master, "RENEW")?;
+        self.token = v["data"]["sessionToken"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        if let Some(m) = v["data"]["masterToken"].as_str() {
+            self.master_token = Some(m.to_string());
         }
+        Ok(())
     }
 
-    /// Run one statement and fetch all of its rows.
     pub fn execute(&mut self, sql: &str) -> Result<Cursor, DbError> {
-        self.execute_with(sql, false)
+        self.execute_with(sql, false, None)
     }
 
     /// Run a statement with qmark (`?`) bindings, all bound as TEXT.
     pub fn execute_bound(&mut self, sql: &str, binds: &[String]) -> Result<Cursor, DbError> {
-        self.bindings = Some(
-            binds
-                .iter()
-                .enumerate()
-                .map(|(i, b)| ((i + 1).to_string(), json!({"type": "TEXT", "value": b})))
-                .collect(),
-        );
-        let r = self.execute(sql);
-        self.bindings = None;
-        r
+        self.execute_with(sql, false, Some(binds))
     }
 
     /// `execute_async` with qmark bindings.
     pub fn execute_async_bound(&mut self, sql: &str, binds: &[String]) -> Result<Cursor, DbError> {
-        self.bindings = Some(
-            binds
-                .iter()
-                .enumerate()
-                .map(|(i, b)| ((i + 1).to_string(), json!({"type": "TEXT", "value": b})))
-                .collect(),
-        );
-        let r = self.execute_with(sql, true);
-        self.bindings = None;
-        r
+        self.execute_with(sql, true, Some(binds))
     }
 
     /// Submit a statement without waiting for its result (`_no_results=True`).
     pub fn execute_async(&mut self, sql: &str) -> Result<Cursor, DbError> {
-        self.execute_with(sql, true)
+        self.execute_with(sql, true, None)
     }
 
-    fn execute_with(&mut self, sql: &str, async_exec: bool) -> Result<Cursor, DbError> {
+    fn execute_with(
+        &mut self,
+        sql: &str,
+        async_exec: bool,
+        binds: Option<&[String]>,
+    ) -> Result<Cursor, DbError> {
         if transfer::is_file_transfer(sql) {
             return transfer::execute(self, sql);
         }
-        let v = self.query_request(sql, async_exec)?;
+        let v = self.query_request(sql, async_exec, binds)?;
         self.cursor_from(sql, v)
     }
 
-    pub(crate) fn query_request(&mut self, sql: &str, async_exec: bool) -> Result<Value, DbError> {
+    /// `binds` become server-side `bindings`, all bound as TEXT.
+    pub(crate) fn query_request(
+        &mut self,
+        sql: &str,
+        async_exec: bool,
+        binds: Option<&[String]>,
+    ) -> Result<Value, DbError> {
         self.sequence += 1;
         let mut parameters = Map::new();
         parameters.insert("PYTHON_CONNECTOR_QUERY_RESULT_FORMAT".into(), json!("JSON"));
@@ -500,13 +497,18 @@ impl Connection {
             "sqlText": sql,
             "asyncExec": async_exec,
             "sequenceId": self.sequence,
-            "querySubmissionTime": now_ms() as u64,
+            "querySubmissionTime": chrono::Utc::now().timestamp_millis(),
             "isInternal": false,
             "describeOnly": false,
             "parameters": parameters,
         });
-        if let Some(b) = &self.bindings {
-            body["bindings"] = Value::Object(b.clone());
+        if let Some(binds) = binds {
+            body["bindings"] = binds
+                .iter()
+                .enumerate()
+                .map(|(i, b)| ((i + 1).to_string(), json!({"type": "TEXT", "value": b})))
+                .collect::<Map<String, Value>>()
+                .into();
         }
         let request_id = uuid4();
         let path = format!(
@@ -514,23 +516,22 @@ impl Connection {
             uuid4()
         );
         let mut v = self.post(&path, &body, Some(&self.token.clone()))?;
-        if v["code"].as_str() == Some("390112") {
+        if v["code"].as_str() == Some(SESSION_EXPIRED) {
             self.renew()?;
             v = self.post(&path, &body, Some(&self.token.clone()))?;
         }
-        // Poll while the query runs.
         let mut delay = 50u64;
-        while matches!(v["code"].as_str(), Some("333333") | Some("333334")) && !async_exec {
+        while v["code"].as_str().is_some_and(|c| IN_PROGRESS.contains(&c)) && !async_exec {
             let url = v["data"]["getResultUrl"]
                 .as_str()
                 .unwrap_or_default()
                 .to_string();
             std::thread::sleep(Duration::from_millis(delay));
             delay = (delay * 2).min(1000);
-            v = self.get(&url)?;
-            if v["code"].as_str() == Some("390112") {
+            v = self.rest_get(&url)?;
+            if v["code"].as_str() == Some(SESSION_EXPIRED) {
                 self.renew()?;
-                v = self.get(&url)?;
+                v = self.rest_get(&url)?;
             }
         }
         Ok(v)
@@ -538,7 +539,7 @@ impl Connection {
 
     pub fn cursor_from(&mut self, sql: &str, v: Value) -> Result<Cursor, DbError> {
         if v["success"].as_bool() != Some(true)
-            && !matches!(v["code"].as_str(), Some("333333") | Some("333334"))
+            && !v["code"].as_str().is_some_and(|c| IN_PROGRESS.contains(&c))
         {
             let mut e = response_error(&v, ErrorKind::Programming);
             e.sfqid = v["data"]["queryId"].as_str().map(str::to_string);
@@ -564,38 +565,28 @@ impl Connection {
             columns,
             rows,
             rowcount,
-            statement_type_id: data["statementTypeId"].as_i64(),
             raw: v,
         })
     }
 
     fn update_session(&mut self, data: &Value) {
-        let s = |k: &str| data[k].as_str().map(str::to_string);
-        if let Some(d) = s("finalDatabaseName") {
-            self.session.database = Some(d);
-        } else if data.get("finalDatabaseName").is_some_and(Value::is_null) {
-            self.session.database = None;
-        }
-        if let Some(d) = s("finalSchemaName") {
-            self.session.schema = Some(d);
-        } else if data.get("finalSchemaName").is_some_and(Value::is_null) {
-            self.session.schema = None;
-        }
-        if let Some(d) = s("finalWarehouseName") {
-            self.session.warehouse = Some(d);
-        } else if data.get("finalWarehouseName").is_some_and(Value::is_null) {
-            self.session.warehouse = None;
-        }
-        if let Some(d) = s("finalRoleName") {
-            self.session.role = Some(d);
-        }
-        if let Some(p) = data["parameters"].as_array() {
-            for e in p {
-                if let Some(n) = e["name"].as_str() {
-                    self.parameters.insert(n.to_string(), e["value"].clone());
-                }
+        let s = &mut self.session;
+        for (key, slot) in [
+            ("finalDatabaseName", &mut s.database),
+            ("finalSchemaName", &mut s.schema),
+            ("finalWarehouseName", &mut s.warehouse),
+        ] {
+            match data.get(key) {
+                Some(Value::String(v)) => *slot = Some(v.clone()),
+                Some(Value::Null) => *slot = None,
+                _ => {}
             }
         }
+        // A null role is never cleared.
+        if let Some(r) = data["finalRoleName"].as_str() {
+            s.role = Some(r.to_string());
+        }
+        self.merge_parameters(data);
     }
 
     fn download_chunk(&self, url: &str, data: &Value) -> Result<Vec<Vec<Option<String>>>, DbError> {
@@ -618,33 +609,21 @@ impl Connection {
         Ok(parse_rowset(&v))
     }
 
-    /// Fetch the result of a query submitted earlier (`get_results_from_sfqid`).
-    pub fn result_of(&mut self, sfqid: &str) -> Result<Cursor, DbError> {
-        let v = self.result_response(sfqid)?;
-        self.cursor_from("", v)
-    }
-
     /// The raw `/queries/<id>/result` response once the query has finished.
     pub fn result_response(&mut self, sfqid: &str) -> Result<Value, DbError> {
-        let mut v = self.get(&format!("/queries/{sfqid}/result"))?;
+        let mut v = self.rest_get(&format!("/queries/{sfqid}/result"))?;
         let mut delay = 100;
-        while matches!(v["code"].as_str(), Some("333333") | Some("333334")) {
+        while v["code"].as_str().is_some_and(|c| IN_PROGRESS.contains(&c)) {
             std::thread::sleep(Duration::from_millis(delay));
             delay = (delay * 2).min(1000);
-            v = self.get(&format!("/queries/{sfqid}/result"))?;
+            v = self.rest_get(&format!("/queries/{sfqid}/result"))?;
         }
         Ok(v)
     }
 
-    /// `connection.rest.request(url, method="get", client="rest")` for
-    /// non-`/api` endpoints such as `/monitoring/queries`.
-    pub fn rest_get(&self, path: &str) -> Result<Value, DbError> {
-        self.get(path)
-    }
-
     /// `get_query_status(sfqid)`: the monitoring status name (`NO_DATA` when absent).
     pub fn query_status(&self, sfqid: &str) -> Result<String, DbError> {
-        let v = self.get(&format!("/monitoring/queries/{sfqid}"))?;
+        let v = self.rest_get(&format!("/monitoring/queries/{sfqid}"))?;
         Ok(v["data"]["queries"]
             .as_array()
             .and_then(|q| q.first())
@@ -655,7 +634,7 @@ impl Connection {
 
     /// `cursor.query_result(sfqid)`: the result of an earlier (async) query.
     pub fn query_result(&mut self, sfqid: &str) -> Result<Cursor, DbError> {
-        let v = self.get(&format!("/queries/{sfqid}/result"))?;
+        let v = self.rest_get(&format!("/queries/{sfqid}/result"))?;
         self.cursor_from("", v)
     }
 
@@ -705,21 +684,9 @@ impl Connection {
                 "Failed to connect to Snowflake to retrieve token.",
             ));
         };
-        let body = json!({ "oldSessionToken": self.token, "requestType": "ISSUE" });
-        let path = format!(
-            "/session/token-request?requestId={}&request_guid={}",
-            uuid4(),
-            uuid4()
-        );
-        let v = self.post(&path, &body, Some(&master))?;
-        if v["success"].as_bool() == Some(true) {
-            Ok(v)
-        } else {
-            Err(response_error(&v, ErrorKind::Database))
-        }
+        self.token_request(&master, "ISSUE")
     }
 
-    /// A REST call returning the raw body text.
     pub fn rest_text(
         &mut self,
         method: &str,
@@ -753,21 +720,15 @@ impl Connection {
         }
     }
 
-    pub fn token(&self) -> &str {
-        &self.token
-    }
-
     pub fn parameter(&self, name: &str) -> Option<&Value> {
         self.parameters.get(name)
     }
 
-    /// `POST /session?delete=true`.
     /// A second handle on this session for parallel work (the connector's
     /// thread-pool uploads share one connection); dropping it keeps the session.
     pub fn worker(&self) -> Connection {
         Connection {
             agent: self.agent.clone(),
-            bindings: None,
             base_url: self.base_url.clone(),
             host: self.host.clone(),
             account: self.account.clone(),
@@ -777,20 +738,17 @@ impl Connection {
             session_id: self.session_id,
             session: self.session.clone(),
             parameters: self.parameters.clone(),
-            server_version: self.server_version.clone(),
             sequence: self.sequence + 1_000_000,
-            closed: false,
-            keep_session: true,
+            state: SessionState::Borrowed,
             params: self.params.clone(),
         }
     }
 
+    /// `POST /session?delete=true` when this connection owns the session.
     pub fn close(&mut self) {
-        if self.closed || self.keep_session || self.token.is_empty() {
-            self.closed = true;
+        if std::mem::replace(&mut self.state, SessionState::Closed) != SessionState::Owned {
             return;
         }
-        self.closed = true;
         let path = format!(
             "/session?delete=true&request_id={}&request_guid={}",
             uuid4(),
@@ -799,9 +757,8 @@ impl Connection {
         let _ = self.post(&path, &json!({}), Some(&self.token.clone()));
     }
 
-    /// Send telemetry and report whether the server accepted it.
     pub fn send_telemetry_checked(&self, logs: Value) -> bool {
-        !self.token.is_empty()
+        matches!(self.state, SessionState::Owned | SessionState::Borrowed)
             && self
                 .post(
                     "/telemetry/send",
@@ -811,16 +768,8 @@ impl Connection {
                 .is_ok()
     }
 
-    /// Send in-band telemetry (`/telemetry/send`).
     pub fn send_telemetry(&self, logs: Value) {
-        if self.token.is_empty() {
-            return;
-        }
-        let _ = self.post(
-            "/telemetry/send",
-            &json!({ "logs": logs }),
-            Some(&self.token),
-        );
+        let _ = self.send_telemetry_checked(logs);
     }
 }
 
@@ -830,18 +779,17 @@ impl Drop for Connection {
     }
 }
 
-fn http_error(code: u16, r: ureq::Response, url: &str) -> DbError {
-    let _ = r;
-    let (errno, kind) = match code {
-        403 => (250_001, ErrorKind::Forbidden),
-        _ => (250_001, ErrorKind::Operational),
+fn http_error(code: u16, url: &str) -> DbError {
+    let kind = match code {
+        403 => ErrorKind::Forbidden,
+        _ => ErrorKind::Operational,
     };
     let path = url::Url::parse(url)
         .map(|u| u.path().to_string())
         .unwrap_or_default();
     DbError::new(
         kind,
-        errno,
+        250_001,
         Some("08001".into()),
         format!("{code}: {code} {}: for url: {path}", status_text(code)),
     )
@@ -908,9 +856,6 @@ fn column_from(c: &Value) -> Column {
         name: c["name"].as_str().unwrap_or_default().to_string(),
         type_name: c["type"].as_str().unwrap_or("text").to_string(),
         scale: c["scale"].as_i64(),
-        precision: c["precision"].as_i64(),
-        length: c["length"].as_i64(),
-        nullable: c["nullable"].as_bool().unwrap_or(true),
     }
 }
 

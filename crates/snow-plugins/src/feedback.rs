@@ -38,10 +38,7 @@ const RATE_LIMIT_MAX: usize = 5;
 const RATE_WINDOW: f64 = 3600.0;
 
 fn env_truthy(n: &str) -> bool {
-    matches!(
-        std::env::var(n).unwrap_or_default().to_lowercase().as_str(),
-        "yes" | "true" | "1" | "on"
-    )
+    snow_api::config::parse_on_off(&std::env::var(n).unwrap_or_default()) == Some(true)
 }
 fn env_set(n: &str) -> bool {
     !std::env::var(n).unwrap_or_default().trim().is_empty()
@@ -142,13 +139,6 @@ fn prepare_message(m: &str) -> (String, bool) {
         return (t, true);
     }
     (t, false)
-}
-
-fn now() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs_f64())
-        .unwrap_or(0.0)
 }
 
 fn recent_timestamps(dir: &std::path::Path, now: f64) -> Vec<f64> {
@@ -299,7 +289,7 @@ fn submit(cli: &mut Cli) -> Outcome {
     } else {
         None
     };
-    let t = now();
+    let t = crate::helpers::now();
     let recent = recent_timestamps(&dir, t);
     if recent.len() >= RATE_LIMIT_MAX {
         let min = recent.iter().copied().fold(f64::INFINITY, f64::min);

@@ -4,6 +4,67 @@ use snow_api::identifiers::Fqn;
 use snow_api::project::PyV;
 use snow_api::{Cli, Result, SnowError};
 
+/// An entity's `type` (`*EntityModel.type`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EntityType {
+    ApplicationPackage,
+    Application,
+    SnowflakeApp,
+    Streamlit,
+    Function,
+    Procedure,
+    Notebook,
+    ComputePool,
+    ImageRepository,
+    Service,
+}
+
+impl EntityType {
+    const ALL: [EntityType; 10] = [
+        EntityType::ApplicationPackage,
+        EntityType::Application,
+        EntityType::SnowflakeApp,
+        EntityType::Streamlit,
+        EntityType::Function,
+        EntityType::Procedure,
+        EntityType::Notebook,
+        EntityType::ComputePool,
+        EntityType::ImageRepository,
+        EntityType::Service,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EntityType::ApplicationPackage => "application package",
+            EntityType::Application => "application",
+            EntityType::SnowflakeApp => "snowflake-app",
+            EntityType::Streamlit => "streamlit",
+            EntityType::Function => "function",
+            EntityType::Procedure => "procedure",
+            EntityType::Notebook => "notebook",
+            EntityType::ComputePool => "compute-pool",
+            EntityType::ImageRepository => "image-repository",
+            EntityType::Service => "service",
+        }
+    }
+
+    /// The type spelled exactly `s`; `None` for any other value.
+    pub fn parse(s: &str) -> Option<EntityType> {
+        EntityType::ALL.into_iter().find(|t| t.as_str() == s)
+    }
+
+    /// The `type` of an entity model.
+    pub fn of(entity: &PyV) -> Option<EntityType> {
+        EntityType::parse(&entity.str_of("type")?)
+    }
+}
+
+impl std::fmt::Display for EntityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// `EntityModelBase.fqn` (identifier string, `Identifier` model, or the entity id).
 pub fn fqn(model: &PyV, entity_id: &str) -> Result<Fqn> {
     match model.get("identifier") {

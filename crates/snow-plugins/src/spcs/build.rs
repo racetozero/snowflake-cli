@@ -1,6 +1,6 @@
 //! `snow spcs service build-image`: upload a build context and run the image builder job.
 
-use super::{py_bool, strip_empty_lines};
+use super::{LogTail, py_bool, strip_empty_lines};
 use snow_api::identifiers::{Fqn, to_string_literal};
 use snow_api::output::{Output, Pv};
 use snow_api::{Cli, Result, SnowError};
@@ -54,6 +54,100 @@ fn describe_status(cli: &mut Cli, job: &str) -> Result<Option<String>> {
     Ok(rows.first().and_then(|r| r.get("status")).map(Pv::py_str))
 }
 
+/// The stage that holds the build context under `build_contexts/<job>`; `temporary`
+/// when the command created it.
+struct BuildStage {
+    temporary: bool,
+    stage: String,
+    fqn: Fqn,
+    ctx_path: String,
+}
+
+impl BuildStage {
+    /// A new temporary `<job>_stage`, or the `--stage` the user gave.
+    fn new(cli: &mut Cli, job: &str) -> Result<BuildStage> {
+        let (temporary, stage, fqn) = match cli.str("stage") {
+            None => {
+                let s = format!("{job}_stage");
+                cli.console.step(&format!("Creating temporary stage: {s}"));
+                let f = cli.using_connection(Fqn::from_string(&s)?)?;
+                cli.execute_query(&crate::stage::create_query(&f, false, None, false, None))?;
+                (true, s, f)
+            }
+            Some(s) => {
+                let f = Fqn::from_string(&s)?;
+                cli.console
+                    .step(&format!("Using existing stage: {}", f.identifier()));
+                (false, s, f)
+            }
+        };
+        Ok(BuildStage {
+            temporary,
+            stage,
+            fqn,
+            ctx_path: format!("build_contexts/{job}"),
+        })
+    }
+
+    /// The statement that cleans up by hand.
+    fn manual_cleanup(&self) -> String {
+        if self.temporary {
+            format!("DROP STAGE {};", self.fqn.sql_identifier())
+        } else {
+            format!("REMOVE @{}/{};", self.fqn.identifier(), self.ctx_path)
+        }
+    }
+
+    fn warn_manual_cleanup(&self, cli: &mut Cli) {
+        let what = if self.temporary {
+            "stage"
+        } else {
+            "build context"
+        };
+        cli.console.warning(&format!(
+            "Remember to manually clean up {what}: {}",
+            self.manual_cleanup()
+        ));
+    }
+
+    /// Drop the temporary stage, or remove the build context from the user's stage.
+    fn cleanup(&self, cli: &mut Cli) -> Result<()> {
+        let (stage, ctx_path) = (&self.stage, &self.ctx_path);
+        let verbose = cli.connector_info;
+        if self.temporary {
+            cli.console.step(&format!("Cleaning up stage: {stage}"));
+            match cli.try_query(&format!(
+                "drop stage if exists {}",
+                self.fqn.sql_identifier()
+            ))? {
+                Ok(_) => cli
+                    .console
+                    .plain_message(&format!("✓ Dropped stage {stage}")),
+                Err(e) => cli.console.warning(&format!(
+                    "Failed to clean up stage: {}",
+                    e.msg_with(verbose)
+                )),
+            }
+        } else {
+            cli.console.step(&format!(
+                "Cleaning up build context files from stage: {stage}"
+            ));
+            let target = snow_api::stage_path::StagePath::from_stage_str(&self.fqn.identifier())
+                .join(ctx_path);
+            match cli.try_query(&format!("remove {}", target.path_for_sql()))? {
+                Ok(_) => cli.console.plain_message(&format!(
+                    "✓ Removed build context files from {stage}/{ctx_path}"
+                )),
+                Err(e) => cli.console.warning(&format!(
+                    "Failed to clean up build context files: {}",
+                    e.msg_with(verbose)
+                )),
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn build_image(cli: &mut Cli) -> Result<Output> {
     let pool = cli.str("compute_pool").unwrap_or_default();
     let repo = cli.str("image_repository").unwrap_or_default();
@@ -95,27 +189,11 @@ pub fn build_image(cli: &mut Cli) -> Result<Output> {
             j
         }
     };
-    let (temporary, stage, stage_fqn) = match cli.str("stage") {
-        None => {
-            let s = format!("{job}_stage");
-            cli.console.step(&format!("Creating temporary stage: {s}"));
-            let f = cli.using_connection(Fqn::from_string(&s)?)?;
-            cli.execute_query(&crate::stage::create_query(&f, false, None, false, None))?;
-            (true, s, f)
-        }
-        Some(s) => {
-            let f = Fqn::from_string(&s)?;
-            cli.console
-                .step(&format!("Using existing stage: {}", f.identifier()));
-            (false, s, f)
-        }
-    };
-    let ctx_path = format!("build_contexts/{job}");
+    let stage = BuildStage::new(cli, &job)?;
+    let target = format!("@{}/{}", stage.fqn.identifier(), stage.ctx_path);
     cli.console.step(&format!(
-        "Uploading build context from {ctx_dir} to @{}/{ctx_path}",
-        stage_fqn.identifier()
+        "Uploading build context from {ctx_dir} to {target}"
     ));
-    let target = format!("@{}/{ctx_path}", stage_fqn.identifier());
     crate::stage::put_tree(cli, Path::new(&ctx_dir), &target, 4, true, false)?;
     cli.console
         .step(&format!("Starting image build job: {job}"));
@@ -148,7 +226,7 @@ pub fn build_image(cli: &mut Cli) -> Result<Output> {
             "env": {"IMAGE_REGISTRY_URL": registry, "IMAGE_NAME": image_name, "IMAGE_TAG": image_tag, "BUILD_CONTEXT": "/app"},
             "volumeMounts": [{"name": "code-volume", "mountPath": "/app"}],
         }],
-        "volumes": [{"name": "code-volume", "source": "stage", "stageConfig": {"name": format!("@{}/{ctx_path}", stage_fqn.identifier())}, "uid": 65532}],
+        "volumes": [{"name": "code-volume", "source": "stage", "stageConfig": {"name": target}, "uid": 65532}],
     }});
     let mut q = vec![
         "EXECUTE JOB SERVICE".to_string(),
@@ -194,19 +272,7 @@ pub fn build_image(cli: &mut Cli) -> Result<Output> {
         std::thread::sleep(std::time::Duration::from_secs(5));
         elapsed += 5;
     }
-    let cleanup_hint = |cli: &mut Cli| {
-        if temporary {
-            cli.console.warning(&format!(
-                "Remember to manually clean up stage: DROP STAGE {};",
-                stage_fqn.sql_identifier()
-            ));
-        } else {
-            cli.console.warning(&format!(
-                "Remember to manually clean up build context: REMOVE @{}/{ctx_path};",
-                stage_fqn.identifier()
-            ));
-        }
-    };
+
     let Some(current) = status.clone().filter(|s| s != "PENDING") else {
         cli.console.warning(&format!(
             "Job did not start within 300s (status: {})",
@@ -215,67 +281,33 @@ pub fn build_image(cli: &mut Cli) -> Result<Output> {
         cli.console.plain_message(&format!(
             "Use 'snow spcs service status {job}' to check status."
         ));
-        cleanup_hint(cli);
+        stage.warn_manual_cleanup(cli);
         return Ok(cli.single_query_result(&cursor));
     };
     cli.console
         .step(&format!("Job status: {current}. Streaming logs..."));
     cli.console.message("");
-    let final_status: Option<String>;
-    let mut prev_ts = String::new();
-    let mut prev: Vec<String> = Vec::new();
-    loop {
+    let mut tail = LogTail::default();
+    let final_status = loop {
         let lq = format!(
             "call SYSTEM$GET_SERVICE_LOGS({}, '0', 'main', 1000, {}, {}, {});",
             to_string_literal(&Fqn::from_string(&job)?.identifier()),
             py_bool(false),
-            to_string_literal(&prev_ts),
+            to_string_literal(&tail.since),
             py_bool(true)
         );
         let c = cli.execute_query(&lq)?;
-        let mut records: Vec<String> = c
-            .rows
-            .iter()
-            .filter_map(|r| r.first().cloned().flatten())
-            .flat_map(|b| b.split('\n').map(str::to_string).collect::<Vec<_>>())
-            .filter(|l| !l.trim().is_empty())
-            .collect();
-        if !records.is_empty() {
-            records.sort();
-            let first = records[0].clone();
-            for p in prev.iter().rev() {
-                if *p < first {
-                    break;
-                }
-                if let Some(pos) = records.iter().position(|r| r == p) {
-                    records.remove(pos);
-                }
-            }
-            if !records.is_empty() {
-                for l in &records {
-                    let shown = l
-                        .split_once(' ')
-                        .map(|x| x.1.to_string())
-                        .unwrap_or(l.clone());
-                    cli.console.plain_message(&shown);
-                }
-                prev_ts = records
-                    .last()
-                    .and_then(|l| l.split(' ').next())
-                    .unwrap_or_default()
-                    .to_string();
-                prev = records;
-            }
+        for l in tail.take_new(&c) {
+            cli.console
+                .plain_message(l.split_once(' ').map_or(l.as_str(), |x| x.1));
         }
         if let Some(s) = describe_status(cli, &job)?
             && ["DONE", "FAILED", "CANCELLED"].contains(&s.as_str())
         {
-            final_status = Some(s);
-            break;
+            break s;
         }
         std::thread::sleep(std::time::Duration::from_secs(2));
-    }
-    let final_status = final_status.unwrap_or(current);
+    };
     cli.console.message("");
     match final_status.as_str() {
         "DONE" => cli.console.plain_message(&format!(
@@ -289,108 +321,8 @@ pub fn build_image(cli: &mut Cli) -> Result<Output> {
             .warning(&format!("✗ Image build job '{job}' was cancelled.")),
         _ => {}
     }
-    if temporary {
-        cli.console.step(&format!("Cleaning up stage: {stage}"));
-        match cli.try_query(&format!(
-            "drop stage if exists {}",
-            stage_fqn.sql_identifier()
-        ))? {
-            Ok(_) => cli
-                .console
-                .plain_message(&format!("✓ Dropped stage {stage}")),
-            Err(e) => cli.console.warning(&format!(
-                "Failed to clean up stage: {}",
-                e.msg_with(verbose)
-            )),
-        }
-    } else {
-        cli.console.step(&format!(
-            "Cleaning up build context files from stage: {stage}"
-        ));
-        let target = snow_api::stage_path::StagePath::from_stage_str(&stage_fqn.identifier())
-            .join(&ctx_path);
-        match cli.try_query(&format!("remove {}", target.path_for_sql()))? {
-            Ok(_) => cli.console.plain_message(&format!(
-                "✓ Removed build context files from {stage}/{ctx_path}"
-            )),
-            Err(e) => cli.console.warning(&format!(
-                "Failed to clean up build context files: {}",
-                e.msg_with(verbose)
-            )),
-        }
-    }
+    stage.cleanup(cli)?;
     Ok(cli.single_query_result(&cursor))
-}
-
-fn cleanup_stage(
-    cli: &mut Cli,
-    temporary: bool,
-    stage: &str,
-    stage_fqn: &Fqn,
-    ctx_path: &str,
-) -> Result<()> {
-    let verbose = cli.connector_info;
-    if temporary {
-        cli.console.step(&format!("Cleaning up stage: {stage}"));
-        match cli.try_query(&format!(
-            "drop stage if exists {}",
-            stage_fqn.sql_identifier()
-        ))? {
-            Ok(_) => cli
-                .console
-                .plain_message(&format!("✓ Dropped stage {stage}")),
-            Err(e) => cli.console.warning(&format!(
-                "Failed to clean up stage: {}",
-                e.msg_with(verbose)
-            )),
-        }
-    } else {
-        cli.console.step(&format!(
-            "Cleaning up build context files from stage: {stage}"
-        ));
-        let target =
-            snow_api::stage_path::StagePath::from_stage_str(&stage_fqn.identifier()).join(ctx_path);
-        match cli.try_query(&format!("remove {}", target.path_for_sql()))? {
-            Ok(_) => cli.console.plain_message(&format!(
-                "✓ Removed build context files from {stage}/{ctx_path}"
-            )),
-            Err(e) => cli.console.warning(&format!(
-                "Failed to clean up build context files: {}",
-                e.msg_with(verbose)
-            )),
-        }
-    }
-    Ok(())
-}
-
-/// `RemoteBuildManager.get_remote_builder(job)`: (status) or `None` for 404/empty.
-fn remote_job_status(cli: &mut Cli, job: &str) -> Result<Option<String>> {
-    let path = format!(
-        "/api/v2/remote-build/jobs/{}",
-        snow_api::identifiers::encode_uri_component(job).replace("%24", "$")
-    );
-    let (code, v) = cli
-        .connection()?
-        .rest("GET", &path, None)
-        .map_err(|e| SnowError::cli(e.msg()))?;
-    if code == 404 || (code < 300 && (v.is_null() || v.as_object().is_some_and(|o| o.is_empty()))) {
-        return Ok(None);
-    }
-    if code >= 300 {
-        let url = format!("{}{path}", cli.connection()?.base_url.clone());
-        return Err(super::services::remote_build_error_pub(
-            cli,
-            code,
-            &format!("get job '{job}'"),
-            &url,
-        ));
-    }
-    Ok(Some(
-        v.get("job_status")
-            .and_then(|s| s.as_str())
-            .unwrap_or("UNKNOWN")
-            .to_string(),
-    ))
 }
 
 pub fn remote_build(cli: &mut Cli) -> Result<Output> {
@@ -436,27 +368,11 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
     }
     let uuid = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
     let local_job = format!("remote_build_{uuid}");
-    let (temporary, stage, stage_fqn) = match cli.str("stage") {
-        None => {
-            let s = format!("{local_job}_stage");
-            cli.console.step(&format!("Creating temporary stage: {s}"));
-            let f = cli.using_connection(Fqn::from_string(&s)?)?;
-            cli.execute_query(&crate::stage::create_query(&f, false, None, false, None))?;
-            (true, s, f)
-        }
-        Some(s) => {
-            let f = Fqn::from_string(&s)?;
-            cli.console
-                .step(&format!("Using existing stage: {}", f.identifier()));
-            (false, s, f)
-        }
-    };
-    let ctx_path = format!("build_contexts/{local_job}");
+    let stage = BuildStage::new(cli, &local_job)?;
+    let target = format!("@{}/{}", stage.fqn.identifier(), stage.ctx_path);
     cli.console.step(&format!(
-        "Uploading build context from {ctx_dir} to @{}/{ctx_path}",
-        stage_fqn.identifier()
+        "Uploading build context from {ctx_dir} to {target}"
     ));
-    let target = format!("@{}/{ctx_path}", stage_fqn.identifier());
     let build_source = snow_api::stage_path::StagePath::from_stage_str(&target).absolute_path();
     let submitted = (|| -> Result<String> {
         crate::stage::put_tree(cli, Path::new(&ctx_dir), &target, 4, true, false)?;
@@ -493,8 +409,7 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
             .map_err(|e| SnowError::cli(e.msg()))?;
         if code >= 300 {
             let url = format!("{}{path}", cli.connection()?.base_url.clone());
-            return Err(super::services::remote_build_error_pub(
-                cli,
+            return Err(super::services::remote_build_error(
                 code,
                 "submit build",
                 &url,
@@ -515,7 +430,7 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
     let job = match submitted {
         Ok(j) => j,
         Err(e) => {
-            cleanup_stage(cli, temporary, &stage, &stage_fqn, &ctx_path)?;
+            stage.cleanup(cli)?;
             return Err(e);
         }
     };
@@ -524,11 +439,18 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
     cli.console.message("");
     let mut current: Option<String> = None;
     let mut elapsed = 0;
-    let mut since = String::new();
-    let mut prev: Vec<String> = Vec::new();
+    let mut tail = LogTail::default();
     let mut terminal = false;
     while elapsed < 1800 {
-        match remote_job_status(cli, &job) {
+        let status = super::services::fetch_remote_job(cli, &job).map(|v| {
+            v.map(|v| {
+                v.get("job_status")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("UNKNOWN")
+                    .to_string()
+            })
+        });
+        match status {
             Ok(Some(s)) => {
                 if current.as_deref() != Some(s.as_str()) {
                     cli.console
@@ -553,17 +475,7 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
                 cli.console.plain_message(&format!(
                     "Once resolved, check its status with: snow spcs service remote-build-status --job-name {job}"
                 ));
-                if temporary {
-                    cli.console.warning(&format!(
-                        "Remember to manually clean up stage: DROP STAGE {};",
-                        stage_fqn.sql_identifier()
-                    ));
-                } else {
-                    cli.console.warning(&format!(
-                        "Remember to manually clean up build context: REMOVE @{}/{ctx_path};",
-                        stage_fqn.identifier()
-                    ));
-                }
+                stage.warn_manual_cleanup(cli);
                 return Err(e);
             }
             Err(e) => cli.console.warning(&format!(
@@ -574,42 +486,12 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
         let lq = format!(
             "call SYSTEM$GET_SERVICE_LOGS({}, '0', 'main', 1000, False, {}, True);",
             to_string_literal(&job),
-            to_string_literal(&since)
+            to_string_literal(&tail.since)
         );
         if let Ok(Ok(c)) = cli.try_query(&lq) {
-            let mut records: Vec<String> = c
-                .rows
-                .iter()
-                .filter_map(|r| r.first().cloned().flatten())
-                .flat_map(|b| b.split('\n').map(str::to_string).collect::<Vec<_>>())
-                .filter(|l| !l.trim().is_empty())
-                .collect();
-            if !records.is_empty() {
-                records.sort();
-                let first = records[0].clone();
-                for p in prev.iter().rev() {
-                    if *p < first {
-                        break;
-                    }
-                    if let Some(pos) = records.iter().position(|r| r == p) {
-                        records.remove(pos);
-                    }
-                }
-                if !records.is_empty() {
-                    for l in &records {
-                        cli.console.plain_message(
-                            &l.split_once(' ')
-                                .map(|x| x.1.to_string())
-                                .unwrap_or(l.clone()),
-                        );
-                    }
-                    since = records
-                        .last()
-                        .and_then(|l| l.split(' ').next())
-                        .unwrap_or_default()
-                        .to_string();
-                    prev = records;
-                }
+            for l in tail.take_new(&c) {
+                cli.console
+                    .plain_message(l.split_once(' ').map_or(l.as_str(), |x| x.1));
             }
         }
         std::thread::sleep(std::time::Duration::from_secs(5));
@@ -629,7 +511,7 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
         _ => {}
     }
     if terminal {
-        cleanup_stage(cli, temporary, &stage, &stage_fqn, &ctx_path)?;
+        stage.cleanup(cli)?;
         if current.as_deref() == Some("DONE") {
             return Ok(Output::message(format!(
                 "Remote build job '{job}' completed successfully."
@@ -640,11 +522,7 @@ pub fn remote_build(cli: &mut Cli) -> Result<Output> {
             current.unwrap_or_default()
         )));
     }
-    let hint = if temporary {
-        format!("DROP STAGE {};", stage_fqn.sql_identifier())
-    } else {
-        format!("REMOVE @{}/{ctx_path};", stage_fqn.identifier())
-    };
+    let hint = stage.manual_cleanup();
     Err(SnowError::cli(format!(
         "Remote build job '{job}' did not reach a terminal state within the 1800s wait budget (last known status: {}). The job may still be running.\n  • Check status: snow spcs service remote-build-status --job-name {job}\n  • Clean up stage manually once done: {hint}",
         current

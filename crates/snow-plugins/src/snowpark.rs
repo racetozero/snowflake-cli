@@ -12,6 +12,16 @@ fn has_magic(s: &str) -> bool {
     s.contains(['*', '?', '['])
 }
 
+/// A destination that names a file (`dest_is_file`): a 2-4 character extension.
+static FILE_DEST: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"\.[a-zA-Z0-9]{2,4}$").expect("re"));
+
+fn file_name(p: &Path) -> String {
+    p.file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 /// `ArtifactOldBuild` / `Artifact` (glob support) for one artifact mapping.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Artifact {
@@ -25,11 +35,7 @@ struct Artifact {
 
 impl Artifact {
     fn dest_is_file(&self) -> bool {
-        self.dest.as_deref().is_some_and(|d| {
-            regex::Regex::new(r"\.[a-zA-Z0-9]{2,4}$")
-                .expect("re")
-                .is_match(d)
-        })
+        self.dest.as_deref().is_some_and(|d| FILE_DEST.is_match(d))
     }
 
     fn name(&self) -> String {
@@ -38,16 +44,11 @@ impl Artifact {
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default()
         };
-        let fname = |p: &Path| {
-            p.file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default()
-        };
         if !self.glob_build {
             return if self.path.is_dir() {
                 format!("{}.zip", stem(&self.path))
             } else {
-                fname(&self.path)
+                file_name(&self.path)
             };
         }
         let s = self.path.to_string_lossy();
@@ -67,9 +68,9 @@ impl Artifact {
             return format!("{}.zip", stem(&self.path));
         }
         if full.is_file() && self.dest_is_file() {
-            return fname(Path::new(self.dest.as_deref().unwrap_or_default()));
+            return file_name(Path::new(self.dest.as_deref().unwrap_or_default()));
         }
-        fname(&self.path)
+        file_name(&self.path)
     }
 
     fn until_asterisk(&self) -> PathBuf {
@@ -85,6 +86,18 @@ impl Artifact {
         parts.iter().collect()
     }
 
+    /// The source directory a glob build keeps: up to the first wildcard, else the parent.
+    fn base(&self) -> PathBuf {
+        if has_magic(&self.path.to_string_lossy()) {
+            self.until_asterisk()
+        } else {
+            self.path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_default()
+        }
+    }
+
     fn post_build_path(&self) -> PathBuf {
         if !self.glob_build {
             return self
@@ -98,17 +111,9 @@ impl Artifact {
                 .bundle_root
                 .join(self.dest.as_deref().unwrap_or_default());
         }
-        let base = if has_magic(&self.path.to_string_lossy()) {
-            self.until_asterisk()
-        } else {
-            self.path
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_default()
-        };
         match &self.dest {
             Some(d) => self.bundle_root.join(d).join(self.name()),
-            None => self.bundle_root.join(base).join(self.name()),
+            None => self.bundle_root.join(self.base()).join(self.name()),
         }
     }
 
@@ -136,17 +141,7 @@ impl Artifact {
                     .unwrap_or_default(),
             ),
             Some(d) => join(&mut p, d),
-            None => {
-                let base = if has_magic(&self.path.to_string_lossy()) {
-                    self.until_asterisk()
-                } else {
-                    self.path
-                        .parent()
-                        .map(Path::to_path_buf)
-                        .unwrap_or_default()
-                };
-                join(&mut p, &base.to_string_lossy())
-            }
+            None => join(&mut p, &self.base().to_string_lossy()),
         }
         format!("{p}/")
     }
@@ -190,9 +185,7 @@ impl Paths {
         };
         if self.glob
             && let Some(d) = &mut dest
-            && !regex::Regex::new(r"\.[a-zA-Z0-9]{2,4}$")
-                .expect("re")
-                .is_match(d)
+            && !FILE_DEST.is_match(d)
             && !d.ends_with('/')
         {
             d.push('/');
@@ -200,17 +193,7 @@ impl Paths {
         Artifact { dest, ..a }
     }
     fn dependencies(&self) -> Artifact {
-        if self.glob {
-            Artifact {
-                path: PathBuf::from("dependencies.zip"),
-                dest: None,
-                glob_build: true,
-                project_root: self.root.clone(),
-                bundle_root: self.bundle_root(),
-            }
-        } else {
-            self.artifact("dependencies.zip", None)
-        }
+        self.artifact("dependencies.zip", None)
     }
 }
 
@@ -334,7 +317,7 @@ fn build_artifact(a: &Artifact, cli: &mut Cli) -> Result<()> {
                 std::fs::create_dir_all(p)?;
             }
             cli.console.step(&format!("Creating: {}", dest.display()));
-            let mut z = crate::zipper::ZipWriter::new();
+            let mut z = crate::zipper::ZipWriter::default();
             for (s, _) in map.all_mappings_expanded() {
                 if s.is_file() {
                     let rel = s
@@ -358,12 +341,7 @@ fn build_artifact(a: &Artifact, cli: &mut Cli) -> Result<()> {
         return Ok(());
     }
     let dest = a.post_build_path();
-    cli.console.step(&format!(
-        "Creating: {}",
-        dest.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    ));
+    cli.console.step(&format!("Creating: {}", file_name(&dest)));
     crate::zipper::zip_dir(&a.path, &dest)?;
     Ok(())
 }
@@ -396,8 +374,7 @@ pub fn build(cli: &mut Cli) -> Result<Output> {
     let root = cli.project_root();
     let glob = cli
         .config
-        .feature("ENABLE_SNOWPARK_GLOB_SUPPORT", Some(false))
-        == Some(true);
+        .feature(snow_api::config::FeatureFlag::EnableSnowparkGlobSupport);
     let paths = Paths {
         root: root.clone(),
         glob,
@@ -435,9 +412,7 @@ pub fn build(cli: &mut Cli) -> Result<Output> {
             if p.exists() {
                 cli.console.step(&format!(
                     "Removing {} left by a previous build",
-                    p.file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default()
+                    file_name(&p)
                 ));
                 std::fs::remove_file(&p)?;
             }
@@ -447,9 +422,7 @@ pub fn build(cli: &mut Cli) -> Result<Output> {
             .phase_start(&format!("Resolving dependencies from {file}"));
         let r = (|| -> Result<()> {
             let anaconda = if ignore_anaconda {
-                Anaconda {
-                    packages: Default::default(),
-                }
+                Anaconda::default()
             } else {
                 Anaconda::load(cli)?
             };
@@ -466,15 +439,11 @@ pub fn build(cli: &mut Cli) -> Result<Output> {
                 skip_version,
                 index_url.as_deref(),
             )?;
-            crate::logs::info(
+            crate::snowpark_pip::check_shared_libraries(
+                &d,
+                allow_shared,
                 "snowflake.cli._plugins.snowpark.commands",
-                "Checking to see if packages have shared (.so/.dll) libraries...",
-            );
-            if crate::snowpark_pip::shared_libraries(&d.downloaded) && !allow_shared {
-                return Err(SnowError::click(
-                    "Some packages contain shared (.so/.dll) libraries. Try again with --allow-shared-libraries.",
-                ));
-            }
+            )?;
             if !d.anaconda.is_empty() {
                 let mut seen = Vec::new();
                 let mut out = Vec::new();
@@ -498,13 +467,8 @@ pub fn build(cli: &mut Cli) -> Result<Output> {
             if std::fs::read_dir(deps_dir.path())?.next().is_some() {
                 let dep = paths.dependencies();
                 let dest = dep.post_build_path();
-                cli.console.step(&format!(
-                    "Creating {}",
-                    dep.path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default()
-                ));
+                cli.console
+                    .step(&format!("Creating {}", file_name(&dep.path)));
                 crate::zipper::zip_dir(deps_dir.path(), &dest)?;
                 return Ok(());
             }
@@ -582,13 +546,6 @@ fn fqn_in_context(cli: &mut Cli, e: &PyV, id: &str) -> Result<Fqn> {
     cli.using_connection(f)
 }
 
-fn list_of(e: &PyV, k: &str) -> Vec<String> {
-    e.get(k)
-        .and_then(PyV::as_list)
-        .map(|l| l.iter().map(PyV::py_str).collect())
-        .unwrap_or_default()
-}
-
 pub fn deploy(cli: &mut Cli) -> Result<Output> {
     // `require_warehouse=True`.
     if !cli.session_has_warehouse()? {
@@ -605,8 +562,7 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
     let root = cli.project_root();
     let glob = cli
         .config
-        .feature("ENABLE_SNOWPARK_GLOB_SUPPORT", Some(false))
-        == Some(true);
+        .feature(snow_api::config::FeatureFlag::EnableSnowparkGlobSupport);
     let paths = Paths {
         root: root.clone(),
         glob,
@@ -650,7 +606,8 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
             .collect();
         let mut declared: Vec<String> = Vec::new();
         for (k, e) in &ents {
-            let eai: Vec<String> = list_of(e, "external_access_integrations")
+            let eai: Vec<String> = e
+                .str_list("external_access_integrations")
                 .iter()
                 .map(|s| s.to_lowercase())
                 .collect();
@@ -774,12 +731,8 @@ pub fn deploy(cli: &mut Cli) -> Result<Output> {
             for a in arts {
                 let pb = a.post_build_path();
                 let up = a.upload_path(&sname);
-                cli.console.step(&format!(
-                    "Uploading {} to {up}",
-                    pb.file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default()
-                ));
+                cli.console
+                    .step(&format!("Uploading {} to {up}", file_name(&pb)));
                 crate::stage::put(
                     cli,
                     &pb.to_string_lossy(),
@@ -846,7 +799,7 @@ fn create_or_replace(
     artifacts: &[String],
     deps: &[String],
 ) -> Result<()> {
-    let mut imports: Vec<String> = list_of(e, "imports");
+    let mut imports: Vec<String> = e.str_list("imports");
     let mut arts = artifacts.to_vec();
     arts.sort();
     arts.dedup();
@@ -868,12 +821,12 @@ fn create_or_replace(
         format!("imports=({})", imports.join(", ")),
         format!("handler='{}'", e.str_of("handler").unwrap_or_default()),
     ];
-    let eai = list_of(e, "external_access_integrations");
+    let eai = e.str_list("external_access_integrations");
     if !eai.is_empty() {
         q.push(format!(
             "external_access_integrations=({})",
             eai.iter()
-                .map(|x| crate::streamlit::sql_object_name(x))
+                .map(|x| snow_api::identifiers::sql_object_name(x))
                 .collect::<Vec<_>>()
                 .join(", ")
         ));
@@ -887,14 +840,14 @@ fn create_or_replace(
                 format!(
                     "{}={}",
                     to_string_literal(k),
-                    crate::streamlit::sql_object_name(&v.py_str())
+                    snow_api::identifiers::sql_object_name(&v.py_str())
                 )
             })
             .collect();
         q.push(format!("secrets=({})", items.join(", ")));
     }
-    let repo_pkgs = list_of(e, "artifact_repository_packages");
-    let pkgs = list_of(e, "packages");
+    let repo_pkgs = e.str_list("artifact_repository_packages");
+    let pkgs = e.str_list("packages");
     if !repo_pkgs.is_empty() && !pkgs.is_empty() {
         return Err(SnowError::usage(
             "You cannot specify both artifact_repository_packages and packages.",
@@ -976,7 +929,8 @@ fn replace_required(
     if std(&old) != std(deps) {
         return true;
     }
-    let eai: std::collections::BTreeSet<String> = list_of(e, "external_access_integrations")
+    let eai: std::collections::BTreeSet<String> = e
+        .str_list("external_access_integrations")
         .into_iter()
         .collect();
     let remote_eai: std::collections::BTreeSet<String> = props
@@ -998,7 +952,7 @@ fn replace_required(
     }
     let pat = regex::Regex::new(r"(?:\[@?\w+_\w+\.)?(\w+(?:/\w+)+\.\w+)(?:\])?").expect("re");
     let mut project: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for s in list_of(e, "imports").iter().chain(arts.iter()) {
+    for s in e.str_list("imports").iter().chain(arts.iter()) {
         for c in pat.captures_iter(&s.to_lowercase()) {
             project.insert(c[1].to_string());
         }

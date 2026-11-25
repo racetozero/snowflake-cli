@@ -1,6 +1,6 @@
 //! File and console logging (`_app/loggers.py`).
 
-use snow_api::Cli;
+use crate::Cli;
 use std::io::Write;
 use std::sync::Mutex;
 
@@ -42,7 +42,7 @@ pub fn init(cli: &mut Cli, verbose: bool, debug: bool) {
     let save = cli
         .config
         .value(&["cli", "logs"], "save_logs")
-        .and_then(|c| snow_api::config::try_cast_to_bool(&c))
+        .and_then(|c| crate::config::try_cast_to_bool(&c))
         .unwrap_or(true);
     let level = cli
         .config
@@ -73,7 +73,7 @@ pub fn init(cli: &mut Cli, verbose: bool, debug: bool) {
     let mut file = None;
     if save {
         let dir = std::path::Path::new(&logs_dir);
-        let _ = snow_api::secure::mkdir_p(dir);
+        let _ = crate::secure::mkdir_p(dir);
         file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)

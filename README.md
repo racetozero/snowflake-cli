@@ -282,7 +282,7 @@ snow sql -x --account myorg-dev --user me --authenticator SNOWFLAKE_JWT --privat
 
 ### Choose an authenticator
 
-`snow` supports every authenticator of the Python connector:
+`snow` supports these authenticators:
 
 | `authenticator`                       | Input                                                              |
 | ------------------------------------- | ------------------------------------------------------------------ |
@@ -297,11 +297,21 @@ snow sql -x --account myorg-dev --user me --authenticator SNOWFLAKE_JWT --privat
 
 Workload identity federation lets a cloud workload sign in without a stored
 secret. AWS includes SSO profiles. OIDC needs a token or token file;
-`snow auth oidc read-token --type github` reads one in GitHub Actions.
+in GitHub Actions, `snow` reads one itself when the connection has neither.
 
-`snow connection generate-jwt` prints a key-pair JWT that is valid for 120
-seconds. `snow connection generate-workload-identity-token` prints a workload
+`snow connection generate-jwt` prints a key-pair JWT that is valid for 24
+hours. `snow connection generate-workload-identity-token` prints a workload
 identity token.
+
+To store a programmatic access token, pass the authenticator to `snow
+connection add`; it asks for the token with hidden input and writes `token`:
+
+```bash
+snow connection add -n prod --account myorg-prod --user svc --authenticator PROGRAMMATIC_ACCESS_TOKEN
+```
+
+Native Okta sign-in (an `https://` authenticator) and
+`PAT_WITH_EXTERNAL_SESSION` are not supported; for Okta, use `externalbrowser`.
 
 `snow` does not cache tokens between commands, so browser authenticators
 sign in again for each command.

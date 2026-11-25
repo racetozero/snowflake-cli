@@ -110,7 +110,7 @@ and `PLAIN`, `snow sql` also prints each statement before its result.
   `snow connection add -n NAME --account ACC --user USER --authenticator
   SNOWFLAKE_JWT --private-key-file PATH [--default] --no-interactive --agent`.
 - `snow connection test --agent` · `set-default NAME` · `remove NAME`.
-- `snow connection generate-jwt --agent` prints a JWT valid for 120 seconds.
+- `snow connection generate-jwt --agent` prints a JWT valid for 24 hours.
   `generate-workload-identity-token` prints a workload identity token.
 - `snow helpers import-snowsql-connections --agent` imports SnowSQL
   connections; a name that already exists is `confirmation_required`.
@@ -121,7 +121,7 @@ and `PLAIN`, `snow sql` also prints each statement before its result.
 | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | `SNOWFLAKE` (default)                | `--user`, `--password`                                                              |
 | `SNOWFLAKE_JWT`                      | `--user`, `--private-key-file` (PKCS#8); passphrase in `PRIVATE_KEY_PASSPHRASE`     |
-| `PROGRAMMATIC_ACCESS_TOKEN`, `OAUTH` | `--token` or `--token-file-path`                                                    |
+| `PROGRAMMATIC_ACCESS_TOKEN`, `OAUTH` | `--token` or `--token-file-path` (`connection add`: `--token-file-path`)             |
 | `USERNAME_PASSWORD_MFA`              | `--user`, `--password`, `--mfa-passcode CODE` (otherwise a Duo push)                |
 | `OAUTH_CLIENT_CREDENTIALS`           | `--oauth-client-id`, `--oauth-client-secret`, `--oauth-token-request-url`           |
 | `WORKLOAD_IDENTITY`                  | `--workload-identity-provider AWS\|AZURE\|GCP\|OIDC`; OIDC also needs a token       |

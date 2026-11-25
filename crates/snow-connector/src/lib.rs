@@ -123,6 +123,8 @@ pub struct ConnectParams {
     pub token_file_path: Option<String>,
     /// DER-encoded PKCS#8 private key for `SNOWFLAKE_JWT`.
     pub private_key: Option<Vec<u8>>,
+    /// Used to build the host when `host` is not set.
+    pub region: Option<String>,
     pub passcode: Option<String>,
     pub passcode_in_password: bool,
     pub client_request_mfa_token: bool,
@@ -141,7 +143,10 @@ pub struct ConnectParams {
     pub oauth_client_secret: Option<String>,
     pub oauth_authorization_url: Option<String>,
     pub oauth_token_request_url: Option<String>,
+    pub oauth_credentials_in_body: bool,
     pub oauth_redirect_uri: Option<String>,
+    /// Where the callback server listens when `oauth_redirect_uri` is not local.
+    pub oauth_socket_uri: Option<String>,
     pub oauth_scope: Option<String>,
     pub oauth_disable_pkce: bool,
     pub client_store_temporary_credential: Option<bool>,
@@ -292,6 +297,27 @@ fn read_body(resp: ureq::Response) -> Result<Vec<u8>, std::io::Error> {
     Ok(buf)
 }
 
+/// `construct_hostname(region, account)`.
+fn construct_hostname(region: Option<&str>, account: &str) -> String {
+    let tld = |region: &str| {
+        if region.to_lowercase().starts_with("cn-") {
+            "cn"
+        } else {
+            "com"
+        }
+    };
+    match region.filter(|r| !r.is_empty() && *r != "us-west-2") {
+        Some(r) => {
+            let account = account.split('.').next().unwrap_or(account);
+            format!("{account}.{r}.snowflakecomputing.{}", tld(r))
+        }
+        None => {
+            let tld = tld(account.split('.').nth(1).unwrap_or(""));
+            format!("{account}.snowflakecomputing.{tld}")
+        }
+    }
+}
+
 fn net_err(e: impl std::fmt::Display) -> DbError {
     DbError::new(ErrorKind::Operational, 251_000 + 1, None, format!("{e}"))
 }
@@ -303,11 +329,18 @@ impl Connection {
         let host = params
             .host
             .clone()
-            .unwrap_or_else(|| format!("{account_full}.snowflakecomputing.com"));
+            .unwrap_or_else(|| construct_hostname(params.region.as_deref(), &account_full));
         let protocol = params.protocol.clone().unwrap_or_else(|| "https".into());
         let port = params.port.unwrap_or(443);
         let base_url = format!("{protocol}://{host}:{port}");
-        let account = account_full.split('.').next().unwrap_or("").to_string();
+        // `parse_account`: drop the region, and the external ID of a global account.
+        let account = match account_full.split_once('.') {
+            Some((a, rest)) if rest.split('.').next() == Some("global") => {
+                a.rsplit_once('-').map_or(a, |(a, _)| a).to_string()
+            }
+            Some((a, _)) => a.to_string(),
+            None => account_full.clone(),
+        };
         let mut conn = Connection {
             agent: agent(),
             base_url,
@@ -335,11 +368,29 @@ impl Connection {
             conn.token = st;
             conn.master_token = Some(mt);
             conn.state = SessionState::Borrowed;
+            let path = format!("/session/heartbeat?requestId={}", uuid4());
+            let mut alive = conn.post(&path, &Value::Null, Some(&conn.token))?;
+            if alive["code"] == "390112" && conn.renew().is_ok() {
+                alive = conn.post(&path, &Value::Null, Some(&conn.token))?;
+            }
+            if alive["success"].as_bool() != Some(true) {
+                return Err(DbError::new(
+                    ErrorKind::Programming,
+                    251_007,
+                    None,
+                    "Session and master tokens invalid",
+                ));
+            }
             return Ok(conn);
         }
         auth::login(&mut conn)?;
         conn.state = SessionState::Owned;
         Ok(conn)
+    }
+
+    /// The port of the server, for error messages.
+    pub(crate) fn port(&self) -> u16 {
+        self.params.port.unwrap_or(443)
     }
 
     pub(crate) fn set_session(&mut self, data: &Value) {
@@ -372,7 +423,11 @@ impl Connection {
         if let Some(t) = auth {
             req = req.set("Authorization", &format!("Snowflake Token=\"{t}\""));
         }
-        let resp = match req.send_string(&body.to_string()) {
+        let resp = match req.send_string(&if body.is_null() {
+            String::new()
+        } else {
+            body.to_string()
+        }) {
             Ok(r) => r,
             Err(ureq::Error::Status(code, _)) => return Err(http_error(code, &url)),
             Err(e) => return Err(net_err(e)),

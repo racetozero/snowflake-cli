@@ -1104,6 +1104,67 @@ pub fn validate(provider: &str, opts: &Options) -> Result<(), DbError> {
     Ok(())
 }
 
+/// `_verify_host_allowed_for_workload_identity`: cloud credentials only go to
+/// Snowflake hosts (or suffixes in `SNOWFLAKE_WIF_ALLOWED_HOST_SUFFIXES`).
+pub(crate) fn verify_host(host: &str) -> Result<(), DbError> {
+    let normalize = |h: &str| {
+        let h = h.trim().to_ascii_lowercase();
+        let h = h.split(':').next().unwrap_or("");
+        h.strip_suffix('.').unwrap_or(h).to_string()
+    };
+    let extra = std::env::var("SNOWFLAKE_WIF_ALLOWED_HOST_SUFFIXES").unwrap_or_default();
+    let h = normalize(host);
+    let allowed = ["com", "cn", "mil"]
+        .into_iter()
+        .map(|tld| format!("snowflakecomputing.{tld}"))
+        .chain(extra.split(',').map(normalize))
+        .filter(|s| !s.is_empty())
+        .any(|s| h == s || h.ends_with(&format!(".{s}")));
+    if allowed {
+        return Ok(());
+    }
+    Err(DbError::new(
+        ErrorKind::Programming,
+        251_021,
+        None,
+        format!(
+            "WORKLOAD_IDENTITY requires a recognized Snowflake host (*.snowflakecomputing.com, .cn or .mil). Got: '{host}'."
+        ),
+    ))
+}
+
+/// `extract_iss_and_sub_without_signature_verification`: the checks of PyJWT
+/// `decode(verify_signature=False)` plus the required claims.
+pub fn validate_oidc_token(token: &str) -> Result<(), DbError> {
+    let fail = |m: &str| invalid(format!("Invalid JWT token: {m}"));
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err(fail("Not enough segments"));
+    }
+    let dec = |s: &str| {
+        let mut t = s.to_string();
+        while !t.len().is_multiple_of(4) {
+            t.push('=');
+        }
+        base64::engine::general_purpose::URL_SAFE.decode(t.as_bytes())
+    };
+    let header = dec(parts[0]).map_err(|_| fail("Invalid header padding"))?;
+    let _: serde_json::Value = serde_json::from_slice(&header)
+        .map_err(|_| fail("Invalid header string: must be a json object"))?;
+    let payload = dec(parts[1]).map_err(|_| fail("Invalid payload padding"))?;
+    let claims: serde_json::Value = serde_json::from_slice(&payload)
+        .map_err(|_| fail("Invalid payload string: must be a json object"))?;
+    if claims.get("iss").is_none() || claims.get("sub").is_none() {
+        return Err(DbError::new(
+            ErrorKind::Programming,
+            251_018,
+            None,
+            "Token is missing 'iss' or 'sub' claims.",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

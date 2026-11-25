@@ -6,9 +6,29 @@ use crate::errors::{Result, SnowError};
 use indexmap::IndexMap;
 use snow_connector::{ConnectParams, Connection, DbError};
 
-pub fn build_params(cli: &mut Cli, p: IndexMap<String, Cv>) -> Result<ConnectParams> {
+pub fn build_params(cli: &mut Cli, mut p: IndexMap<String, Cv>) -> Result<ConnectParams> {
     let s = |p: &IndexMap<String, Cv>, k: &str| p.get(k).map(Cv::py_str);
     let authenticator = s(&p, "authenticator");
+    let upper = |k: &str| s(&p, k).unwrap_or_default().to_uppercase();
+    if upper("authenticator") == "WORKLOAD_IDENTITY"
+        && upper("workload_identity_provider") == "OIDC"
+        && s(&p, "token_file_path").unwrap_or_default().is_empty()
+        && s(&p, "token").is_none_or(|t| t.is_empty() || is_expired_jwt(&t))
+    {
+        // `_maybe_update_oidc_token`: without a provider the given token is used.
+        match crate::oidc::read_token(cli, "auto") {
+            Ok(t) => {
+                p.insert("token".into(), Cv::Str(t));
+            }
+            Err(e) => crate::logs::info(
+                "snowflake.cli._app.snow_connector",
+                &format!(
+                    "No token found when while WORKLOAD_IDENTITY auto auto-detection: {}",
+                    e.message()
+                ),
+            ),
+        }
+    }
     let mut cp = ConnectParams {
         account: s(&p, "account"),
         user: s(&p, "user"),
@@ -22,6 +42,12 @@ pub fn build_params(cli: &mut Cli, p: IndexMap<String, Cv>) -> Result<ConnectPar
         database: s(&p, "database"),
         schema: s(&p, "schema"),
         warehouse: s(&p, "warehouse"),
+        region: s(&p, "region"),
+        passcode: s(&p, "passcode"),
+        passcode_in_password: p
+            .get("passcode_in_password")
+            .and_then(try_cast_to_bool)
+            .unwrap_or(false),
         role: s(&p, "role"),
         authenticator: authenticator.clone(),
         token: s(&p, "token"),
@@ -48,6 +74,11 @@ pub fn build_params(cli: &mut Cli, p: IndexMap<String, Cv>) -> Result<ConnectPar
         oauth_client_secret: s(&p, "oauth_client_secret"),
         oauth_authorization_url: s(&p, "oauth_authorization_url"),
         oauth_token_request_url: s(&p, "oauth_token_request_url"),
+        oauth_credentials_in_body: p
+            .get("oauth_credentials_in_body")
+            .and_then(try_cast_to_bool)
+            .unwrap_or(false),
+        oauth_socket_uri: s(&p, "oauth_socket_uri"),
         oauth_redirect_uri: s(&p, "oauth_redirect_uri"),
         oauth_scope: s(&p, "oauth_scope"),
         oauth_disable_pkce: p
@@ -127,6 +158,22 @@ pub fn build_params(cli: &mut Cli, p: IndexMap<String, Cv>) -> Result<ConnectPar
     Ok(cp)
 }
 
+/// True only for a JWT whose `exp` is past, or within a minute of it.
+fn is_expired_jwt(token: &str) -> bool {
+    use base64::Engine;
+    token
+        .split('.')
+        .nth(1)
+        .and_then(|payload| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(payload.trim_end_matches('='))
+                .ok()
+        })
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|claims| claims["exp"].as_f64())
+        .is_some_and(|exp| exp <= chrono::Utc::now().timestamp() as f64 + 60.0)
+}
+
 /// `command_info()`: `SNOWCLI.<COMMAND.PATH>`.
 pub(crate) fn application_for(cli: &Cli) -> String {
     let parts: Vec<String> = cli
@@ -160,10 +207,23 @@ pub fn connect(cli: &mut Cli, p: ConnectParams) -> Result<Connection> {
         .get("oauth_enable_refresh_tokens")
         .and_then(try_cast_to_bool);
     let store = p.client_store_temporary_credential;
+    // `connection add` once stored the token of these authenticators as the password.
+    let token_as_password = matches!(
+        oauth.as_deref(),
+        Some("PROGRAMMATIC_ACCESS_TOKEN" | "OAUTH")
+    ) && p.password.is_some()
+        && p.token.is_none()
+        && p.token_file_path.is_none();
     Connection::connect(p).map_err(|e| {
         let mut msg = e.msg_with(cli.verbose || cli.debug);
         if let Some(h) = oauth_hint(&e, oauth.as_deref(), refresh, store) {
             msg = format!("{msg}\n{h}");
+        }
+        if token_as_password {
+            msg = format!(
+                "{msg}\nThe connection has a password but no token, and authenticator {} signs in with a token. If the password is the token, rename 'password' to 'token' in the connection; otherwise set token, token_file_path, --token or --token-file-path.",
+                oauth.as_deref().unwrap_or_default()
+            );
         }
         SnowError::cli(format!("Could not connect to Snowflake. Reason: {msg}"))
             .named("SnowflakeConnectionError")

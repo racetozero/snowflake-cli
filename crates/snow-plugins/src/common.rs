@@ -36,7 +36,7 @@ pub fn parse_key_value_variables(vars: &[String]) -> Result<Vec<Variable>> {
 /// `typer.prompt(text, default="", show_default=False)`: read one line from stdin.
 /// Returns `None` for an empty answer. EOF aborts like Click.
 pub fn prompt(cli: &mut snow_api::Cli, text: &str, hide_input: bool) -> Result<Option<String>> {
-    use std::io::{BufRead, Write};
+    use std::io::{BufRead, IsTerminal, Write};
     if cli.agent {
         return Err(
             SnowError::cli(format!("{text} is required (agent mode never prompts)"))
@@ -51,12 +51,19 @@ pub fn prompt(cli: &mut snow_api::Cli, text: &str, hide_input: bool) -> Result<O
         print!("{p}");
         let _ = std::io::stdout().flush();
     }
-    let mut line = String::new();
-    let n = std::io::stdin().lock().read_line(&mut line).unwrap_or(0);
-    if n == 0 {
+    let line = if hide_input && std::io::stdin().is_terminal() {
+        rpassword::read_password().ok()
+    } else {
+        let mut line = String::new();
+        match std::io::stdin().lock().read_line(&mut line) {
+            Ok(n) if n > 0 => Some(line),
+            _ => None,
+        }
+    };
+    let Some(line) = line else {
         println!();
         return Err(SnowError::Click(snow_click::ClickError::Abort));
-    }
+    };
     let v = line.trim_end_matches(['\n', '\r']).to_string();
     Ok(if v.is_empty() { None } else { Some(v) })
 }

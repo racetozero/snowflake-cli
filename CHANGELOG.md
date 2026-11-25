@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `connection add` stores the secret of a `PROGRAMMATIC_ACCESS_TOKEN` or `OAUTH` connection as `token`, not as `password`, which these authenticators ignore. With `--authenticator` the prompt asks for the token. When a connection has the old form, the failed login says how to fix it. Upstream has the same bug.
+- Security: password, token and passphrase prompts no longer show what you type.
+- Security: the OAuth code flow checks `state`, and workload identity sends credentials only to Snowflake hosts.
+- `OAUTH_AUTHORIZATION_CODE` (and `auth login`) uses the built-in client, the configured redirect port, and a pasted URL when no browser opens. `externalbrowser` ignores requests that carry no token.
+- `OAUTH_CLIENT_CREDENTIALS` requires the client ID and secret, and supports `oauth_credentials_in_body` and `{host}` and `{port}` in URLs.
+- MFA: `--mfa-passcode` works with every authenticator, `passcode` and `passcode_in_password` work in the configuration, and a Duo push completes.
+- Key pair: EC keys (P-256, P-384), `JWT_LIFETIME_IN_SECONDS`, 60-second login tokens, and 24-hour `generate-jwt` tokens, as upstream.
+- Workload identity: OIDC reads the GitHub Actions token when the connection has none or an expired one.
+- Connections: `region`, `.global` and China accounts, upper-case `secondary_roles`, account identifier checks, and checked session tokens, as upstream. Token files may end with a newline.
+
 ## 0.0.2 - 2026-11-23
 
 - TLS trusts the operating system's certificate store instead of the bundled Mozilla roots, so corporate root CAs and TLS-inspecting proxies work. `SSL_CERT_FILE` and `SSL_CERT_DIR` replace the system store. This covers every HTTPS and WebSocket connection: Snowflake, cloud storage, workload identity, `snow update` and `!source` URLs.

@@ -21,7 +21,7 @@ pub mod feedback;
 pub mod git;
 pub mod helpers;
 pub mod init;
-pub mod logs;
+pub use snow_api::logs;
 pub mod logs_cmd;
 pub mod nativeapp;
 pub mod notebook;

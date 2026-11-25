@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use snow_api::config::{CONNECTION_FIELDS, Cv, connection_table, normalize_connection};
 use snow_api::output::{Output, Pv, Row};
 use snow_api::{Cli, Result, SnowError};
+use std::io::IsTerminal;
 use toml_edit::value;
 
 pub fn list(cli: &mut Cli) -> Result<Output> {
@@ -70,8 +71,16 @@ pub fn add(cli: &mut Cli) -> Result<Output> {
                 .named("InputRequired"),
         );
     }
+    // These authenticators sign in with a token; they ignore a password.
+    let uses_token = |opts: &IndexMap<&str, Option<Cv>>| {
+        opts["authenticator"].as_ref().is_some_and(|a| {
+            ["PROGRAMMATIC_ACCESS_TOKEN", "OAUTH"]
+                .contains(&a.py_str().trim().to_uppercase().as_str())
+        })
+    };
     let no_interactive = cli.flag("no_interactive") || cli.agent;
     if !no_interactive {
+        let authenticator_given = opts["authenticator"].is_some();
         for f in fields {
             if matches!(
                 f,
@@ -80,7 +89,10 @@ pub fn add(cli: &mut Cli) -> Result<Output> {
                 continue;
             }
             if opts[f].is_none() {
-                let text = format!("Enter {}", f.replace('_', " "));
+                let text = match f {
+                    "password" if uses_token(&opts) => "Enter token".to_string(),
+                    _ => format!("Enter {}", f.replace('_', " ")),
+                };
                 let v = prompt(cli, &text, f == "password")?;
                 opts.insert(f, v.map(Cv::Str));
             }
@@ -89,6 +101,22 @@ pub fn add(cli: &mut Cli) -> Result<Output> {
                 opts.insert(f, Some(Cv::Str(t)));
             }
         }
+        // The password prompt comes before the authenticator prompt, so a person
+        // can leave it empty and then choose a token. Scripts keep the same prompts.
+        if !authenticator_given
+            && uses_token(&opts)
+            && opts["password"].is_none()
+            && opts["token_file_path"].is_none()
+            && std::io::stdin().is_terminal()
+        {
+            let v = prompt(cli, "Enter token", true)?;
+            opts.insert("password", v.map(|t| Cv::Str(t.trim().to_string())));
+        }
+    }
+    if uses_token(&opts)
+        && let Some(token) = opts.insert("password", None).flatten()
+    {
+        opts.insert("token", Some(token));
     }
     if let Some(v) = opts["port"].clone() {
         let n = match v {
@@ -288,7 +316,9 @@ pub fn generate_jwt(cli: &mut Cli) -> Result<Output> {
         }
         Err(e) => return Err(SnowError::click(e)),
     };
-    let token = snow_connector::auth::keypair_jwt(&account, &user, &der).map_err(token_error)?;
+    const DAY: i64 = 24 * 60 * 60;
+    let token =
+        snow_connector::auth::keypair_jwt(&account, &user, &der, DAY).map_err(token_error)?;
     Ok(Output::message(token))
 }
 
@@ -313,7 +343,7 @@ pub fn generate_workload_identity_token(cli: &mut Cli) -> Result<Output> {
                 "OIDC provider requires a token. Set --token-file-path or configure 'token' in the connection.",
             ));
         };
-        validate_jwt(&token)?;
+        snow_connector::wif::validate_oidc_token(&token).map_err(token_error)?;
         return Ok(Output::message(token));
     }
     let token = match provider.as_str() {
@@ -347,33 +377,4 @@ fn token_error(e: snow_connector::DbError) -> SnowError {
         },
         n => SnowError::click(format!("{n}: {n}: {}", e.raw_msg)),
     }
-}
-
-/// PyJWT `decode(verify_signature=False)` plus the iss/sub check of `wif_util`.
-fn validate_jwt(token: &str) -> Result<()> {
-    use base64::Engine;
-    let fail = |m: &str| SnowError::click(format!("251017: 251017: Invalid JWT token: {m}"));
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return Err(fail("Not enough segments"));
-    }
-    let dec = |s: &str| {
-        let mut t = s.to_string();
-        while !t.len().is_multiple_of(4) {
-            t.push('=');
-        }
-        base64::engine::general_purpose::URL_SAFE.decode(t.as_bytes())
-    };
-    let header = dec(parts[0]).map_err(|_| fail("Invalid header padding"))?;
-    let _: serde_json::Value = serde_json::from_slice(&header)
-        .map_err(|_| fail("Invalid header string: must be a json object"))?;
-    let payload = dec(parts[1]).map_err(|_| fail("Invalid payload padding"))?;
-    let claims: serde_json::Value = serde_json::from_slice(&payload)
-        .map_err(|_| fail("Invalid payload string: must be a json object"))?;
-    if claims.get("iss").is_none() || claims.get("sub").is_none() {
-        return Err(SnowError::click(
-            "251018: 251018: Token is missing 'iss' or 'sub' claims.",
-        ));
-    }
-    Ok(())
 }

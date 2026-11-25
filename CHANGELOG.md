@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.3 - 2026-11-25
 
 - `connection add` stores the secret of a `PROGRAMMATIC_ACCESS_TOKEN` or `OAUTH` connection as `token`, not as `password`, which these authenticators ignore. With `--authenticator` the prompt asks for the token. When a connection has the old form, the failed login says how to fix it. Upstream has the same bug.
 - Security: password, token and passphrase prompts no longer show what you type.
